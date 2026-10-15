@@ -6,7 +6,7 @@ A supply-chain control tower for retail operations, built as a portfolio project
 
 The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md). Current progress is in [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
-## What exists today (P0 foundation, P1-T1 inventory model, P1-T2 users and login)
+## What exists today (P0 foundation; P1-T1 to P1-T3: inventory model, users and login, data APIs)
 
 | Component | What it does |
 |---|---|
@@ -20,7 +20,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/tests` | Unit tests (no database needed) and PostgreSQL integration tests (migrations, stock rules, a concurrency race). |
 | `.github/workflows/ci.yml` | On every push and pull request: Ruff lint/format, pytest against a real Postgres 16, then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: product/warehouse/inventory APIs and audit events (P1-T3), synthetic seed data (P1-T4), ML, agents, frontend, AWS.
+Not built yet: synthetic seed data (P1-T4), ML, agents, frontend, AWS.
 
 ## How stock changes
 
@@ -31,6 +31,26 @@ Stock is never overwritten. Every change goes through `record_movement(session, 
 3. It updates `inventory.on_hand` **and** appends an `inventory_movements` row (quantity, reason, resulting balance, optional reference such as a PO number) in the same transaction.
 
 So the sum of a product's movements always equals its `on_hand`, and every stock level can be explained. The database also enforces non-negative stock with a CHECK constraint, as a second safety net. Reasons are `receipt`, `sale`, `transfer_in`, `transfer_out` and `adjustment`. `movement_history()` returns a product's recent movements at a warehouse, newest first. `updated_at` columns are kept current by a database trigger, so they are right even for raw SQL updates.
+
+## Products, warehouses and stock (API)
+
+| Endpoint | Who |
+|---|---|
+| `GET /products?search=&category=&is_active=&limit=&offset=`, `GET /products/{id}` | analyst+ |
+| `POST /products`, `PATCH /products/{id}` (no delete: set `is_active=false`) | admin |
+| `GET /warehouses`, `GET /warehouses/{id}` | analyst+ |
+| `POST /warehouses`, `PATCH /warehouses/{id}` | admin |
+| `GET /inventory?warehouse_id=&product_id=&max_on_hand=` (stock levels; `max_on_hand` finds low stock) | analyst+ |
+| `GET /inventory/movements?product_id=&warehouse_id=` (history, newest first) | analyst+ |
+| `POST /inventory/movements` `{product_id, warehouse_id, quantity_change, reason, reference}` | manager+ |
+
+- SKUs and warehouse codes are trimmed and stored upper-case (`sku-1` becomes `SKU-1`), and cannot be changed after creation.
+- Prices are exact decimals with 2 places, sent as strings in JSON (`"4.99"`).
+- Recording a movement returns **201**; overselling returns **409** with the stock on hand; an unknown product or warehouse returns **404**.
+- **Safe retries:** send an `Idempotency-Key: <unique string>` header with `POST /inventory/movements`. If the same user repeats the same request with the same key (for example after a timeout), the API returns the original movement with **200** and does not change stock again. The same key with a different body, or from another user, returns **409**. Two simultaneous retries are handled by a unique constraint.
+- Every create, update and stock movement writes an audit event with the acting user.
+- **Warehouse capacity:** a receipt or incoming transfer that would take a warehouse above `capacity_units` (all products together) returns **409**. Positive adjustments are allowed, because a stock count records what is physically there. Capacity cannot be lowered below the units currently stored (409). The warehouse row is locked during the check, so two simultaneous receipts cannot overfill it together.
+- **Paging:** every list endpoint takes `limit` (max 200) and `offset` and returns the total number of matching rows in the `X-Total-Count` response header.
 
 ## Users, login and roles
 
@@ -69,7 +89,9 @@ How it is kept safe:
 
 **Audit trail:** logins, logouts, user creation and user changes are written to `audit_events` (actor, action, entity, details such as `{"changes": {"role": ["analyst", "manager"]}}`) in the same transaction as the change itself. Stock movements record the acting user in `inventory_movements.created_by_user_id`.
 
-**Housekeeping:** `docker compose run --rm api python -m app.cli cleanup --days 30` deletes tokens that expired or were revoked more than 30 days ago, and login attempts older than 30 days. Safe to run daily.
+**Client IP behind a proxy:** rate limiting uses the client's IP. Uvicorn takes the IP from `X-Forwarded-For` only when the request comes from an address in `FORWARDED_ALLOW_IPS` (default `127.0.0.1,::1`), so clients cannot fake their IP. Behind the AWS load balancer (P8), set it to the load balancer's subnet.
+
+**Housekeeping:** `docker compose run --rm api python -m app.cli cleanup --days 30` deletes tokens that expired or were revoked more than 30 days ago, and login attempts older than 30 days. Safe to run daily. What is kept and for how long: [docs/DATA_RETENTION.md](docs/DATA_RETENTION.md).
 
 ## Run locally with Docker
 

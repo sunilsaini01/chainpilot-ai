@@ -168,3 +168,55 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings and fixes: all five targeted items VERIFIED. New LOW items: P1-T2-R5 (real client IP behind the ALB, P8) and P1-T2-R6 (retention of emails in login_attempts, documented).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: owner commits and pushes; confirm CI green; then P1-T3 (product/warehouse/inventory APIs with RBAC, using `record_event` and `actor_user_id`).
+
+## 2026-10-15 14:00 UTC — P1-T2 CI verification
+- Starting commit / branch: `51b9039` on `main` (pushed by the owner), working tree clean.
+- Tests run / actual results: GitHub Actions run 38728526108 (CI #3) on `51b9039` concluded `success` in 1m19s. Both jobs ran on `ubuntu-24.04`; every step succeeded ("Show container logs on failure" skipped as expected); 0 annotations on both jobs. Checked via the public GitHub API; job logs not read (need authentication).
+- Outcome: P1-T2 approved by the owner ("it's done now check and then go ahead"). Next: P1-T3.
+
+## 2026-10-15 14:50 UTC — P1-T3
+- Starting commit / branch: `51b9039` on `main`, working tree clean apart from the CI #3 log entry.
+- Objective and plan: product, warehouse and inventory APIs with server-side roles, audit events and the acting user on every write; safe retries for stock movements.
+- Files changed and why:
+  - `apps/api/migrations/versions/20261015_0005_idempotency_and_code_case.py` (new): `inventory_movements.idempotency_key` (unique); upper-case CHECKs on `products.sku` and `warehouses.code`.
+  - `apps/api/app/models.py` (constraints, idempotency column); `app/catalog_service.py` (new: create product/warehouse with duplicate detection, `apply_changes` with JSON-safe old/new values).
+  - `apps/api/app/inventory_service.py`: `idempotency_key` on `record_movement`, `record_movement_once` (race-safe, actor-scoped), `IdempotencyConflictError`, `list_inventory`.
+  - `apps/api/app/schemas.py`: product/warehouse/inventory/movement schemas, code normalization, exact `Money` type, `sent_updates` (rejects explicit nulls in PATCH).
+  - `apps/api/app/routes/{products,warehouses,inventory}.py` (new); `app/main.py` (routers).
+  - `apps/api/tests/conftest.py`: cheap scrypt for fixture users; fail fast when Postgres is unreachable.
+  - Tests (counts from `pytest --collect-only`): `tests/test_catalog_api.py` (20), `tests/test_inventory_api.py` (15), i.e. 35 new; 155 in total.
+  - `README.md`, `docs/{REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`.
+- Tests run / actual results:
+  - CI #3 checked first (see the previous entry).
+  - First full run: 153 passed in 91.9 s.
+  - Mutations: analysts allowed to record movements gave 1 failed; idempotency key ignored gave 2 failed; analysts allowed to create products gave 1 failed; race handling removed gave **0 failed**, so the concurrency test was strengthened (P1-T3-R1) and now fails as it should.
+  - Fixture users with cheap scrypt: 153 passed in 49.8 s.
+  - Isolated Docker project `chainpilot-e2e`: migrations through 0005; admin created via CLI; product `widget-1` stored as `WIDGET-1`; warehouse `wh-1` stored as `WH-1`; manager creating a product gave 403; receipt of 100 with `Idempotency-Key` gave 201, the retry gave 200; sale of 101 gave 409 ("Insufficient stock: 100 on hand"); sale of 30 gave 201; `/inventory` on_hand = 70; history `[(-30, 70, actor 2), (100, 100, actor 2)]`; audit list showed both movements, warehouse.created, product.created, logins and user.created. Project removed (own volume and images only).
+  - Development stack upgraded "0004 -> 0005", `alembic current` = `0005 (head)`, `/ready` 200.
+  - Self-review fixes (P1-T3-R2 search escaping, R3 actor-scoped keys): after I had stopped the dev database, a run gave 118 errors in 165 s (my mistake, which led to P1-T3-R4: fail-fast, verified at ~6 s with exit 1). With Postgres running: 1 failure, a wrong assertion in my new search test ("Mug_Large" literally contains "g_L"), fixed. Mutations for both fixes were caught.
+  - Final: with DB 155 passed in 23.2 s; no DB 36 passed, 119 skipped; `ruff check .` and `ruff format --check .` pass.
+  - NOT VERIFIED: CI on GitHub for this task (not pushed yet).
+- Self-review findings and fixes: P1-T3-R1 to R4 VERIFIED. Open: R5 (capacity, P4), R6 (total counts, P6).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner commits and pushes; confirm CI green; then P1-T4 (deterministic synthetic seed data: 3–5 warehouses, 100–500 products, opening stock via `record_movement`).
+
+## 2026-10-15 15:30 UTC — P1-T3 review-queue fixes (owner request before commit)
+- Starting commit / branch: `51b9039` on `main`, with P1-T3 uncommitted.
+- Objective and plan: fix the open review items before committing: P1-T3-R5 (capacity), P1-T3-R6 (total counts), P1-T2-R5 (client IP behind a proxy), P1-T2-R6 (retention documentation).
+- Files changed and why:
+  - `apps/api/app/inventory_service.py`: `WarehouseCapacityError`, `CAPACITY_CHECKED_REASONS`, `warehouse_stock_total`, `check_capacity` (warehouse row lock); `list_inventory` became `inventory_query`.
+  - `apps/api/app/pagination.py` (new): `fetch_page` with `X-Total-Count`. `app/audit.py`: `list_events` became `events_query`.
+  - `apps/api/app/routes/{users,products,warehouses,inventory,audit}.py`: paging with total count; warehouse PATCH capacity guard; capacity error mapped to 409.
+  - `docker-compose.yml`, `.env.example`: `FORWARDED_ALLOW_IPS`.
+  - `apps/api/tests/test_capacity_and_paging.py` (new, 6 tests). Total 161.
+  - `docs/DATA_RETENTION.md` (new), `README.md`, `docs/{REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`.
+- Tests run / actual results:
+  - Existing suite after the refactor: 155 passed in 47.8 s.
+  - New tests, first run: 1 failure, a wrong expectation in my test (expected 2 warehouses, but that test only creates one); corrected, then 6 passed.
+  - Mutations (files restored, diff identical): warehouse lock removed gave 1 failed (race test); capacity check removed gave 3 failed; adjustments included gave 1 failed; count taken from the page gave 1 failed; PATCH capacity guard removed gave 1 failed.
+  - Isolated Docker project `chainpilot-e2e`: default `FORWARDED_ALLOW_IPS=127.0.0.1,::1`, login with fake `X-Forwarded-For: 203.0.113.9` recorded client_ip `172.23.0.1`; with `FORWARDED_ALLOW_IPS=*`, recorded `203.0.113.9`; capacity 50: receipt 50 gave 201, receipt 1 gave 409 ("50 of 50 units used, 1 more requested"), adjustment +2 gave 201, PATCH capacity 10 gave 409 ("below the 52 units currently stored"); `/products?limit=1` returned `x-total-count: 1`. Project removed (own volume and images only).
+  - Final: with DB 161 passed in 25.4 s; no DB 36 passed, 125 skipped; `ruff check .` and `ruff format --check .` pass. No migration in this step (dev database stays at 0005).
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings and fixes: P1-T3-R5 and R6 VERIFIED; P1-T2-R5 FIXED (only the P8 value remains); P1-T2-R6 FIXED (documented). No open review items remain that can be completed before later phases.
+- Ending commit (if any): none. The owner will commit in several commits (commands given in chat).
+- Next recommended task: owner commits and pushes; confirm CI green; then P1-T4 (synthetic seed data).

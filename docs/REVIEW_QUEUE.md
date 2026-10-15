@@ -163,11 +163,57 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `app/routes/auth.py` uses `request.client.host`. Behind the AWS ALB (P8) every request would show the balancer's IP, so the per-IP login limit would apply to all users together.
 - Expected behavior: use the real client IP from `X-Forwarded-For`, but only when it is set by the trusted proxy.
 - Fix and regression test: in P8, run uvicorn with `--proxy-headers --forwarded-allow-ips=<ALB subnet>`, and test it.
-- Status: OPEN
+- Update 2026-10-15: fixed for everything that can be done before AWS exists. Uvicorn 0.54 already enables proxy headers but trusts them only from `FORWARDED_ALLOW_IPS` (default `127.0.0.1,::1`). Compose now passes `FORWARDED_ALLOW_IPS` (same default) and `.env.example` documents it. Verified in Docker: with the default, a request with a fake `X-Forwarded-For: 203.0.113.9` was recorded with the real address `172.23.0.1`; with `FORWARDED_ALLOW_IPS=*` (simulating a trusted proxy) it was recorded as `203.0.113.9`. Remaining for P8: set the variable to the ALB subnet in the ECS task definition.
+- Status: FIXED (P8 configuration value pending)
 
 ## P1-T2-R6 — [LOW] `login_attempts` stores emails typed at login
 - Source: Claude self-review (privacy)
 - File and reproduction: needed for per-account limits, but the table holds personal data, including mistyped emails.
 - Expected behavior: kept only as long as necessary.
 - Fix and regression test: `cleanup --days 30` deletes old rows (tested). Document the retention in the deployment/privacy notes (P9).
-- Status: OPEN
+- Update 2026-10-15: documented now in `docs/DATA_RETENTION.md` (what is stored about users, why, how long, how it is removed; audit events kept; CloudWatch retention for P8), linked from the README.
+- Status: FIXED
+
+## P1-T3-R1 — [MEDIUM] Concurrency test for idempotency keys did not really race
+- Source: Claude self-review (mutation check)
+- File and reproduction: `tests/test_inventory_api.py::test_concurrent_requests_with_same_key_apply_once`. With the race handling in `record_movement_once` removed, the test still passed: the first thread usually finished before the second looked up the key, so the unique-constraint path never ran.
+- Expected behavior: the test fails when the race handling is missing.
+- Fix and regression test: the test now wraps `_find_by_key` so both threads finish their first lookup (both see "not used") before either inserts, which forces the unique-constraint collision every time. Thread exceptions are collected and asserted empty. Real code: passed 3 of 3 runs. With the handling removed: fails with `UniqueViolation … uq_inventory_movements_idempotency_key`.
+- Status: VERIFIED
+
+## P1-T3-R2 — [LOW] Product search treated `%` and `_` as wildcards
+- Source: Claude self-review
+- File and reproduction: `GET /products?search=%` matched every product. Not SQL injection (bound parameter), but wrong results.
+- Expected behavior: search text matches literally.
+- Fix and regression test: `%`, `_` and `\` are escaped and `ilike(..., escape="\\")` is used. `test_search_treats_percent_and_underscore_literally` (the first version of its `_` check was itself wrong, because "Mug_Large" contains the literal text "g_L"; replaced with `p_a`). With escaping removed, the test fails.
+- Status: VERIFIED
+
+## P1-T3-R3 — [MEDIUM] Idempotency keys were shared between users
+- Source: Claude self-review
+- File and reproduction: if manager B reused manager A's key with the same body, B silently received A's movement and B's intended change was never applied.
+- Expected behavior: a key only replays the same user's request.
+- Fix and regression test: `_same_request` also compares `created_by_user_id`; another user gets 409. `test_same_key_from_another_user_is_409`; fails when the actor comparison is removed.
+- Status: VERIFIED
+
+## P1-T3-R4 — [LOW] DB tests with Postgres down produced 118 slow errors
+- Source: Claude (own mistake: stopped the dev database, then ran `RUN_DB_TESTS=1`)
+- File and reproduction: every database test errored separately after a connection timeout (~2 min 45 s in total) instead of one clear message.
+- Expected behavior: fail fast with instructions.
+- Fix and regression test: `tests/conftest.py` uses the connect timeout and calls `pytest.exit(..., returncode=1)` with "PostgreSQL at host:port is not reachable … Start it, e.g. `docker compose up -d postgres`". Verified: with Postgres stopped, the run ends in ~6 s with that message and exit code 1.
+- Status: VERIFIED
+
+## P1-T3-R5 — [LOW] Warehouse capacity is not enforced on receipts
+- Source: Claude self-review
+- File and reproduction: `capacity_units` is stored, but a receipt can push a warehouse's total stock above it.
+- Expected behavior: capacity is respected by replenishment decisions.
+- Fix and regression test: the spec places capacity constraints in inventory decisions (P4, section 4.E). Enforce there (recommendations and simulated execution), with tests. Manual receipts keep working, because physical reality wins over a recorded number.
+- Update 2026-10-15: fixed now at the owner's request. `record_movement` checks capacity for positive `receipt` and `transfer_in` movements (all products in the warehouse together) and raises `WarehouseCapacityError` (API 409). Positive adjustments are exempt (a stock count records physical reality). `check_capacity` locks the warehouse row, so concurrent receipts are checked one after the other; lock order is always warehouse then inventory row, and sales take only the inventory lock, so no deadlock cycle. `PATCH /warehouses/{id}` refuses a capacity below the units stored (409) under the same lock. Tests: `tests/test_capacity_and_paging.py` (5 capacity tests, including a two-thread race that pauses each thread after reading the total). Mutations caught: lock removed, check removed, adjustments included, PATCH guard removed. End-to-end: 50/50 receipt 201, +1 receipt 409, +2 adjustment 201, lowering capacity to 10 with 52 stored 409. Capacity-aware *recommendations* remain part of P4.
+- Status: VERIFIED
+
+## P1-T3-R6 — [LOW] List endpoints return no total count
+- Source: Claude self-review
+- File and reproduction: `/products`, `/warehouses`, `/inventory`, `/users` and `/audit-events` page with limit/offset but do not say how many rows exist, so a UI cannot show "page 3 of 12".
+- Expected behavior: a total count when the frontend needs it.
+- Fix and regression test: add an `X-Total-Count` header (or a wrapper object) in P6 when the dashboard tables are built, with tests.
+- Update 2026-10-15: fixed now. `app/pagination.py` `fetch_page()` counts the filtered query (ordering dropped, before limit/offset) and sets `X-Total-Count` on `/users`, `/products`, `/warehouses`, `/inventory` and `/audit-events`. `test_list_endpoints_report_total_count` checks totals with `limit=1` and that filters apply; it fails if the count is taken from the page only. A browser frontend on another origin must expose this header via CORS (P6).
+- Status: VERIFIED

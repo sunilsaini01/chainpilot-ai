@@ -85,3 +85,23 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 
 ## D-024 — 2026-10-15 — Review-queue items moved forward from P1-T3/P7 at the owner's request
 - The owner asked for the review queue to be cleared before committing P1-T2. Audit events, the actor on stock movements, user deactivation/role changes, login rate limiting and token cleanup were built now. P1-T3 keeps the product/warehouse/inventory APIs (which will use `record_event` and `actor_user_id`).
+
+## D-025 — 2026-10-15 — Who may change what (P1-T3)
+- Read (products, warehouses, stock, history): analyst and up. Master data (products, warehouses): admin. Stock movements: manager and up, because they change operational state; approvals and simulated purchase orders come in P7.
+- Products and warehouses are never deleted (stock history and audit events refer to them). Products are deactivated with `is_active=false`. SKU and warehouse code are immutable identifiers.
+- Manual transfers between warehouses are not a separate endpoint yet: a transfer is two movements (`transfer_out`, `transfer_in`). An atomic transfer action belongs with the approval workflow (P4/P7).
+
+## D-026 — 2026-10-15 — Idempotency keys for stock movements
+- Optional `Idempotency-Key` header, stored in a unique column on `inventory_movements`. A replay by the same user with the same body returns the original movement (200); a different body or another user gives 409. A race between two identical requests is settled by the unique constraint inside a savepoint. Keys are kept forever with the movement (cheap, and useful for tracing); a TTL is not needed at this scale.
+
+## D-027 — 2026-10-15 — Cheaper password hashing for test fixture users only
+- The `make_user` fixture uses scrypt N=2^10, p=1 (stored in each hash, so verification works unchanged). This cut the suite from about 92 s to about 23–50 s. Production parameters stay as they are and are still covered by `tests/test_security.py`, users created through `POST /users`, and the end-to-end checks.
+
+## D-028 — 2026-10-15 — Warehouse capacity enforced on goods-in movements
+- Receipts and incoming transfers may not take a warehouse above `capacity_units` (sum over all products). Positive adjustments are exempt, because they record a physical count. The warehouse row is locked (`SELECT … FOR UPDATE`) during the check. Lock order is always warehouse then inventory row; sales lock only the inventory row, so no cycle is possible. Capacity cannot be lowered below current stock. Smarter capacity use (recommendations that leave room, transfers to emptier sites) stays in P4.
+
+## D-029 — 2026-10-15 — Total counts in an `X-Total-Count` header
+- A header keeps the response bodies plain JSON arrays (no breaking change for existing clients and tests). One extra `COUNT(*)` per list request is cheap at this scale. The frontend will need CORS `expose_headers=["X-Total-Count"]` (P6).
+
+## D-030 — 2026-10-15 — Real client IP only from trusted proxies
+- Uvicorn's `ProxyHeadersMiddleware` (on by default) is configured through `FORWARDED_ALLOW_IPS`, passed by Compose with the safe default `127.0.0.1,::1`. Trusting `X-Forwarded-For` from everyone would let attackers dodge the per-IP login limit by inventing IPs.
