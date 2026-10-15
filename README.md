@@ -18,9 +18,10 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/migrations` | Alembic database migrations. |
 | `docker-compose.yml` | Runs PostgreSQL 16, a one-shot `migrate` job, then the API. Ports are published on `127.0.0.1` only. |
 | `apps/api/tests` | Unit tests (no database needed) and PostgreSQL integration tests (migrations, stock rules, a concurrency race). |
-| `.github/workflows/ci.yml` | On every push and pull request: Ruff lint/format, pytest against a real Postgres 16, then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
+| `ml/demand_forecasting/m5_data.py` | Loads and validates the Kaggle M5 dataset and turns it into one row per product, store and day. The data itself must be downloaded: see [docs/DATASETS.md](docs/DATASETS.md). |
+| `.github/workflows/ci.yml` | On every push and pull request: API and ML Ruff lint/format and tests (API tests against a real Postgres 16, ML tests on tiny M5-format fixtures), then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: ML (demand forecasting, delivery risk), inventory decisions, agents, frontend, AWS.
+Not built yet: forecasting models (P2-T2 onwards; blocked until the M5 data is downloaded), delivery risk, inventory decisions, agents, frontend, AWS.
 
 ## How stock changes
 
@@ -165,9 +166,10 @@ All settings come from environment variables (see [.env.example](.env.example)).
 
 ## Continuous integration
 
-GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on every push to `main` and every pull request. It has two jobs:
-1. **API lint and tests:** Python 3.11, Ruff, and pytest including the PostgreSQL integration test (Postgres runs as a service container).
-2. **Docker build and smoke test:** builds the stack with Compose, waits for the healthchecks, then curls `/health` and `/ready`.
+GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on every push to `main` and every pull request. It has three jobs:
+1. **API lint and tests:** Python 3.11, Ruff, and pytest including the PostgreSQL integration tests (Postgres runs as a service container).
+2. **ML lint and tests:** Ruff and pytest for `ml/`, using tiny synthetic files in the M5 format (the real dataset is never in CI).
+3. **Docker build and smoke test:** builds the stack with Compose, waits for the healthchecks, then curls `/health` and `/ready` and checks that migrations ran.
 
 The workflow has read-only permissions and uses no secrets; its database passwords are throwaway CI values.
 

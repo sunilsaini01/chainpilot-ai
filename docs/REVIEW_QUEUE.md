@@ -231,3 +231,17 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: the seed grows with the data model.
 - Fix and regression test: extend `build_plan`/`load_plan` when those tables are added (P3 delivery data, P4 replenishment), with determinism and bounds tests like the existing ones.
 - Status: OPEN (P3/P4)
+
+## P2-T1-R1 — [MEDIUM] Loader not yet run on the real M5 files
+- Source: Claude self-review
+- File and reproduction: `ml/demand_forecasting/m5_data.py` is tested only on the tiny synthetic M5-format fixtures. The real files are not on this machine and must be downloaded by the owner (Kaggle account and competition rules).
+- Expected behavior: `python -m demand_forecasting.m5_data validate ../data/raw/m5` prints `OK: 30490 series x 1913 days`, and a one-store summary works.
+- Fix and regression test: owner downloads per `docs/DATASETS.md`; then run both validate commands and record the actual output.
+- Status: BLOCKED (waiting for the dataset)
+
+## P2-T1-R2 — [LOW] `load_sales` reads the whole file before filtering stores
+- Source: Claude self-review
+- File and reproduction: `pd.read_csv` loads all 30,490 rows (default 64-bit integers, roughly 0.5 GB for the day columns) and only then filters by store and converts to int16.
+- Expected behavior: memory use that a laptop handles comfortably.
+- Fix and regression test: measure on the real file first (P2-T1-R1). If it is a problem, read with `dtype` int16 for day columns and/or in chunks filtered by store; add a test that the filtered result is unchanged.
+- Status: OPEN (measure after download)

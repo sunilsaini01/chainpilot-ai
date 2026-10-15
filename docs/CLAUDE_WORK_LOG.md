@@ -245,3 +245,31 @@ Append-only. Each entry records what was actually done and actually run.
 - P1 phase gate (spec: "CRUD and role tests pass; audit foundation"): met locally (CRUD + RBAC tests, audit_events, migrations, seeds). Final confirmation after CI on the pushed commit.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: owner commits and pushes; confirm CI; P1 milestone check; then P2 (M5 demand forecasting), which needs the owner to download the M5 dataset from Kaggle.
+
+## 2026-10-15 17:10 UTC — P1-T4 CI verification and P1 milestone
+- Starting commit / branch: `9d9798c` on `main` (owner pushed `528ae5e` code, `ca0d17c` tests, `9d9798c` docs), working tree clean.
+- Tests run / actual results: GitHub Actions run 38738582317 (CI #5) on `9d9798c` concluded `success`; both jobs on `ubuntu-24.04`, every step succeeded, 0 annotations.
+- Outcome: P1-T4 approved and the **P1 phase gate is complete** (owner: "it's done now go ahead").
+- Dataset check for P2: no M5 files (`sales_train_*.csv`, `calendar.csv`, `sell_prices.csv`) found under Downloads, Documents, Desktop or C:\projects. A Kaggle credentials file exists in the user profile; it was **not read or used** (downloading is an external action on the owner's account, and the competition rules must be accepted by the owner).
+
+## 2026-10-15 17:40 UTC — P2-T1
+- Starting commit / branch: `9d9798c` on `main`, working tree clean apart from the P1 milestone log entry.
+- Objective and plan: start P2 with the parts that do not need the dataset (spec section 3: "implement schema, ... small test fixtures, and a clear manual download guide, then mark real-data training blocked").
+- Files changed and why:
+  - `ml/demand_forecasting/m5_data.py` (new): `find_files`, `load_calendar`, `load_sales` (store filter, int16), `load_prices`, `validate_m5` (13 checks), `to_long` (calendar, prices by store/item/week, own-state SNAP flag), `summarize`, `validate` command.
+  - `ml/tests/fixtures/make_m5_tiny.py` + `ml/tests/fixtures/m5_tiny/*.csv` (new, synthetic), `ml/tests/test_m5_data.py` (new, 24 tests).
+  - `ml/{pyproject.toml,requirements.txt,requirements-dev.txt}`, `ml/demand_forecasting/__init__.py`, `ml/tests/__init__.py` (new).
+  - `.github/workflows/ci.yml`: new `ml-tests` job (same pinned action SHAs). `.gitignore`: `kaggle.json`, `*.zip`.
+  - `docs/DATASETS.md` (new: what the data is, terms, browser and CLI download, validation commands, pitfalls), `README.md`, `docs/{REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`.
+- Tests run / actual results:
+  - PyPI: pandas 3.0.6 (2026-09-17) has a cp311 Windows wheel; numpy 2.5.4 does not; pip resolved numpy 2.4.6. Installed; `pip check` clean.
+  - Fixture generator run twice: SHA-256 of all three files identical.
+  - `ml`: `pytest -q` gives 24 passed in about 1.1–1.6 s; `ruff check .` and `ruff format --check .` pass.
+  - Mutations (restored, diff identical): CA SNAP flag for every state failed 1 test; price join ignoring the week failed 3 tests.
+  - `ci.yml` parsed with PyYAML: jobs `api-tests`, `ml-tests`, `docker-smoke`.
+  - `git check-ignore`: `data/raw/m5/*.csv` ignored by `data/raw/`; `kaggle.json` ignored. `git add --dry-run ml` lists only the 11 intended files.
+  - API unchanged: no DB 48 passed, 128 skipped; with DB 176 passed.
+  - NOT VERIFIED: the loader on the real M5 files (not downloaded; P2-T1-R1, BLOCKED); the new CI job on GitHub (not pushed yet).
+- Self-review findings and fixes: avoided a memory blow-up in the CLI (summary skipped above 5,000 series); fixed a leftover confusing expression in a test before running it. Open: P2-T1-R1 (BLOCKED, data), P2-T1-R2 (LOW, memory, measure after download).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner commits and pushes; downloads M5 per docs/DATASETS.md; then run the validate commands; then P2-T2.
