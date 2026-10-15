@@ -6,7 +6,7 @@ the change it describes, so a change and its audit record succeed or fail togeth
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from app.models import AuditEvent, User
@@ -32,19 +32,12 @@ def record_event(
     return event
 
 
-def list_events(
-    session: Session,
-    entity_type: str | None = None,
-    entity_id: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
-) -> list[AuditEvent]:
-    """Newest events first, optionally only those about one entity type or entity."""
+def events_query(entity_type: str | None = None, entity_id: str | None = None) -> Select:
+    """Query for audit events, newest first, optionally about one entity type or entity."""
     query = select(AuditEvent)
     if entity_type is not None:
         query = query.where(AuditEvent.entity_type == entity_type)
     if entity_id is not None:
         query = query.where(AuditEvent.entity_id == entity_id)
     # id breaks ties between events from the same transaction (same created_at).
-    query = query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
-    return list(session.execute(query.limit(limit).offset(offset)).scalars())
+    return query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())

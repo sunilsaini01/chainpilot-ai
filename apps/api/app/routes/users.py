@@ -2,13 +2,14 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit import record_event
 from app.dependencies import get_db_session, require_role
 from app.models import Role, User
+from app.pagination import fetch_page
 from app.schemas import CreateUserRequest, UpdateUserRequest, UserOut
 from app.users_service import LastAdminError, UserAlreadyExistsError, create_user, update_user
 
@@ -21,13 +22,14 @@ router = APIRouter(prefix="/users", tags=["users"])
 def list_users(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    *,
+    response: Response,
     admin: User = Depends(require_role(Role.ADMIN)),
     session: Session = Depends(get_db_session),
 ) -> list[User]:
     """List users, oldest first, one page at a time."""
-    return list(
-        session.execute(select(User).order_by(User.id).limit(limit).offset(offset)).scalars()
-    )
+    query = select(User).order_by(User.id)
+    return list(fetch_page(session, query, limit, offset, response).scalars())
 
 
 @router.post(

@@ -72,6 +72,8 @@ class Product(Base):
     __table_args__ = (
         CheckConstraint("unit_cost >= 0", name="unit_cost_non_negative"),
         CheckConstraint("unit_price >= 0", name="unit_price_non_negative"),
+        # SKUs are stored upper-case so "sku-1" and "SKU-1" cannot both exist.
+        CheckConstraint("sku = upper(sku)", name="sku_uppercase"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -88,7 +90,10 @@ class Product(Base):
 
 class Warehouse(Base):
     __tablename__ = "warehouses"
-    __table_args__ = (CheckConstraint("capacity_units > 0", name="capacity_positive"),)
+    __table_args__ = (
+        CheckConstraint("capacity_units > 0", name="capacity_positive"),
+        CheckConstraint("code = upper(code)", name="code_uppercase"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(16), unique=True)
@@ -152,6 +157,9 @@ class InventoryMovement(Base):
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT")
     )
+    # Optional client-supplied key: retrying a request with the same key does not
+    # apply the stock change twice (see inventory_service.record_movement_once).
+    idempotency_key: Mapped[str | None] = mapped_column(String(100), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
