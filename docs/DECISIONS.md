@@ -130,3 +130,8 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - Metrics: MAE, WAPE, bias (sum-based, signed), RMSSE (M5-style scale from first sale; unweighted mean). No MAPE: undefined on the many zero-sales days.
 - Features for the tree model use only sales at least 28 days old (`min_lag=28`), so one model can forecast all 28 days directly without feeding back its own predictions. Verified by a perturbation test (changing all newer sales leaves the features unchanged).
 - Each run writes a JSON report with origins, windows, runtime, package versions, `git describe --dirty`, and SHA-256 of the data files.
+
+## D-037 — 2026-10-15 — LightGBM model design (first version)
+- One model per store (memory and time: ~45 s per store-origin for three boosters), Tweedie objective for zero-heavy counts, product/department/category as categorical features, 730 training days, fixed settings (no tuning on test data), deterministic seeds. Intervals from separate 10%/90% quantile models, ordered after prediction. Days without a price are excluded from training and forecast as 0.
+- Models are saved in LightGBM's text format (not pickle, so loading cannot run code) with a metadata JSON (features, window, settings, data checksums, code version) in `ml/artifacts/` (ignored by Git).
+- The first backtest did not beat the 28-day moving average (P2-T3-R1). Decision: report it as is and let the owner choose whether to invest in a validated second version.

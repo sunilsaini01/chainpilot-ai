@@ -322,3 +322,29 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings and fixes: P2-T2-R1 fixed (docstring); R2 (dirty provenance) and R3 (unweighted RMSSE) documented and accepted.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: owner commits and pushes; confirm CI; then P2-T3 (LightGBM model on these features, must beat the 28-day moving average; uncertainty bands; saved model artifacts). LightGBM is a new dependency and needs approval to install.
+
+## 2026-10-15 20:40 UTC — P2-T2 CI verification
+- Starting commit / branch: `f5601f9` on `main` (owner pushed `5499c67` code, `3bbd7d5` tests, `f5601f9` results/docs), working tree clean.
+- Tests run / actual results: GitHub Actions run 38770055568 (CI #8) on `f5601f9` concluded `success`; all three jobs on `ubuntu-24.04`, every step succeeded, 0 annotations.
+- Outcome: P2-T2 approved ("it's done now go ahead"). The owner's go-ahead is taken as approval of the LightGBM dependency for P2-T3, which was asked in the previous handoff.
+
+## 2026-10-15 22:45 UTC — P2-T3
+- Starting commit / branch: `f5601f9` on `main`, working tree clean apart from the CI #8 log entry.
+- Objective and plan: LightGBM demand model with an 80% interval, evaluated in the same rolling-origin backtest as the baselines; saved final model artifacts.
+- Dependency: PyPI checked (lightgbm 4.7.0, 2026-07-18, Windows and manylinux wheels; needs scipy, narwhals). Installed after the owner's go-ahead; `pip check` clean; import OK with warnings as errors. Pinned in `ml/requirements.txt`.
+- Files changed and why:
+  - `ml/demand_forecasting/lgbm_model.py` (new): settings, training rows, point and quantile boosters, prediction rules, forecaster for the backtest, save/load.
+  - `ml/demand_forecasting/train_final.py` (new): final models per store into `ml/artifacts/<store>/`.
+  - `ml/demand_forecasting/backtest.py`: interval metrics (coverage, width, pinball), optional LightGBM, LightGBM version and settings in provenance, wider table.
+  - `ml/tests/test_lgbm_model.py` (new, 8 tests). ML total 52.
+  - `ml/requirements.txt` (lightgbm), `.gitignore` (`ml/artifacts/`), `README.md`, `docs/{MODEL_RESULTS,REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`, `docs/results/p2_lightgbm.json` (new, generated).
+- Tests run / actual results:
+  - Timing probe: CA_1, 1 origin, 3 boosters: 44 s; WAPE 0.7336, bias −0.0029, coverage 0.882.
+  - `ml`: 52 passed; Ruff passes. A test that passed for the wrong reason was fixed (P2-T3-R3).
+  - Mutations (restored, diff identical): training rows up to origin + horizon failed the future-perturbation test; features with min_lag 7 failed 4 tests including the perturbation test.
+  - Full backtest, all stores, 3 origins, `--with-lightgbm`: exit 0, 1,382 s; results table in `docs/MODEL_RESULTS.md`. LightGBM WAPE 0.753/0.751/0.755 (7/14/28 d) vs moving average 0.736/0.737/0.753; coverage 0.870–0.873.
+  - `train_final --store CA_1`: 54 s wall, trained 2014-04-26 to 2016-04-24 on 2,187,494 rows in 40.5 s; files point.txt (5.5 MB), lower.txt, upper.txt, metadata.json; reloaded and predicted 9,147 real rows, all intervals ordered; `git check-ignore` matches `ml/artifacts/`.
+  - NOT VERIFIED: CI with LightGBM on GitHub (not pushed yet; Linux needs OpenMP `libgomp`, normally present on ubuntu-24.04).
+- Self-review findings and fixes: R3 VERIFIED. Open: R1 (MEDIUM, model does not beat the baseline; owner decision), R2 (LOW, interval too wide).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner decides on P2-T3-R1 (improve with a validation period, or accept the moving average as the production forecast for now and continue to P2-T4).

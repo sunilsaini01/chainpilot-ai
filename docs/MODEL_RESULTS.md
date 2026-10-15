@@ -50,3 +50,39 @@ python -m demand_forecasting.backtest ..\data\raw\m5 --all-stores --horizon 28 -
 ```
 
 One value was checked independently: seasonal-naive WAPE for store CA_1, origin 2016-03-27, 28 days, recomputed with plain pandas straight from the CSV files gave 0.8876, and the backtest gives 0.888.
+
+## Demand forecasting: LightGBM (P2-T3)
+
+**Same data, origins and test windows as the baselines above**, and the same run, so all three models are compared on identical rows. One LightGBM model per store per origin, trained on the 730 days up to the origin; Tweedie objective for the point forecast, plus 10th and 90th percentile models for an 80% interval. Settings were fixed before running and **not tuned on these test windows**.
+
+| Model | Horizon | MAE | WAPE | Bias | RMSSE | 80% interval coverage | Interval width |
+|---|---|---|---|---|---|---|---|
+| Seasonal naive | 7 days | 1.186 | 0.856 | -0.065 | 0.890 | – | – |
+| Seasonal naive | 14 days | 1.211 | 0.860 | -0.079 | 0.934 | – | – |
+| Seasonal naive | 28 days | 1.214 | 0.880 | -0.061 | 0.958 | – | – |
+| Moving average, 28 days | 7 days | 1.020 | 0.736 | -0.030 | 0.675 | – | – |
+| Moving average, 28 days | 14 days | 1.037 | 0.737 | -0.044 | 0.714 | – | – |
+| Moving average, 28 days | 28 days | 1.040 | 0.753 | -0.025 | 0.736 | – | – |
+| LightGBM (Tweedie) | 7 days | 1.044 | 0.753 | -0.035 | 0.684 | 0.873 | 2.99 |
+| LightGBM (Tweedie) | 14 days | 1.056 | 0.751 | -0.044 | 0.720 | 0.870 | 3.00 |
+| LightGBM (Tweedie) | 28 days | 1.042 | 0.755 | -0.050 | 0.736 | 0.870 | 2.97 |
+
+WAPE at 28 days by store (moving average / LightGBM; ✓ = LightGBM better): CA_1 0.7483 / 0.7477 ✓ (a hair), CA_2 0.787 / 0.773 ✓, CA_3 0.672 / 0.671 ✓, CA_4 0.894 / 0.904, TX_1 0.792 / 0.811, TX_2 0.744 / 0.750, TX_3 0.750 / 0.774, WI_1 0.790 / 0.778 ✓, WI_2 0.724 / 0.718 ✓, WI_3 0.748 / 0.750.
+
+**Honest reading**
+- **LightGBM does not beat the 28-day moving average** overall: at 28 days it ties (WAPE 0.755 vs 0.753, RMSSE 0.736 both), and at 7 and 14 days it is slightly worse (WAPE 0.753 vs 0.736). It is better in 5 of 10 stores at 28 days.
+- **Likely cause (a design choice, not a bug):** every sales-based feature is at least 28 days old, so that one model can forecast all 28 days without feeding back its own predictions. For the first forecast days, the model therefore works from sales 4 to 8 weeks old, while the moving average uses the last 28 days. The standard remedy is one model per forecast week (lags of at least 7, 14, 21, 28 days), chosen on a separate validation period before these test windows, so the test results stay unbiased. See review item P2-T3-R1.
+- **The 80% interval is too wide:** it contains the actual value 87% of the time instead of 80%. The 10th-percentile model is usually 0 on these zero-heavy series, so the interval almost always includes the many zero-sales days. A calibration step (e.g. conformal adjustment on a validation window) would fix this (P2-T3-R2).
+- Bias −5%: like the baselines, it slightly under-forecasts.
+
+**Provenance** (`docs/results/p2_lightgbm.json`): code `f5601f9-dirty` (commit f5601f9 plus the uncommitted P2-T3 code, committed right after this run), LightGBM 4.7.0, settings in the JSON, same data checksums as above. Runtime 1,382 s (23 min) for 30 store-origin trainings of 3 models each.
+
+**Reproduce**
+
+```powershell
+cd ml
+python -m demand_forecasting.backtest ..\data\raw\m5 --all-stores --horizon 28 --origins 3 --with-lightgbm --output ..\docs\results\p2_lightgbm.json
+python -m demand_forecasting.train_final ..\data\raw\m5 --store CA_1      # final model -> ml/artifacts/CA_1/
+```
+
+The final CA_1 model (trained 2014-04-26 to 2016-04-24, 2,187,494 rows, 40.5 s) was saved and reloaded, and it predicts real feature rows with ordered intervals. Model files are not in Git.

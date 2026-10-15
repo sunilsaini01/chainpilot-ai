@@ -268,3 +268,24 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: users must not compare these numbers with the Kaggle leaderboard.
 - Fix and regression test: documented clearly in `metrics.py` and `docs/MODEL_RESULTS.md` ("not comparable"). A weighted variant could be added if aggregate-level evaluation is needed (P2-T3).
 - Status: OPEN (documented limitation)
+
+## P2-T3-R1 — [MEDIUM] LightGBM does not beat the 28-day moving average
+- Source: real backtest (docs/results/p2_lightgbm.json)
+- File and reproduction: `ml/demand_forecasting/lgbm_model.py` with `features.DEFAULT_MIN_LAG = 28`. All stores, 3 origins: WAPE at 7/14/28 days 0.753/0.751/0.755 vs moving average 0.736/0.737/0.753; RMSSE at 28 days 0.736 for both. Better in 5 of 10 stores.
+- Expected behavior: a tree model that clearly beats the strongest baseline, or a documented decision to use the baseline.
+- Fix and regression test: not fixed, on purpose. Changing the model while scoring on these same windows would tune it to the test set. Proposed next step (owner decision): carve out a validation period before 2016-01-31; compare (a) one model per forecast week with minimum lags 7/14/21/28 and (b) origin-anchored "recent level" features; choose on validation only, then report once on the existing test windows.
+- Status: OPEN (needs owner decision)
+
+## P2-T3-R2 — [LOW] 80% interval covers 87% (too wide)
+- Source: real backtest
+- File and reproduction: the 10th-percentile model predicts 0 for most zero-heavy series, so `[lower, upper]` contains most zero days. Coverage 0.870–0.873 at all horizons; per store 0.856–0.881.
+- Expected behavior: coverage close to 0.80 with the narrowest honest width.
+- Fix and regression test: calibrate on a validation window (e.g. conformal adjustment of the bounds, or a different lower-quantile approach for intermittent demand), then check coverage on the test windows.
+- Status: OPEN
+
+## P2-T3-R3 — [LOW] Unclear error when there is nothing to train on
+- Source: Claude self-review (a passing test that passed for the wrong reason)
+- File and reproduction: with fewer than 29 days of history, LightGBM raised "Input data must be 2 dimensional and non empty", which is confusing for a user.
+- Expected behavior: a clear message.
+- Fix and regression test: `train_models` raises "no training rows: each series needs more than 28 days of history (with prices) before the origin"; `test_train_final_command_on_fixtures` checks that message.
+- Status: VERIFIED
