@@ -13,6 +13,9 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY app ./app
+# Migrations ship in the same image; the Compose `migrate` service runs them.
+COPY alembic.ini .
+COPY migrations ./migrations
 
 # Run as an unprivileged user rather than root.
 RUN useradd --create-home --uid 10001 appuser

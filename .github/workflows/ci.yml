@@ -18,7 +18,7 @@ concurrency:
 jobs:
   api-tests:
     name: API lint and tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
@@ -50,9 +50,9 @@ jobs:
       POSTGRES_DB: chainpilot_test
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
           cache: pip
@@ -72,14 +72,14 @@ jobs:
 
   docker-smoke:
     name: Docker build and smoke test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       # Throwaway CI-only value; Compose refuses to start without a password.
       POSTGRES_PASSWORD: "ci-smoke-only"
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Validate Compose file
         run: docker compose config --quiet
@@ -94,6 +94,14 @@ jobs:
           echo
           curl --fail --silent --show-error http://127.0.0.1:8000/ready
           echo
+
+      - name: Check database migrations ran
+        # The one-shot `migrate` service must have created the schema.
+        run: |
+          version=$(docker compose exec -T postgres \
+            psql -U chainpilot -d chainpilot -Atc "SELECT version_num FROM alembic_version")
+          echo "Database schema version: $version"
+          test -n "$version"
 
       - name: Show container logs on failure
         if: failure()

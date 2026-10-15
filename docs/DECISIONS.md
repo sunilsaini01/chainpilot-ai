@@ -35,3 +35,28 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 
 ## D-010 — 2026-10-15 — Use the current major versions of GitHub actions
 - `actions/checkout@v7` and `actions/setup-python@v7` run on Node 24. The older v4/v5 run on Node 20, which GitHub is retiring (P0-T2-R6). Still pinned by major tag; SHA pinning is tracked in P0-T2-R3.
+
+## D-011 — 2026-10-15 — P1 split into four tasks
+- P1-T1: Alembic + core inventory tables + stock-movement service. P1-T2: users, password hashing, tokens, roles. P1-T3: product/warehouse/inventory APIs with RBAC and audit events. P1-T4: deterministic synthetic seed data. Each task is small enough to review and test on its own.
+
+## D-012 — 2026-10-15 — Stock is a ledger, not an editable number
+- `inventory.on_hand` changes only via `record_movement()`, which locks the row (`SELECT … FOR UPDATE`), rejects negative balances, updates `on_hand` and appends an `inventory_movements` row in one transaction. This satisfies spec §6 ("never silently overwrite stock; reconcile through movement records") and keeps an audit trail. A database CHECK (`on_hand >= 0`) is a second safety net.
+- Row locking was chosen over optimistic version columns because it is easier to explain and test, and stock contention per product/warehouse is low.
+- Movement reasons are text plus a CHECK constraint, not a PostgreSQL ENUM type, because adding a value to a PG enum needs special migration handling.
+- Suppliers, purchase orders and shipments are not in P1-T1. They arrive with the phases that use them (P3/P4), so no unused tables are created early.
+
+## D-013 — 2026-10-15 — Migrations live in `apps/api/migrations`
+- The spec's example layout shows `database/migrations/`. Keeping them next to the API code means the same Docker image contains the models and the migrations that must match them, and a test (`test_models_and_migrations_are_in_sync`) can compare the two. Migrations are hand-written and readable, with explicit constraint names from a naming convention.
+- Compose runs them with a one-shot `migrate` service (`alembic upgrade head`); the API starts only after it exits successfully. That is simpler and safer than migrating inside API startup, which would race when several API containers start at once.
+
+## D-014 — 2026-10-15 — Throwaway database per test run
+- Integration tests create `<POSTGRES_DB>_pytest_<random>`, migrate it, empty tables after each test (`TRUNCATE … RESTART IDENTITY`) and drop it at the end with `DROP DATABASE … WITH (FORCE)`. Developers can run tests against their Compose Postgres without losing data. Real commits (not rolled-back transactions) are used so the concurrency test can exercise real row locks across two connections.
+
+## D-015 — 2026-10-15 — `updated_at` maintained by a database trigger
+- A small PL/pgSQL trigger function (`set_updated_at`, migration 0002) stamps `updated_at = now()` on every row update of products, warehouses and inventory, so raw SQL and future bulk loads cannot leave it stale. The models declare `server_onupdate=FetchedValue()` so SQLAlchemy reloads the value. The ledger table (`inventory_movements`) has no `updated_at`, because its rows are never updated.
+
+## D-016 — 2026-10-15 — GitHub Actions pinned to commit SHAs
+- Done before P8 instead of during it: it costs one comment per line, and a SHA cannot be moved by the action's owner the way a tag can. The version stays readable as a trailing comment (`# v7.0.1`). Upgrades mean looking up the new tag's SHA with `git ls-remote`.
+
+## D-017 — 2026-10-15 — `httpx2` for the test client
+- Starlette 1.8 deprecates `httpx` for `TestClient` in favour of `httpx2` (same author, official pydantic/httpx2 repository). Approved by the owner on 2026-10-15. It is a test-only dependency (`requirements-dev.txt`) and is not in the Docker image.

@@ -68,3 +68,50 @@ Append-only. Each entry records what was actually done and actually run.
 - Known limitations / blockers: P0-T1-R3 (`httpx2` approval), P0-T2-R3 (SHA pinning), P0-T2-R4 (first GitHub run).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: after the push, confirm both CI jobs are green, then begin P1.
+
+## 2026-10-15 11:00 UTC — P0 close-out and P1-T1
+- Starting commit / branch: `4a568db` on `main` (pushed by the owner), working tree clean.
+- Objective and plan: (1) record the first GitHub CI result; (2) the owner approved P0 ("it's done so check and go ahead"), so start P1-T1: Alembic, core inventory tables, a stock-movement service, tests, Compose migrate job, CI check.
+- CI verification (public GitHub API): run 38721880236 (CI #1) on `4a568db` concluded `success`; both jobs and all steps succeeded. The only annotation is a notice that `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19, so both jobs are now pinned to `ubuntu-24.04` (P0-T2-R7). Job logs need authentication (HTTP 403), so the pytest output itself was not read.
+- Files changed and why:
+  - `apps/api/app/models.py` (new): Product, Warehouse, Inventory, InventoryMovement, MovementReason; constraint naming convention; CHECK constraints.
+  - `apps/api/app/inventory_service.py` (new): `record_movement()`, `InsufficientStockError`.
+  - `apps/api/alembic.ini`, `apps/api/migrations/{env.py,script.py.mako}`, `migrations/versions/20261015_0001_core_inventory_tables.py` (new).
+  - `apps/api/tests/conftest.py` (new, throwaway-database fixtures), `tests/test_migrations.py` (3 tests), `tests/test_inventory_service.py` (10 tests).
+  - `apps/api/requirements.txt` (+ `alembic==1.20.0`), `apps/api/Dockerfile` (copy migrations), `docker-compose.yml` (`migrate` service, shared env anchor), `.github/workflows/ci.yml` (Ubuntu 24.04 pin, migration check step).
+  - `README.md`, `docs/{DECISIONS,REVIEW_QUEUE,PROJECT_STATUS}.md`.
+- Tests run / actual results (Windows 11, Python 3.11.9, Docker 29.7.2, Compose v5.4.0):
+  - Alembic 1.20.0 checked on PyPI (official sqlalchemy/alembic, released 2026-09-11) and installed.
+  - First DB run: 13 errors from Alembic's `path_separator` deprecation warning (P1-T1-R1). After the fix: `RUN_DB_TESTS=1 pytest -q` gives 29 passed in 4.5 s.
+  - Mutation checks: removing `.with_for_update()` made the concurrency test fail with `['sold', 'sold']`; adding an unmigrated `region` column made the sync test fail with `add_column`. Both files were restored (diff identical) and all 29 tests passed again.
+  - No `%pytest%` databases left behind afterwards (checked with psql).
+  - `docker compose up --build --detach --wait`: exit 0; `migrate` Exited (0) after "Running upgrade -> 0001"; `alembic_version` = 0001; tables `inventory, inventory_movements, products, warehouses`; `/ready` 200. A second `up` was also exit 0 with no new upgrade; `alembic current` gives `0001 (head)`.
+  - Ruff: fixed one E501 and applied `ruff format` to 2 files; `ruff check .` and `ruff format --check .` pass. After formatting: no DB 15 passed, 14 skipped; with DB 29 passed.
+  - NOT VERIFIED: the new CI step and Ubuntu 24.04 pin on GitHub (not pushed yet).
+- Self-review findings and fixes: P1-T1-R1 verified; R2/R3 LOW open; R4 MEDIUM open (actor column planned for P1-T3); R5 documented.
+- Known limitations / blockers: no users/auth yet (P1-T2); no API endpoints for the new tables yet (P1-T3).
+- Ending commit (if any): none. Changes are uncommitted on top of `4a568db`.
+- Next recommended task: owner reviews, commits and pushes; confirm CI is green; then P1-T2 (users, password hashing, login tokens, roles).
+
+## 2026-10-15 11:40 UTC — Review queue fixes before the P1-T1 commit
+- Starting commit / branch: `4a568db` on `main`, with P1-T1 uncommitted.
+- Objective and plan: the owner asked to fix the open review-queue items before committing. Fixed: P1-T1-R3 (`updated_at` trigger), P1-T1-R2 (history ordering), P0-T2-R3 (SHA pinning), P0-T1-R3 (`httpx2`, owner approved via question). Not fixable yet: P1-T1-R4 (actor column needs the users table from P1-T2).
+- Files changed and why:
+  - `apps/api/migrations/versions/20261015_0002_updated_at_triggers.py` (new): trigger function and three triggers.
+  - `apps/api/app/models.py`: `updated_at_column()` helper with `server_onupdate=FetchedValue()`.
+  - `apps/api/app/inventory_service.py`: `movement_history()` ordered by `created_at DESC, id DESC`.
+  - `apps/api/tests/test_inventory_service.py`: +5 tests (three history, two `updated_at`).
+  - `.github/workflows/ci.yml`: actions pinned to commit SHAs.
+  - `apps/api/requirements-dev.txt` (`httpx` → `httpx2==2.13.1`), `apps/api/pyproject.toml` (removed the warning exception).
+  - `docs/{REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`, this log.
+- Tests run / actual results:
+  - `git ls-remote --tags` for actions/checkout and actions/setup-python: v7 = v7.0.1 = `3d3c42e…`; v7 = v7.0.0 = `5fda3b9…`.
+  - After the trigger and history changes: `RUN_DB_TESTS=1 pytest -q` gave 33 passed.
+  - Mutation: migration 0002 moved away gave 2 failed (both `updated_at` tests); restored.
+  - Mutation: `id` tie-breaker removed: the original 3-movement test still passed (a weak test, found in self-review), so a shuffled 20-row test was added. With the mutation it failed (`[4, 1, 9, 8, 17, 3, ...]`); restored (diff identical) and it passed. Full suite: 34 passed.
+  - Docker: `docker compose up --build --wait` exit 0; migrate log "Running upgrade 0001 -> 0002"; `alembic_version` = 0002; triggers `trg_inventory_set_updated_at, trg_products_set_updated_at, trg_warehouses_set_updated_at`; `/ready` 200; stack stopped.
+  - `httpx2==2.13.1` installed after owner approval; `httpx` and `httpcore` uninstalled; `import httpx` gives ModuleNotFoundError; `pip check` clean. No DB: 15 passed, 19 skipped. With DB: 34 passed. `ruff check .` and `ruff format --check .` pass. No leftover `%pytest%` databases.
+  - NOT VERIFIED: CI on GitHub with these changes (not pushed yet).
+- Self-review findings and fixes: found and fixed a weak ordering test (above). Remaining open: P1-T1-R4 (scheduled for P1-T3).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner commits and pushes; confirm CI green; then P1-T2.

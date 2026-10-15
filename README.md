@@ -6,16 +6,29 @@ A supply-chain control tower for retail operations, built as a portfolio project
 
 The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md). Current progress is in [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
-## What exists today (Phase 0: foundation and CI)
+## What exists today (P0 foundation + P1-T1 inventory data model)
 
 | Component | What it does |
 |---|---|
 | `apps/api` | FastAPI backend. `GET /health` (process is alive) and `GET /ready` (PostgreSQL answers `SELECT 1`; returns 503 if not). OpenAPI docs at `/docs`. Logs are one JSON object per line. |
-| `docker-compose.yml` | Runs PostgreSQL 16 and the API locally. Ports are published on `127.0.0.1` only. |
-| `apps/api/tests` | Unit tests (no database needed) and one PostgreSQL integration test. |
-| `.github/workflows/ci.yml` | On every push and pull request: Ruff lint/format, pytest against a real Postgres 16, then builds the Docker stack and checks `/health` and `/ready`. |
+| `apps/api/app/models.py` | Tables: `products`, `warehouses`, `inventory` (stock per product × warehouse) and `inventory_movements` (stock ledger). |
+| `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
+| `apps/api/migrations` | Alembic database migrations. |
+| `docker-compose.yml` | Runs PostgreSQL 16, a one-shot `migrate` job, then the API. Ports are published on `127.0.0.1` only. |
+| `apps/api/tests` | Unit tests (no database needed) and PostgreSQL integration tests (migrations, stock rules, a concurrency race). |
+| `.github/workflows/ci.yml` | On every push and pull request: Ruff lint/format, pytest against a real Postgres 16, then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Nothing else (ML, agents, frontend, AWS) is built yet.
+Not built yet: users/roles, data APIs, synthetic seed data, ML, agents, frontend, AWS.
+
+## How stock changes
+
+Stock is never overwritten. Every change goes through `record_movement(session, product_id, warehouse_id, quantity_change, reason, reference)`:
+
+1. It locks the product's inventory row (`SELECT ... FOR UPDATE`), so two simultaneous sales cannot both take the last unit.
+2. It computes the new balance and raises `InsufficientStockError` if it would be negative.
+3. It updates `inventory.on_hand` **and** appends an `inventory_movements` row (quantity, reason, resulting balance, optional reference such as a PO number) in the same transaction.
+
+So the sum of a product's movements always equals its `on_hand`, and every stock level can be explained. The database also enforces non-negative stock with a CHECK constraint, as a second safety net. Reasons are `receipt`, `sale`, `transfer_in`, `transfer_out` and `adjustment`. `movement_history()` returns a product's recent movements at a warehouse, newest first. `updated_at` columns are kept current by a database trigger, so they are right even for raw SQL updates.
 
 ## Run locally with Docker
 
@@ -31,6 +44,15 @@ docker compose down                 # add -v to also delete the database volume
 
 If port 5432 or 8000 is already used on your machine, change `POSTGRES_HOST_PORT` / `API_HOST_PORT` in `.env` (and `POSTGRES_PORT` to match if you run the API outside Docker).
 
+**Database migrations** run automatically: `docker compose up` starts the `migrate` job (`alembic upgrade head`) and the API waits for it to finish. Useful commands:
+
+```bash
+docker compose run --rm migrate alembic current            # which revision the database is at
+docker compose run --rm migrate alembic downgrade -1       # undo the latest migration
+```
+
+To create a new migration after changing `app/models.py`, run `alembic revision --autogenerate -m "describe change"` inside `apps/api` with the `POSTGRES_*` variables set, then **read and edit** the generated file before committing. The test `test_models_and_migrations_are_in_sync` fails if models and migrations disagree.
+
 **Changing the password later:** Postgres sets the password only when it first creates its data volume. If you change `POSTGRES_PASSWORD` afterwards, `/ready` will return 503 until you recreate the volume with `docker compose down -v` (this deletes the local database).
 
 ## Run the API and tests without Docker
@@ -43,15 +65,17 @@ python -m venv .venv
 pip install -r apps/api/requirements-dev.txt
 
 cd apps/api
-pytest                      # unit tests; the database test is skipped
+pytest                      # unit tests; database tests are skipped
 ruff check . && ruff format --check .
 
-# Run the API against the Compose Postgres (start it with: docker compose up -d postgres)
+# Run the API against the Compose Postgres (start it with: docker compose up -d migrate)
 uvicorn app.main:app --reload --env-file ../../.env
 
-# Database integration test (needs Postgres running and the POSTGRES_* variables set)
-RUN_DB_TESTS=1 pytest tests/test_database_integration.py
+# Database tests (need Postgres running and the POSTGRES_* variables set)
+RUN_DB_TESTS=1 pytest
 ```
+
+Database tests never touch your development data. Each run creates a throwaway database named `<POSTGRES_DB>_pytest_<random>`, applies the migrations, and drops it at the end. The `POSTGRES_USER` therefore needs permission to create databases (the Compose user has it).
 
 ## Configuration
 
