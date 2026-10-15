@@ -7,6 +7,13 @@ requires-python = ">=3.11,<3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# Turn unexpected warnings into failures so new deprecations are noticed early.
+# The one exception: Starlette 1.8 asks for the `httpx2` package in place of `httpx`
+# for TestClient. Switching needs a new dependency (review item P0-T1-R3).
+filterwarnings = [
+    "error",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100

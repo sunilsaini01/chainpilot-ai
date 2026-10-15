@@ -1,0 +1,104 @@
+# Continuous integration: runs on every push to main and on every pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The workflow only reads the code; it never needs write access.
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the older, now-outdated run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-tests:
+    name: API lint and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/api
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chainpilot
+          # Throwaway CI-only password. The reserved characters prove that
+          # URL.create() handles them (see docs/DECISIONS.md).
+          POSTGRES_PASSWORD: "ci:p@ss/w#rd?"
+          POSTGRES_DB: chainpilot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chainpilot -d chainpilot_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      RUN_DB_TESTS: "1"
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: chainpilot
+      POSTGRES_PASSWORD: "ci:p@ss/w#rd?"
+      POSTGRES_DB: chainpilot_test
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: apps/api/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Tests (unit + PostgreSQL integration)
+        run: pytest -v
+
+  docker-smoke:
+    name: Docker build and smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Throwaway CI-only value; Compose refuses to start without a password.
+      POSTGRES_PASSWORD: "ci-smoke-only"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate Compose file
+        run: docker compose config --quiet
+
+      - name: Build and start the stack
+        # --wait blocks until every container's healthcheck reports healthy.
+        run: docker compose up --build --detach --wait --wait-timeout 120
+
+      - name: Check /health and /ready
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:8000/health
+          echo
+          curl --fail --silent --show-error http://127.0.0.1:8000/ready
+          echo
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes

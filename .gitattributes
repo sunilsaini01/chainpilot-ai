@@ -1,0 +1,3 @@
+# Keep LF line endings on every OS. Files are copied into Linux containers,
+# where CRLF endings break shell scripts.
+* text=auto eol=lf

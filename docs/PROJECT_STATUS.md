@@ -1,39 +1,41 @@
 # Project Status
 
 Current phase: P0 (Foundation)
-Current task: P0-T1, local runnable FastAPI + PostgreSQL foundation
+Current task: P0-T2, GitHub Actions CI
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
-Status: READY_FOR_USER_CHECK
-Branch: main (local repository created 2026-10-15; no remote configured)
-Last commit: none (changes are uncommitted; commits not yet authorized)
+Status: READY_FOR_USER_CHECK (CI run on GitHub NOT VERIFIED until pushed)
+Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
+Last commit: 87fc3c5 "Set up FastAPI and PostgreSQL foundation" (P0-T1). P0-T2 and the review fixes are uncommitted.
 
-Acceptance criteria:
-- [x] `GET /health` returns 200 without needing the database (unit test + curl against Docker)
-- [x] `GET /ready` returns 200 when Postgres answers and 503 when it is down (unit tests + real stop/start check)
-- [x] DB URL built with `URL.create()`; password with `@ : / # ?` verified end-to-end
-- [x] Docker Compose starts Postgres 16 + API; both healthy; ports bound to 127.0.0.1 only
-- [x] API container runs as a non-root user
-- [x] Configuration via environment variables, `.env.example` provided, `.env` ignored by Git
-- [x] Ruff lint + format pass; pytest passes (unit and Postgres integration)
-- [x] README explains how to run and test
-- [ ] CI runs these checks automatically (P0-T2)
+## P0-T1 — FastAPI + PostgreSQL foundation: READY_FOR_USER_CHECK (committed in 87fc3c5)
+Follow-up fixes (uncommitted): R4 structured logs VERIFIED; R3 deprecation warning mitigated, still open.
+
+## P0-T2 acceptance criteria
+- [x] Workflow runs on push to `main` and on pull requests
+- [x] Job 1: Python 3.11, Ruff lint + format check, pytest including the Postgres 16 integration test (service container, reserved-character password)
+- [x] Job 2: `docker compose config`, image build, stack started with `--wait` on healthchecks, curl `/health` and `/ready`, logs on failure, cleanup
+- [x] Read-only permissions, no secrets, outdated runs cancelled
+- [x] Every step reproduced locally with the same commands (see docs/CLAUDE_WORK_LOG.md)
+- [ ] Both jobs green on GitHub. NOT VERIFIED: requires a push
 
 Tests executed (2026-10-15, details in docs/CLAUDE_WORK_LOG.md):
-- `pytest -q` gave 10 passed, 1 skipped. With `RUN_DB_TESTS=1` against Compose Postgres: 11 passed.
-- `ruff check .` and `ruff format --check .` pass.
-- `docker compose config`, `up --build`, `ps`, curl `/health`, `/ready`, `/docs`, and the database stop/start check: all as expected.
+- `pytest -q` gives 15 passed, 1 skipped, 0 warnings. With CI-style Postgres: 16 passed in 2.62 s.
+- `ruff check .` and `ruff format --check .` pass. `git diff --check` is clean.
+- Local Compose smoke test (`up --build --wait`, `/health` 200, `/ready` 200), and JSON log check (9/9 lines valid).
 
-Open findings: P0-T1-R3 (LOW, test deprecation warning), P0-T1-R4 (LOW, structured logs). See docs/REVIEW_QUEUE.md.
-Next action: Owner checks P0-T1. After approval, start P0-T2 (GitHub Actions CI).
-Blockers: none. Commits await owner authorization, and a GitHub remote is needed before CI can actually run.
+Open findings: P0-T1-R3 (LOW, needs approval to add `httpx2`), P0-T2-R3 (LOW, pin actions to SHAs before P8), P0-T2-R4 (MEDIUM, confirm CI on GitHub). Handoff self-review fixed P0-T2-R5 (test isolation) and P0-T2-R6 (Node 20 actions → v7). See docs/REVIEW_QUEUE.md.
+Next action: Commit and push these changes, then confirm both CI jobs pass in the GitHub Actions tab.
+Blockers: none technical. Commit/push and the `httpx2` dependency await owner decision.
 
 ## Roadmap progress
 | Phase | Status |
 |---|---|
-| P0 Foundation | P0-T1 READY_FOR_USER_CHECK; P0-T2 CI NOT_STARTED |
+| P0 Foundation | P0-T1 READY_FOR_USER_CHECK (committed); P0-T2 READY_FOR_USER_CHECK (uncommitted, GitHub run pending) |
 | P1–P9 | NOT_STARTED |
 
 ## History
-- 2026-10-08 to 2026-10-15: first attempt under the two-agent Claude↔Codex workflow (P0-T1 approved by Codex; P0-T2/T3 in progress). On 2026-10-15 the owner deleted it entirely, including Git history. See DECISIONS D-001.
-- 2026-10-15: restarted under the Claude-only workflow. P0-T1 rebuilt and self-reviewed.
+- 2026-10-08 to 2026-10-15: first attempt under the two-agent Claude↔Codex workflow. On 2026-10-15 the owner deleted it entirely, including Git history. See DECISIONS D-001.
+- 2026-10-15: restarted under the Claude-only workflow. P0-T1 rebuilt, self-reviewed and committed by the owner (87fc3c5).
+- 2026-10-15: P0-T1 review items R3/R4 addressed; P0-T2 CI built and verified locally.
+- 2026-10-15: P0-T2 handoff re-checked; fixed R5 and R6.

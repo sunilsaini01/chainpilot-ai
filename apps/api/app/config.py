@@ -23,8 +23,12 @@ class Settings(BaseSettings):
     # Validated here so a typo fails with a clear settings error instead of
     # crashing inside logging setup.
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    # "json" for containers and cloud log search; "text" is easier to read locally.
+    log_format: Literal["json", "text"] = "json"
 
-    postgres_host: str = "localhost"
+    # 127.0.0.1 rather than "localhost": on Windows "localhost" tries IPv6 (::1)
+    # first, but Docker publishes Postgres on IPv4 only, so connections stall.
+    postgres_host: str = "127.0.0.1"
     postgres_port: int = Field(default=5432, ge=1, le=65535)
     postgres_user: str = "chainpilot"
     # SecretStr keeps the password out of logs and reprs.

@@ -18,3 +18,20 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 
 ## D-005 — 2026-10-15 — No migrations tool in P0
 - Alembic is planned for P1, when the first tables appear (roadmap: "P1 Core data: migrations…"). P0 has no schema, so adding it now would only be scaffolding.
+
+## D-006 — 2026-10-15 — JSON logs with the standard library
+- A ~20-line `logging.Formatter` subclass produces one JSON object per line. No new dependency (for example `structlog` or `python-json-logger`) is needed for four fields. Uvicorn's loggers are routed through the same handler so access logs match. `LOG_FORMAT=text` remains for local readability.
+
+## D-007 — 2026-10-15 — CI design
+- One workflow, two jobs: (1) lint + tests with a Postgres 16 service container, so the integration test always runs in CI; (2) Docker build + Compose smoke test with `--wait`, which tests the real image and healthchecks rather than only the Python code.
+- `permissions: contents: read`, no secrets, throwaway CI passwords. `concurrency` cancels outdated runs. Actions are pinned by major tag for readability; pin to SHAs before AWS credentials are added (P0-T2-R3).
+- pytest treats unexpected warnings as errors (`filterwarnings = error`) so deprecations surface early instead of piling up.
+
+## D-008 — 2026-10-15 — Default database host is 127.0.0.1, not localhost
+- On Windows `localhost` resolves to IPv6 first, and Docker publishes Postgres on IPv4 only. That cost ~130 s per connection without a timeout (P0-T2-R1). `127.0.0.1` also matches the Compose bind address.
+
+## D-009 — 2026-10-15 — LF line endings via .gitattributes
+- Files end up in Linux containers. `* text=auto eol=lf` stops Windows `core.autocrlf=true` checkouts from turning them into CRLF, which would break future shell scripts.
+
+## D-010 — 2026-10-15 — Use the current major versions of GitHub actions
+- `actions/checkout@v7` and `actions/setup-python@v7` run on Node 24. The older v4/v5 run on Node 20, which GitHub is retiring (P0-T2-R6). Still pinned by major tag; SHA pinning is tracked in P0-T2-R3.

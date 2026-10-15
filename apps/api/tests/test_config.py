@@ -6,6 +6,17 @@ from pydantic import ValidationError
 from app.config import Settings
 
 
+@pytest.fixture(autouse=True)
+def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove settings variables from the environment so tests see only defaults.
+
+    CI sets POSTGRES_* for the integration test; without this, a "default" test
+    could pass just because CI happens to use the same value.
+    """
+    for field_name in Settings.model_fields:
+        monkeypatch.delenv(field_name.upper(), raising=False)
+
+
 def make_settings(**overrides: object) -> Settings:
     # _env_file=None so a developer's local .env cannot change test results.
     return Settings(_env_file=None, **overrides)
@@ -50,6 +61,11 @@ def test_settings_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     assert settings.database_url.host == "postgres"
     assert settings.database_url.port == 6543
     assert settings.database_url.database == "chainpilot_test"
+
+
+def test_default_host_is_ipv4_loopback() -> None:
+    # "localhost" can resolve to IPv6 first and stall against IPv4-only Docker ports.
+    assert make_settings().database_url.host == "127.0.0.1"
 
 
 def test_invalid_port_is_rejected() -> None:
