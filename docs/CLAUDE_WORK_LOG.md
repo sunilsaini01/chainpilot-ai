@@ -273,3 +273,25 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings and fixes: avoided a memory blow-up in the CLI (summary skipped above 5,000 series); fixed a leftover confusing expression in a test before running it. Open: P2-T1-R1 (BLOCKED, data), P2-T1-R2 (LOW, memory, measure after download).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: owner commits and pushes; downloads M5 per docs/DATASETS.md; then run the validate commands; then P2-T2.
+
+## 2026-10-15 19:00 UTC — P2-T1 real-data validation and memory fix
+- Starting commit / branch: `9d9798c` on `main`, with P2-T1 still uncommitted (the owner has not pushed it yet).
+- Objective and plan: the owner downloaded M5 into `data/raw/m5`. Validate it with the documented commands, measure memory (P2-T1-R2), fix what the numbers show.
+- Files changed and why:
+  - `ml/demand_forecasting/m5_data.py`: ids as categories in `load_sales` (plus `remove_unused_categories` after the store filter); new `compact_long` (`LONG_CATEGORY_COLUMNS`, `LONG_NUMBER_TYPES`) called by `to_long`.
+  - `ml/tests/test_m5_data.py`: +2 tests (compact types, unused categories); price comparison with `pytest.approx` (float32).
+  - `docs/{DATASETS,REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`.
+- Tests run / actual results:
+  - `ls data/raw/m5`: calendar.csv (103,469 B), sales_train_evaluation.csv, sales_train_validation.csv (120,007,726 B), sample_submission.csv, sell_prices.csv (203,395,785 B). `git check-ignore -v` matched `data/raw/` for all five.
+  - `python -m demand_forecasting.m5_data validate ../data/raw/m5`: `OK: 30490 series x 1913 days`, exit 0, 12.7 s. With `--store CA_1`: `OK: 3049 series x 1913 days`, rows 5832737, 2011-01-29 to 2016-04-24, zero_sales_share 0.639, days_without_price_share 0.194, 12.9 s.
+  - Memory script (scratchpad, not committed): the first version printed "peak 0 MB" (my ctypes mistake: 64-bit handle truncated); after fixing, 62 MB idle. Baseline: full load 642 MB / validate 801 MB; CA_1 long table 3,476 MB deep size, 1,493 MB peak.
+  - After `compact_long` only: CA_1 table 179 MB, peak 1,338 MB; 1 test failed (exact float comparison against float32), fixed with a tolerance. After categories in `load_sales`: CA_1 peak 1,205 MB, 10.0 s; full validate 803 MB, 8.8 s; **all stores** long table 58,327,370 rows, 1,784 MB, peak 6,435 MB, 66.0 s (machine RAM 15.7 GB).
+  - `ml`: 26 passed; mutation "no compact_long" caught; Ruff passes. Real-data validate commands re-run after the change: same output.
+  - NOT VERIFIED: the `ml-tests` CI job on GitHub (P2-T1 not pushed yet).
+- Self-review findings and fixes: P2-T1-R1 VERIFIED (real data valid), P2-T1-R2 VERIFIED (memory fixed and measured). I also caught my own broken measurement before relying on it.
+- Ending commit (if any): none. The owner will commit and push P2-T1 (including this fix).
+- Next recommended task: owner commits and pushes; confirm CI (three jobs); then P2-T2 (features, seasonal-naive baseline, rolling-origin backtests, metrics on real data).
+
+## 2026-10-15 19:10 UTC — Correction and P2-T1 CI verification
+- Correction to the previous entry: it says P2-T1 was "still uncommitted". In fact the owner had already pushed P2-T1 as `739c2a2` (loader, tests, fixtures), `8705510` (CI job, ignore rules) and `222a701` (docs) at 21:35 local time. The memory fix and real-data results in the previous entry are therefore **uncommitted follow-up changes on top of `222a701`**.
+- CI: GitHub Actions run 38766062716 (CI #6) on `222a701` concluded `success`; all three jobs (API lint and tests, ML lint and tests, Docker build and smoke test) on `ubuntu-24.04`, every step succeeded, 0 annotations. The new `ml-tests` job is verified on GitHub (it ran the version before the memory fix).

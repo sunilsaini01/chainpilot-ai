@@ -237,11 +237,13 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `ml/demand_forecasting/m5_data.py` is tested only on the tiny synthetic M5-format fixtures. The real files are not on this machine and must be downloaded by the owner (Kaggle account and competition rules).
 - Expected behavior: `python -m demand_forecasting.m5_data validate ../data/raw/m5` prints `OK: 30490 series x 1913 days`, and a one-store summary works.
 - Fix and regression test: owner downloads per `docs/DATASETS.md`; then run both validate commands and record the actual output.
-- Status: BLOCKED (waiting for the dataset)
+- Update 2026-10-15: the owner downloaded M5 into `data/raw/m5` (5 files, all ignored by Git: `git check-ignore` matched `data/raw/`). `validate ../data/raw/m5` gave `OK: 30490 series x 1913 days` (exit 0, ~13 s); `--store CA_1` gave `OK: 3049 series x 1913 days`, 5,832,737 rows, 2011-01-29 to 2016-04-24, zero_sales_share 0.639, days_without_price_share 0.194.
+- Status: VERIFIED
 
 ## P2-T1-R2 — [LOW] `load_sales` reads the whole file before filtering stores
 - Source: Claude self-review
 - File and reproduction: `pd.read_csv` loads all 30,490 rows (default 64-bit integers, roughly 0.5 GB for the day columns) and only then filters by store and converts to int16.
 - Expected behavior: memory use that a laptop handles comfortably.
 - Fix and regression test: measure on the real file first (P2-T1-R1). If it is a problem, read with `dtype` int16 for day columns and/or in chunks filtered by store; add a test that the filtered result is unchanged.
-- Status: OPEN (measure after download)
+- Update 2026-10-15: measured with the Windows process peak working set (my first measurement script returned 0 MB because of a 32/64-bit handle mistake in ctypes; fixed and sanity-checked at 62 MB idle). Reading the full file: 642 MB peak (fine). The real problem was in `to_long`: one store's long table used **3,476 MB** (pandas deep size) / 1,493 MB peak, because every row held Python strings for 9 repeated text columns, so all stores would need roughly 35 GB. Fix: id columns read as `category` in `load_sales` (unused categories dropped after store filtering); `compact_long` makes `d` and event columns categories and uses int16/int32/int8/float32 numbers. After: one store **179 MB**, 1,205 MB peak, ~10 s; all 10 stores 58,327,370 rows, **1,784 MB**, 6,435 MB peak, 66 s. Regression tests: `test_long_table_uses_compact_types` (fails without `compact_long`) and `test_store_filter_drops_unused_categories`. Price comparisons in tests now use a 1e-6 relative tolerance (float32).
+- Status: VERIFIED
