@@ -220,3 +220,28 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings and fixes: P1-T3-R5 and R6 VERIFIED; P1-T2-R5 FIXED (only the P8 value remains); P1-T2-R6 FIXED (documented). No open review items remain that can be completed before later phases.
 - Ending commit (if any): none. The owner will commit in several commits (commands given in chat).
 - Next recommended task: owner commits and pushes; confirm CI green; then P1-T4 (synthetic seed data).
+
+## 2026-10-15 16:00 UTC — P1-T3 CI verification
+- Starting commit / branch: `92b4793` on `main` (pushed by the owner as three commits: `d614e58` code, 13 files; `7d4e841` tests + Compose/env, 6 files; `92b4793` docs, 6 files), working tree clean.
+- Tests run / actual results: GitHub Actions run 38733073904 (CI #4) on `92b4793` concluded `success`; both jobs on `ubuntu-24.04`, every step succeeded, 0 annotations. Only the head commit is run by CI; the two earlier commits were not tested on their own.
+- Outcome: P1-T3 approved by the owner ("now check and then go ahead"). Next: P1-T4.
+
+## 2026-10-15 16:40 UTC — P1-T4
+- Starting commit / branch: `92b4793` on `main`, working tree clean apart from the CI #4 log entry.
+- Objective and plan: deterministic synthetic seed (spec section 3: 3–5 warehouses, 100–500 products) with opening stock through the ledger, clearly labelled, safe to re-run, and a CLI command.
+- Files changed and why:
+  - `apps/api/app/seed.py` (new): `build_plan` (pure, seeded), `load_plan` (writes via services, refuses a second run, audit event), low-stock share.
+  - `apps/api/app/cli.py`: `seed` command (`--products`, `--warehouses`, `--seed`).
+  - `apps/api/tests/test_seed.py` (new, 15 tests: 12 without DB, 3 with DB). Total 176.
+  - `README.md`, `docs/{REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`.
+- Tests run / actual results:
+  - First run: no DB 11 passed, 3 skipped; with DB 14 passed in 5.9 s.
+  - Mutations (restored, diff identical): global `random` instead of the seeded generator failed the determinism test; no already-seeded guard failed 2 tests; filling to 100% failed the fill-limit test.
+  - Isolated Docker project `chainpilot-e2e`, max size: "Loaded SYNTHETIC data (seed 42): 5 warehouses, 500 products, 2021 opening stock movements, 191474 units" in about 9 s including container start; second run gave "Error: Synthetic data is already loaded"; API totals: products 500, warehouses 5, inventory rows 2021; fill per warehouse 69.5–69.7%; ledger sum = on_hand sum; 2021 movements with no user; the first 3 products from the API matched `build_plan(42, 500, 5)` exactly. **Low stock (`max_on_hand=20`) = 0**, which became P1-T4-R1.
+  - After the fix: default plan 49 of 654 pairs low (7.5%); mutation `LOW_STOCK_SHARE = 0` failed the new test. Full suite with DB: 176 passed in 34.8 s; no DB: 48 passed, 128 skipped; `ruff check .` and `ruff format --check .` pass.
+  - Isolated Docker re-check: default seed loaded (4 warehouses, 200 products, 654 movements, 160712 units); `/inventory?max_on_hand=20` gave `X-Total-Count: 49` (e.g. SYN-WH1 / SYN-0001 Classic Rug: 6); ledger = on_hand. Project removed (own volume and images only). The developer database was **not** seeded; the owner can run the command when wanted.
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings and fixes: P1-T4-R1 VERIFIED. Open: P1-T4-R2 (suppliers/POs/shipments in the seed, P3/P4).
+- P1 phase gate (spec: "CRUD and role tests pass; audit foundation"): met locally (CRUD + RBAC tests, audit_events, migrations, seeds). Final confirmation after CI on the pushed commit.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner commits and pushes; confirm CI; P1 milestone check; then P2 (M5 demand forecasting), which needs the owner to download the M5 dataset from Kaggle.

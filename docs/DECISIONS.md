@@ -105,3 +105,8 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 
 ## D-030 — 2026-10-15 — Real client IP only from trusted proxies
 - Uvicorn's `ProxyHeadersMiddleware` (on by default) is configured through `FORWARDED_ALLOW_IPS`, passed by Compose with the safe default `127.0.0.1,::1`. Trusting `X-Forwarded-For` from everyone would let attackers dodge the per-IP login limit by inventing IPs.
+
+## D-031 — 2026-10-15 — Seed as a pure plan plus a loader
+- `build_plan(seed, n_products, n_warehouses)` uses its own `random.Random(seed)` and returns frozen dataclasses, so determinism is checked without a database. `load_plan` writes through the normal services: opening stock is `record_movement(..., reason=receipt, reference="SEED-OPENING", actor=None)`, so capacity rules and the ledger apply exactly as for real users. Loading is refused if `SYN-` products exist (no destructive reset command; to start over locally, use `docker compose down -v`).
+- Synthetic labelling is part of the identifiers (`SYN-`, `SYN-WH`), and the load writes a `seed.loaded` audit event with the seed and sizes. The dashboard's "simulated data" badge comes in P6.
+- No demo user accounts are seeded: default credentials in a repository are a common security mistake. Users are created with `create-user`.

@@ -217,3 +217,17 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Fix and regression test: add an `X-Total-Count` header (or a wrapper object) in P6 when the dashboard tables are built, with tests.
 - Update 2026-10-15: fixed now. `app/pagination.py` `fetch_page()` counts the filtered query (ordering dropped, before limit/offset) and sets `X-Total-Count` on `/users`, `/products`, `/warehouses`, `/inventory` and `/audit-events`. `test_list_endpoints_report_total_count` checks totals with `limit=1` and that filters apply; it fails if the count is taken from the page only. A browser frontend on another origin must expose this header via CORS (P6).
 - Status: VERIFIED
+
+## P1-T4-R1 — [MEDIUM] Seed produced no low-stock items
+- Source: Claude self-review (end-to-end check)
+- File and reproduction: `app/seed.py`. After seeding 500 products into 5 warehouses, `GET /inventory?max_on_hand=20` returned `X-Total-Count: 0`. Every stocked pair received roughly 100+ units, so the demo had nothing for stock-out detection (P4) or the dashboard (P6) to show.
+- Expected behavior: a realistic mix of well-stocked and nearly empty items.
+- Fix and regression test: about 10% of stocked pairs (`LOW_STOCK_SHARE`) get 1–20 units, taken from the warehouse budget first; the rest share the remaining budget as before. `test_plan_includes_low_stock_and_well_stocked_items` (fails with `LOW_STOCK_SHARE = 0`). The default plan (seed 42) has 49 of 654 pairs at 20 units or fewer (7.5%); end-to-end, `/inventory?max_on_hand=20` gives `X-Total-Count: 49`.
+- Status: VERIFIED
+
+## P1-T4-R2 — [LOW] Seed covers products, warehouses and stock only
+- Source: Claude self-review against spec section 3 (synthetic operations also list suppliers, purchase orders, lead times, shipping events and costs)
+- File and reproduction: no supplier, PO or shipment tables exist yet.
+- Expected behavior: the seed grows with the data model.
+- Fix and regression test: extend `build_plan`/`load_plan` when those tables are added (P3 delivery data, P4 replenishment), with determinism and bounds tests like the existing ones.
+- Status: OPEN (P3/P4)

@@ -6,7 +6,7 @@ A supply-chain control tower for retail operations, built as a portfolio project
 
 The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md). Current progress is in [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
-## What exists today (P0 foundation; P1-T1 to P1-T3: inventory model, users and login, data APIs)
+## What exists today (P0 foundation and P1 core data: inventory model, users and login, data APIs, synthetic seed)
 
 | Component | What it does |
 |---|---|
@@ -20,7 +20,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/tests` | Unit tests (no database needed) and PostgreSQL integration tests (migrations, stock rules, a concurrency race). |
 | `.github/workflows/ci.yml` | On every push and pull request: Ruff lint/format, pytest against a real Postgres 16, then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: synthetic seed data (P1-T4), ML, agents, frontend, AWS.
+Not built yet: ML (demand forecasting, delivery risk), inventory decisions, agents, frontend, AWS.
 
 ## How stock changes
 
@@ -31,6 +31,22 @@ Stock is never overwritten. Every change goes through `record_movement(session, 
 3. It updates `inventory.on_hand` **and** appends an `inventory_movements` row (quantity, reason, resulting balance, optional reference such as a PO number) in the same transaction.
 
 So the sum of a product's movements always equals its `on_hand`, and every stock level can be explained. The database also enforces non-negative stock with a CHECK constraint, as a second safety net. Reasons are `receipt`, `sale`, `transfer_in`, `transfer_out` and `adjustment`. `movement_history()` returns a product's recent movements at a warehouse, newest first. `updated_at` columns are kept current by a database trigger, so they are right even for raw SQL updates.
+
+## Synthetic demo data
+
+> **SYNTHETIC DATA.** The seed invents a small retail operation. It is not any real company's data. Every SKU starts with `SYN-` and every warehouse code with `SYN-WH`.
+
+```bash
+docker compose up -d
+docker compose run --rm api python -m app.cli seed                     # 4 warehouses, 200 products, seed 42
+docker compose run --rm api python -m app.cli seed --products 500 --warehouses 5 --seed 7
+```
+
+- **Deterministic:** the same `--seed` always produces exactly the same warehouses, products, prices and stock.
+- Sizes follow the spec: 100–500 products, 3–5 warehouses.
+- Opening stock is recorded as `receipt` movements (reference `SEED-OPENING`, no user), so the ledger adds up and capacity rules apply. Each warehouse is filled to at most 70% of capacity. About 80% of product/warehouse pairs are stocked, and about 10% of those start low (1–20 units), so there is something for stock-out detection to find.
+- It refuses to run when `SYN-` products already exist; it never deletes or overwrites data. It creates no user accounts (use `create-user`).
+- Suppliers, purchase orders, lead times and shipments are added with the phases that use them (P3/P4).
 
 ## Products, warehouses and stock (API)
 
