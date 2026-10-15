@@ -79,7 +79,8 @@ def test_prices_join_by_store_item_and_week(tables) -> None:
         & (prices["item_id"] == "FOODS_1_001")
         & (prices["wm_yr_wk"] == 11102)
     ]["sell_price"].iloc[0]
-    assert row["sell_price"] == expected
+    # Prices are stored as float32 to save memory: equal to within a millionth.
+    assert row["sell_price"] == pytest.approx(expected, rel=1e-6)
 
 
 def test_items_not_yet_on_sale_have_no_price_and_no_sales(tables) -> None:
@@ -195,3 +196,20 @@ def test_cli_reports_problems(tmp_path: Path, capsys: pytest.CaptureFixture[str]
 
     assert m5_data.main(["validate", str(tmp_path)]) == 1
     assert "PROBLEM: sales: negative unit sales" in capsys.readouterr().err
+
+
+def test_long_table_uses_compact_types(tables) -> None:
+    # On the real data this keeps one store at ~180 MB instead of ~3.5 GB (see the work log).
+    long = to_long(*_in_call_order(tables))
+
+    for column in ["id", "item_id", "store_id", "state_id", "d", "event_name_1"]:
+        assert long[column].dtype == "category", column
+    assert long["sales"].dtype == "int16"
+    assert long["sell_price"].dtype == "float32"
+    assert long["snap"].dtype == "int8"
+
+
+def test_store_filter_drops_unused_categories() -> None:
+    sales = load_sales(find_files(FIXTURES)["sales"], ["TX_1"])
+
+    assert list(sales["store_id"].cat.categories) == ["TX_1"]
