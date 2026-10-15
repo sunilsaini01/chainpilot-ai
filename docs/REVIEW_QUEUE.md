@@ -247,3 +247,24 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Fix and regression test: measure on the real file first (P2-T1-R1). If it is a problem, read with `dtype` int16 for day columns and/or in chunks filtered by store; add a test that the filtered result is unchanged.
 - Update 2026-10-15: measured with the Windows process peak working set (my first measurement script returned 0 MB because of a 32/64-bit handle mistake in ctypes; fixed and sanity-checked at 62 MB idle). Reading the full file: 642 MB peak (fine). The real problem was in `to_long`: one store's long table used **3,476 MB** (pandas deep size) / 1,493 MB peak, because every row held Python strings for 9 repeated text columns, so all stores would need roughly 35 GB. Fix: id columns read as `category` in `load_sales` (unused categories dropped after store filtering); `compact_long` makes `d` and event columns categories and uses int16/int32/int8/float32 numbers. After: one store **179 MB**, 1,205 MB peak, ~10 s; all 10 stores 58,327,370 rows, **1,784 MB**, 6,435 MB peak, 66 s. Regression tests: `test_long_table_uses_compact_types` (fails without `compact_long`) and `test_store_filter_drops_unused_categories`. Price comparisons in tests now use a 1e-6 relative tolerance (float32).
 - Status: VERIFIED
+
+## P2-T2-R1 — [LOW] Docstring command silently merged two lines
+- Source: Claude self-review
+- File and reproduction: `ml/demand_forecasting/backtest.py`. A line ending in a single `\` inside a normal docstring is a line continuation, so `__doc__` showed one garbled line.
+- Expected behavior: the usage text reads as written.
+- Fix and regression test: rewrote the example without a continuation; checked `__doc__` prints both command lines.
+- Status: FIXED
+
+## P2-T2-R2 — [LOW] Results were produced from uncommitted code
+- Source: Claude self-review (provenance)
+- File and reproduction: `docs/results/p2_baselines.json` records `git_commit: a5ad708-dirty`. The provenance uses `git describe --always --dirty`, so this is reported honestly instead of a misleading clean SHA.
+- Expected behavior: results traceable to exact code.
+- Fix and regression test: the code is committed together with the results. To regenerate from a clean checkout, rerun the command in `docs/MODEL_RESULTS.md`; with unchanged code and data (checksums recorded) the numbers are deterministic.
+- Status: OPEN (accepted; regenerate later if the backtest code changes)
+
+## P2-T2-R3 — [LOW] RMSSE is unweighted, not the M5 competition WRMSSE
+- Source: Claude self-review
+- File and reproduction: `metrics.mean_rmsse` averages RMSSE over series equally; the competition weighted by dollar sales across 12 aggregation levels.
+- Expected behavior: users must not compare these numbers with the Kaggle leaderboard.
+- Fix and regression test: documented clearly in `metrics.py` and `docs/MODEL_RESULTS.md` ("not comparable"). A weighted variant could be added if aggregate-level evaluation is needed (P2-T3).
+- Status: OPEN (documented limitation)

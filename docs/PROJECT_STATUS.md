@@ -1,33 +1,29 @@
 # Project Status
 
 Current phase: P2 (Demand ML)
-Current task: P2-T1, M5 loader, validation, fixtures and download guide
+Current task: P2-T2, baselines, rolling-origin backtests, metrics and features
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 222a701 "Add dataset guide and start Phase 2" (CI #6 green, three jobs). The real-data validation and memory fix are uncommitted follow-ups.
+Last commit: a5ad708 "Record M5 validation results and memory measurements" (CI #7 green). P2-T2 is uncommitted.
 
-## P2-T1 acceptance criteria
-- [x] Download guide (`docs/DATASETS.md`): browser and Kaggle CLI, terms, where files go, how to check them
-- [x] Loader for the three M5 files with store filter and compact dtypes
-- [x] Validator: required columns, consecutive day columns, non-negative whole sales, unique ids, consecutive calendar covering all days, positive unique prices, known weeks, every series priced
-- [x] Long format: one row per series/day with date, week, events, own-state SNAP flag, weekly price (empty when not on sale)
-- [x] Synthetic M5-format fixtures from a seeded script; 24 tests; new `ml-tests` CI job
-- [x] Raw data, `kaggle.json` and zip archives ignored by Git
-- [x] Loader run on the real M5 files: `OK: 30490 series x 1913 days` (owner downloaded 2026-10-15)
-- [x] Memory measured and fixed: one store 3.5 GB to 179 MB; all stores 1.8 GB (6.4 GB peak)
-- [x] CI green on GitHub with the new `ml-tests` job (CI #6 on 222a701)
-- [ ] CI green for the memory-fix follow-up. NOT VERIFIED: requires a push
+## P2-T2 acceptance criteria
+- [x] Seasonal naive baseline (spec) and a 28-day moving average
+- [x] Rolling-origin backtest: 3 non-overlapping 28-day windows ending 2016-04-24; forecaster sees only data up to its origin (tested)
+- [x] Metrics: MAE, WAPE, bias, RMSSE for 7/14/28-day horizons; split dates recorded; no invented numbers
+- [x] Real results on all 10 stores (30,490 series) in `docs/MODEL_RESULTS.md` and `docs/results/p2_baselines.json` with provenance and data checksums
+- [x] One metric cross-checked independently (0.8876 vs 0.888)
+- [x] Leakage-safe features (min lag 28), proven by a perturbation test; fast on real data (one store 2.5 s)
+- [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
 Tests executed (2026-10-15, details in docs/CLAUDE_WORK_LOG.md):
-- `ml`: 26 passed; Ruff passes. Mutations (SNAP mapping, price join, compact types) caught.
-- Real data: validate full and `--store CA_1` both OK (see docs/DATASETS.md).
-- API unchanged: 176 passed with PostgreSQL.
+- `ml`: 44 passed; Ruff passes. Four leakage/logic mutations caught.
+- Real data: all-stores backtest 133 s.
 
-Open findings: P1-T4-R2 (LOW, seed suppliers/POs in P3/P4). P2-T1-R1 and R2 VERIFIED. See docs/REVIEW_QUEUE.md.
-Next action: Owner commits and pushes the memory-fix follow-up, then confirms CI.
-Blockers: none. The M5 data is available locally (not in Git).
+Open findings: P2-T2-R2 (LOW, results from `a5ad708-dirty`, committed together), P2-T2-R3 (LOW, unweighted RMSSE documented), P1-T4-R2 (LOW, P3/P4). See docs/REVIEW_QUEUE.md.
+Next action: Owner commits and pushes P2-T2, then confirms CI.
+Blockers: none. P2-T3 needs approval to install LightGBM (new dependency).
 
 ## Roadmap progress
 | Phase / task | Status |
@@ -38,8 +34,8 @@ Blockers: none. The M5 data is available locally (not in Git).
 | P1-T2 Users, password hashing, tokens, roles (+ audit, rate limiting) | APPROVED (owner, 2026-10-15; CI #3 green on 51b9039) |
 | P1-T3 Product/warehouse/inventory APIs with RBAC + audit events | APPROVED (owner, 2026-10-15; CI #4 green on 92b4793) |
 | P1-T4 Deterministic synthetic seed data | APPROVED (owner, 2026-10-15; CI #5 green on 9d9798c) |
-| P2-T1 M5 loader, validation, fixtures, download guide | READY_FOR_USER_CHECK |
-| P2-T2 Features, baselines, rolling-origin backtests, metrics | NOT_STARTED (unblocked: data downloaded) |
+| P2-T1 M5 loader, validation, fixtures, download guide | APPROVED (owner, 2026-10-15; CI #7 green on a5ad708) |
+| P2-T2 Features, baselines, rolling-origin backtests, metrics | READY_FOR_USER_CHECK |
 | P2-T3 LightGBM model, uncertainty, artifacts | NOT_STARTED |
 | P2-T4 Forecast tables and API | NOT_STARTED |
 | P3–P9 | NOT_STARTED |
@@ -55,3 +51,4 @@ Blockers: none. The M5 data is available locally (not in Git).
 - 2026-10-15: P1-T4 built and self-reviewed; P1 gate met locally. Owner pushed 528ae5e, ca0d17c, 9d9798c; CI #5 green; P1 complete.
 - 2026-10-15: P2 started. P2-T1 built (no real data needed); P2-T2 blocked until M5 is downloaded.
 - 2026-10-15: owner downloaded M5; real data validated; long-table memory fixed (one store 3.5 GB to 179 MB).
+- 2026-10-15: P2-T2 built; first real baseline results on all 10 M5 stores (docs/MODEL_RESULTS.md).

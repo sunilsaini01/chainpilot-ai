@@ -1,0 +1,775 @@
+{
+  "dataset": "M5 Forecasting - Accuracy (sales_train_validation.csv)",
+  "stores": [
+    "CA_1",
+    "CA_2",
+    "CA_3",
+    "CA_4",
+    "TX_1",
+    "TX_2",
+    "TX_3",
+    "WI_1",
+    "WI_2",
+    "WI_3"
+  ],
+  "horizon_days": 28,
+  "origins": [
+    "2016-01-31",
+    "2016-02-28",
+    "2016-03-27"
+  ],
+  "test_windows": [
+    [
+      "2016-02-01",
+      "2016-02-28"
+    ],
+    [
+      "2016-02-29",
+      "2016-03-27"
+    ],
+    [
+      "2016-03-28",
+      "2016-04-24"
+    ]
+  ],
+  "overall": [
+    {
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.186,
+          "wape": 0.8555,
+          "bias": -0.0648,
+          "rmsse": 0.8904,
+          "rmsse_series": 91460,
+          "actual_units": 887680
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.2106,
+          "wape": 0.86,
+          "bias": -0.079,
+          "rmsse": 0.9339,
+          "rmsse_series": 91460,
+          "actual_units": 1802582
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.2141,
+          "wape": 0.8796,
+          "bias": -0.0608,
+          "rmsse": 0.9579,
+          "rmsse_series": 91460,
+          "actual_units": 3535361
+        }
+      ]
+    },
+    {
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.0205,
+          "wape": 0.7361,
+          "bias": -0.0297,
+          "rmsse": 0.6746,
+          "rmsse_series": 91460,
+          "actual_units": 887680
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.0368,
+          "wape": 0.7366,
+          "bias": -0.0443,
+          "rmsse": 0.7135,
+          "rmsse_series": 91460,
+          "actual_units": 1802582
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.0401,
+          "wape": 0.7535,
+          "bias": -0.0255,
+          "rmsse": 0.7362,
+          "rmsse_series": 91460,
+          "actual_units": 3535361
+        }
+      ]
+    }
+  ],
+  "by_store": [
+    {
+      "store": "CA_1",
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.254,
+          "wape": 0.8389,
+          "bias": -0.0601,
+          "rmsse": 0.8431,
+          "rmsse_series": 9146,
+          "actual_units": 95712
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.2782,
+          "wape": 0.8588,
+          "bias": -0.0561,
+          "rmsse": 0.882,
+          "rmsse_series": 9146,
+          "actual_units": 190605
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.2875,
+          "wape": 0.8768,
+          "bias": -0.0431,
+          "rmsse": 0.9088,
+          "rmsse_series": 9146,
+          "actual_units": 376059
+        }
+      ]
+    },
+    {
+      "store": "CA_1",
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.0815,
+          "wape": 0.7235,
+          "bias": -0.0435,
+          "rmsse": 0.6435,
+          "rmsse_series": 9146,
+          "actual_units": 95712
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.0903,
+          "wape": 0.7325,
+          "bias": -0.0393,
+          "rmsse": 0.675,
+          "rmsse_series": 9146,
+          "actual_units": 190605
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.0987,
+          "wape": 0.7483,
+          "bias": -0.0262,
+          "rmsse": 0.6996,
+          "rmsse_series": 9146,
+          "actual_units": 376059
+        }
+      ]
+    },
+    {
+      "store": "CA_2",
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.2762,
+          "wape": 0.9056,
+          "bias": -0.0094,
+          "rmsse": 0.9444,
+          "rmsse_series": 9145,
+          "actual_units": 90232
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.2919,
+          "wape": 0.9067,
+          "bias": -0.0203,
+          "rmsse": 0.9812,
+          "rmsse_series": 9145,
+          "actual_units": 182463
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.303,
+          "wape": 0.9321,
+          "bias": -0.0014,
+          "rmsse": 1.0093,
+          "rmsse_series": 9145,
+          "actual_units": 358033
+        }
+      ]
+    },
+    {
+      "store": "CA_2",
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.0871,
+          "wape": 0.7714,
+          "bias": -0.0354,
+          "rmsse": 0.7178,
+          "rmsse_series": 9145,
+          "actual_units": 90232
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.0966,
+          "wape": 0.7696,
+          "bias": -0.046,
+          "rmsse": 0.7518,
+          "rmsse_series": 9145,
+          "actual_units": 182463
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.1007,
+          "wape": 0.7874,
+          "bias": -0.0276,
+          "rmsse": 0.7759,
+          "rmsse_series": 9145,
+          "actual_units": 358033
+        }
+      ]
+    },
+    {
+      "store": "CA_3",
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.6411,
+          "wape": 0.7838,
+          "bias": -0.0142,
+          "rmsse": 0.8995,
+          "rmsse_series": 9144,
+          "actual_units": 134055
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.6731,
+          "wape": 0.7875,
+          "bias": -0.0286,
+          "rmsse": 0.9356,
+          "rmsse_series": 9144,
+          "actual_units": 272086
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.6889,
+          "wape": 0.8048,
+          "bias": -0.0166,
+          "rmsse": 0.962,
+          "rmsse_series": 9144,
+          "actual_units": 537488
+        }
+      ]
+    },
+    {
+      "store": "CA_3",
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.3666,
+          "wape": 0.6527,
+          "bias": -0.0084,
+          "rmsse": 0.683,
+          "rmsse_series": 9144,
+          "actual_units": 134055
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.3899,
+          "wape": 0.6542,
+          "bias": -0.0228,
+          "rmsse": 0.7187,
+          "rmsse_series": 9144,
+          "actual_units": 272086
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.4099,
+          "wape": 0.6718,
+          "bias": -0.0107,
+          "rmsse": 0.7442,
+          "rmsse_series": 9144,
+          "actual_units": 537488
+        }
+      ]
+    },
+    {
+      "store": "CA_4",
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 0.8899,
+          "wape": 1.0417,
+          "bias": -0.0264,
+          "rmsse": 0.8801,
+          "rmsse_series": 9146,
+          "actual_units": 54698
+        },
+        {
+          "horizon_days": 14,
+          "mae": 0.8907,
+          "wape": 1.0543,
+          "bias": -0.0156,
+          "rmsse": 0.9155,
+          "rmsse_series": 9146,
+          "actual_units": 108193
+        },
+        {
+          "horizon_days": 28,
+          "mae": 0.9022,
+          "wape": 1.0674,
+          "bias": -0.016,
+          "rmsse": 0.9515,
+          "rmsse_series": 9146,
+          "actual_units": 216471
+        }
+      ]
+    },
+    {
+      "store": "CA_4",
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 0.7469,
+          "wape": 0.8743,
+          "bias": -0.035,
+          "rmsse": 0.6505,
+          "rmsse_series": 9146,
+          "actual_units": 54698
+        },
+        {
+          "horizon_days": 14,
+          "mae": 0.7472,
+          "wape": 0.8844,
+          "bias": -0.0243,
+          "rmsse": 0.6804,
+          "rmsse_series": 9146,
+          "actual_units": 108193
+        },
+        {
+          "horizon_days": 28,
+          "mae": 0.7558,
+          "wape": 0.8943,
+          "bias": -0.0246,
+          "rmsse": 0.7158,
+          "rmsse_series": 9146,
+          "actual_units": 216471
+        }
+      ]
+    },
+    {
+      "store": "TX_1",
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 0.9519,
+          "wape": 0.8979,
+          "bias": -0.0575,
+          "rmsse": 0.8358,
+          "rmsse_series": 9147,
+          "actual_units": 67877
+        },
+        {
+          "horizon_days": 14,
+          "mae": 0.9677,
+          "wape": 0.8974,
+          "bias": -0.0733,
+          "rmsse": 0.8807,
+          "rmsse_series": 9147,
+          "actual_units": 138077
+        },
+        {
+          "horizon_days": 28,
+          "mae": 0.979,
+          "wape": 0.908,
+          "bias": -0.0732,
+          "rmsse": 0.91,
+          "rmsse_series": 9147,
+          "actual_units": 276128
+        }
+      ]
+    },
+    {
+      "store": "TX_1",
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 0.839,
+          "wape": 0.7915,
+          "bias": -0.0142,
+          "rmsse": 0.6282,
+          "rmsse_series": 9147,
+          "actual_units": 67877
+        },
+        {
+          "horizon_days": 14,
+          "mae": 0.8507,
+          "wape": 0.789,
+          "bias": -0.0308,
+          "rmsse": 0.67,
+          "rmsse_series": 9147,
+          "actual_units": 138077
+        },
+        {
+          "horizon_days": 28,
+          "mae": 0.8538,
+          "wape": 0.792,
+          "bias": -0.0307,
+          "rmsse": 0.6978,
+          "rmsse_series": 9147,
+          "actual_units": 276128
+        }
+      ]
+    },
+    {
+      "store": "TX_2",
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.1273,
+          "wape": 0.8528,
+          "bias": -0.0252,
+          "rmsse": 0.8417,
+          "rmsse_series": 9147,
+          "actual_units": 84636
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.1592,
+          "wape": 0.8586,
+          "bias": -0.0457,
+          "rmsse": 0.8857,
+          "rmsse_series": 9147,
+          "actual_units": 172900
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.1698,
+          "wape": 0.871,
+          "bias": -0.0407,
+          "rmsse": 0.9089,
+          "rmsse_series": 9147,
+          "actual_units": 344002
+        }
+      ]
+    },
+    {
+      "store": "TX_2",
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 0.9727,
+          "wape": 0.7359,
+          "bias": 0.0023,
+          "rmsse": 0.6291,
+          "rmsse_series": 9147,
+          "actual_units": 84636
+        },
+        {
+          "horizon_days": 14,
+          "mae": 0.9937,
+          "wape": 0.736,
+          "bias": -0.0187,
+          "rmsse": 0.6678,
+          "rmsse_series": 9147,
+          "actual_units": 172900
+        },
+        {
+          "horizon_days": 28,
+          "mae": 0.9998,
+          "wape": 0.7444,
+          "bias": -0.0136,
+          "rmsse": 0.6901,
+          "rmsse_series": 9147,
+          "actual_units": 344002
+        }
+      ]
+    },
+    {
+      "store": "TX_3",
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.0787,
+          "wape": 0.8515,
+          "bias": -0.0619,
+          "rmsse": 0.8917,
+          "rmsse_series": 9147,
+          "actual_units": 81113
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.0994,
+          "wape": 0.8524,
+          "bias": -0.0786,
+          "rmsse": 0.9394,
+          "rmsse_series": 9147,
+          "actual_units": 165167
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.106,
+          "wape": 0.8738,
+          "bias": -0.0612,
+          "rmsse": 0.9615,
+          "rmsse_series": 9147,
+          "actual_units": 324199
+        }
+      ]
+    },
+    {
+      "store": "TX_3",
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 0.9232,
+          "wape": 0.7288,
+          "bias": -0.0152,
+          "rmsse": 0.6738,
+          "rmsse_series": 9147,
+          "actual_units": 81113
+        },
+        {
+          "horizon_days": 14,
+          "mae": 0.9388,
+          "wape": 0.7278,
+          "bias": -0.0328,
+          "rmsse": 0.7161,
+          "rmsse_series": 9147,
+          "actual_units": 165167
+        },
+        {
+          "horizon_days": 28,
+          "mae": 0.9498,
+          "wape": 0.7503,
+          "bias": -0.0145,
+          "rmsse": 0.7389,
+          "rmsse_series": 9147,
+          "actual_units": 324199
+        }
+      ]
+    },
+    {
+      "store": "WI_1",
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.1334,
+          "wape": 0.9147,
+          "bias": -0.0191,
+          "rmsse": 0.9289,
+          "rmsse_series": 9146,
+          "actual_units": 79341
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.1517,
+          "wape": 0.9184,
+          "bias": -0.0307,
+          "rmsse": 0.9689,
+          "rmsse_series": 9146,
+          "actual_units": 160576
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.1628,
+          "wape": 0.931,
+          "bias": -0.0268,
+          "rmsse": 0.9916,
+          "rmsse_series": 9146,
+          "actual_units": 319882
+        }
+      ]
+    },
+    {
+      "store": "WI_1",
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 0.9726,
+          "wape": 0.7849,
+          "bias": -0.0109,
+          "rmsse": 0.7049,
+          "rmsse_series": 9146,
+          "actual_units": 79341
+        },
+        {
+          "horizon_days": 14,
+          "mae": 0.9826,
+          "wape": 0.7836,
+          "bias": -0.0226,
+          "rmsse": 0.7393,
+          "rmsse_series": 9146,
+          "actual_units": 160576
+        },
+        {
+          "horizon_days": 28,
+          "mae": 0.9866,
+          "wape": 0.7899,
+          "bias": -0.0187,
+          "rmsse": 0.7591,
+          "rmsse_series": 9146,
+          "actual_units": 319882
+        }
+      ]
+    },
+    {
+      "store": "WI_2",
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.4345,
+          "wape": 0.7983,
+          "bias": -0.199,
+          "rmsse": 0.9654,
+          "rmsse_series": 9145,
+          "actual_units": 115063
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.4827,
+          "wape": 0.798,
+          "bias": -0.2253,
+          "rmsse": 1.0219,
+          "rmsse_series": 9145,
+          "actual_units": 237955
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.4467,
+          "wape": 0.8261,
+          "bias": -0.1781,
+          "rmsse": 1.0322,
+          "rmsse_series": 9145,
+          "actual_units": 448551
+        }
+      ]
+    },
+    {
+      "store": "WI_2",
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.2574,
+          "wape": 0.6997,
+          "bias": -0.079,
+          "rmsse": 0.7452,
+          "rmsse_series": 9145,
+          "actual_units": 115063
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.2919,
+          "wape": 0.6953,
+          "bias": -0.1093,
+          "rmsse": 0.7958,
+          "rmsse_series": 9145,
+          "actual_units": 237955
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.268,
+          "wape": 0.724,
+          "bias": -0.0549,
+          "rmsse": 0.8057,
+          "rmsse_series": 9145,
+          "actual_units": 448551
+        }
+      ]
+    },
+    {
+      "store": "WI_3",
+      "model": "seasonal_naive",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 1.0727,
+          "wape": 0.8085,
+          "bias": -0.1428,
+          "rmsse": 0.8738,
+          "rmsse_series": 9147,
+          "actual_units": 84953
+        },
+        {
+          "horizon_days": 14,
+          "mae": 1.1116,
+          "wape": 0.8155,
+          "bias": -0.1657,
+          "rmsse": 0.9279,
+          "rmsse_series": 9147,
+          "actual_units": 174560
+        },
+        {
+          "horizon_days": 28,
+          "mae": 1.0956,
+          "wape": 0.8387,
+          "bias": -0.1293,
+          "rmsse": 0.9437,
+          "rmsse_series": 9147,
+          "actual_units": 334548
+        }
+      ]
+    },
+    {
+      "store": "WI_3",
+      "model": "moving_average_28",
+      "metrics": [
+        {
+          "horizon_days": 7,
+          "mae": 0.9578,
+          "wape": 0.7219,
+          "bias": -0.0472,
+          "rmsse": 0.6706,
+          "rmsse_series": 9147,
+          "actual_units": 84953
+        },
+        {
+          "horizon_days": 14,
+          "mae": 0.9862,
+          "wape": 0.7235,
+          "bias": -0.0726,
+          "rmsse": 0.7198,
+          "rmsse_series": 9147,
+          "actual_units": 174560
+        },
+        {
+          "horizon_days": 28,
+          "mae": 0.9774,
+          "wape": 0.7483,
+          "bias": -0.0322,
+          "rmsse": 0.7344,
+          "rmsse_series": 9147,
+          "actual_units": 334548
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "git_commit": "a5ad708-dirty",
+    "python": "3.11.9",
+    "pandas": "3.0.6",
+    "numpy": "2.4.6",
+    "data_sha256": {
+      "calendar": "d12b5914ef03e66649adf5dd9e996e6602251c22b7a6af8f1f7e3aa12f8860f5",
+      "sales": "f368e66ed1dbecb48b2cc8fc589bf68b3deddbbb36bf5c88b4d6d0a09b9b6724",
+      "prices": "9da3ad1f8b8ccacdbdc70612191dd375ec24a4ac6625c24b75b3bc60b0bed2ef"
+    }
+  },
+  "runtime_seconds": 133.3
+}

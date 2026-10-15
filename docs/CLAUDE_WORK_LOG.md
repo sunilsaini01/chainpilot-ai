@@ -295,3 +295,30 @@ Append-only. Each entry records what was actually done and actually run.
 ## 2026-10-15 19:10 UTC — Correction and P2-T1 CI verification
 - Correction to the previous entry: it says P2-T1 was "still uncommitted". In fact the owner had already pushed P2-T1 as `739c2a2` (loader, tests, fixtures), `8705510` (CI job, ignore rules) and `222a701` (docs) at 21:35 local time. The memory fix and real-data results in the previous entry are therefore **uncommitted follow-up changes on top of `222a701`**.
 - CI: GitHub Actions run 38766062716 (CI #6) on `222a701` concluded `success`; all three jobs (API lint and tests, ML lint and tests, Docker build and smoke test) on `ubuntu-24.04`, every step succeeded, 0 annotations. The new `ml-tests` job is verified on GitHub (it ran the version before the memory fix).
+
+## 2026-10-15 19:30 UTC — P2-T1 follow-up CI verification
+- Starting commit / branch: `a5ad708` on `main` (owner pushed `d39af01` memory fix, `318049b` tests, `a5ad708` docs), working tree clean.
+- Tests run / actual results: GitHub Actions run 38767199354 (CI #7) on `a5ad708` concluded `success`; all three jobs on `ubuntu-24.04`, every step succeeded, 0 annotations.
+- Outcome: P2-T1 approved by the owner ("ok it's done now go ahead"). Next: P2-T2.
+
+## 2026-10-15 20:10 UTC — P2-T2
+- Starting commit / branch: `a5ad708` on `main`, working tree clean apart from the CI #7 log entry.
+- Objective and plan: baselines, rolling-origin backtests, metrics for 7/14/28 days on the real M5 data, plus leakage-safe features for P2-T3.
+- Files changed and why:
+  - `ml/demand_forecasting/metrics.py` (new): MAE, WAPE, bias, RMSSE scales and mean.
+  - `ml/demand_forecasting/baselines.py` (new): seasonal naive, 28-day moving average.
+  - `ml/demand_forecasting/backtest.py` (new): origins, run, score, per-store loop, JSON report with provenance, command line.
+  - `ml/demand_forecasting/features.py` (new): lags 28/35/42/56, rolling means 7/28/56 and std 28 on sales shifted by `min_lag`, calendar and price-change features.
+  - `ml/tests/test_forecasting.py` (new, 18 tests). ML total 44.
+  - `docs/MODEL_RESULTS.md` (new), `docs/results/p2_baselines.json` (new, generated), `README.md`, `docs/{REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`.
+- Tests run / actual results:
+  - `ml`: 44 passed; Ruff passes (fixed one long line and import order).
+  - Mutations (restored, diff identical): rolling features on unshifted sales gave 2 failed; forecaster given the full series gave 4 failed; RMSSE scale from the full series gave 1 failed; seasonal-naive weekday off by one gave 2 failed.
+  - CA_1 backtest (3 origins, 28 days): seasonal naive WAPE 0.839/0.859/0.877 (7/14/28 d), moving average 0.724/0.733/0.748; 14.4 s.
+  - Independent check: seasonal-naive WAPE for CA_1, origin 2016-03-27, 28 days, recomputed with plain pandas from the CSVs gave 0.8876; the backtest gave 0.888.
+  - All stores: see the table in `docs/MODEL_RESULTS.md` (e.g. moving average at 28 days: MAE 1.040, WAPE 0.753, bias −0.025, RMSSE 0.736 over 91,460 series-origins); runtime 133.3 s; report at `docs/results/p2_baselines.json` with `git_commit a5ad708-dirty` and data checksums.
+  - Features on real CA_1: 5,832,737 rows in 2.5 s, 396 MB; spot check `lag_28` on 2016-03-29 = 41 = sales on 2016-03-01; missing shares as expected (lags 1.5–2.9% at series start, prices 19.4%).
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings and fixes: P2-T2-R1 fixed (docstring); R2 (dirty provenance) and R3 (unweighted RMSSE) documented and accepted.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner commits and pushes; confirm CI; then P2-T3 (LightGBM model on these features, must beat the 28-day moving average; uncertainty bands; saved model artifacts). LightGBM is a new dependency and needs approval to install.

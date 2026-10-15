@@ -123,3 +123,10 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 
 ## D-035 — 2026-10-15 — Compact types for the M5 long table
 - Categories for the 9 repeated text columns and small number types (sales int16, week int32, weekday/SNAP int8, price float32) cut one store from 3.5 GB to 179 MB and make all 10 stores (58.3M rows) fit in 1.8 GB. float32 prices keep about 7 significant digits, which is far more than cents need. Modelling will still work per store or per store group by default, to keep peaks low on a 16 GB laptop.
+
+## D-036 — 2026-10-15 — Baselines, backtest design and metrics
+- Baselines: seasonal naive (spec requirement) plus a 28-day moving average, because seasonal naive is a weak bar for noisy item-level data; the stronger baseline is the one models must beat.
+- Rolling origin: 3 origins, 28 days apart, ending on the last day (2016-04-24), non-overlapping test windows; 7/14/28-day horizons are the first 7/14/28 days of each window. The forecaster receives only history up to the origin (tested with a spy and a "cheating" forecaster), and RMSSE scales use only history up to each origin.
+- Metrics: MAE, WAPE, bias (sum-based, signed), RMSSE (M5-style scale from first sale; unweighted mean). No MAPE: undefined on the many zero-sales days.
+- Features for the tree model use only sales at least 28 days old (`min_lag=28`), so one model can forecast all 28 days directly without feeding back its own predictions. Verified by a perturbation test (changing all newer sales leaves the features unchanged).
+- Each run writes a JSON report with origins, windows, runtime, package versions, `git describe --dirty`, and SHA-256 of the data files.
