@@ -17,8 +17,10 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app import security
 from app.config import Settings
 from app.dependencies import get_db_session
 from app.main import app
@@ -43,9 +45,22 @@ def test_database_url() -> Iterator[URL]:
     settings = Settings()
     test_db_name = f"{settings.postgres_db}_pytest_{uuid.uuid4().hex[:8]}"
     # CREATE/DROP DATABASE cannot run inside a transaction, hence AUTOCOMMIT.
-    admin_engine = create_engine(settings.database_url, isolation_level="AUTOCOMMIT")
-    with admin_engine.connect() as connection:
-        connection.execute(text(f'CREATE DATABASE "{test_db_name}"'))
+    admin_engine = create_engine(
+        settings.database_url,
+        isolation_level="AUTOCOMMIT",
+        connect_args={"connect_timeout": settings.database_connect_timeout},
+    )
+    try:
+        with admin_engine.connect() as connection:
+            connection.execute(text(f'CREATE DATABASE "{test_db_name}"'))
+    except OperationalError as error:
+        # Stop the whole run with one clear message instead of erroring every test.
+        pytest.exit(
+            f"RUN_DB_TESTS=1 but PostgreSQL at {settings.postgres_host}:{settings.postgres_port} "
+            f"is not reachable ({type(error).__name__}). Start it, e.g. `docker compose up -d "
+            "postgres`, or unset RUN_DB_TESTS.",
+            returncode=1,
+        )
     try:
         yield settings.database_url.set(database=test_db_name)
     finally:
@@ -124,17 +139,25 @@ def api_client(db_engine: Engine, db_session: Session) -> Iterator[TestClient]:
 
 
 @pytest.fixture
-def make_user(db_session: Session) -> Callable[..., User]:
-    """Factory: make_user(Role.ADMIN) creates and commits a user with TEST_PASSWORD."""
+def make_user(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Callable[..., User]:
+    """Factory: make_user(Role.ADMIN) creates and commits a user with TEST_PASSWORD.
+
+    Test users get a cheap scrypt cost (N=2^10, p=1) so the suite stays fast. Each
+    hash stores its own parameters, so logging in works exactly as in production;
+    users created through the API and tests/test_security.py use the real cost.
+    """
 
     def _make_user(role: Role = Role.ANALYST, email: str | None = None) -> User:
-        user = create_user(
-            db_session,
-            email=email or f"{role.value}@example.com",
-            full_name=f"Test {role.value.title()}",
-            role=role,
-            password=TEST_PASSWORD,
-        )
+        with monkeypatch.context() as patch:
+            patch.setattr(security, "SCRYPT_N", 2**10)
+            patch.setattr(security, "SCRYPT_P", 1)
+            user = create_user(
+                db_session,
+                email=email or f"{role.value}@example.com",
+                full_name=f"Test {role.value.title()}",
+                role=role,
+                password=TEST_PASSWORD,
+            )
         db_session.commit()
         return user
 

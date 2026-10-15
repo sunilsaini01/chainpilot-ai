@@ -8,6 +8,9 @@ x-api-environment: &api-environment
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   LOG_FORMAT: ${LOG_FORMAT:-json}
   ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-480}
+  # Uvicorn trusts X-Forwarded-For (the real client IP) only from these addresses.
+  # Locally that is nobody else; behind the AWS load balancer set it to the ALB's subnet.
+  FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1,::1}
   # Inside the Compose network the database host is the service name.
   POSTGRES_HOST: postgres
   POSTGRES_PORT: "5432"
