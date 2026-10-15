@@ -1,0 +1,38 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Data and models: raw/generated data and trained artifacts stay out of Git.
+data/raw/
+data/processed/
+data/synthetic/
+*.parquet
+*.joblib
+*.pkl
+mlruns/
+
+# Node / frontend (later phases)
+node_modules/
+.next/
+
+# Terraform state (later phases)
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
