@@ -13,6 +13,10 @@ venv/
 .ruff_cache/
 *.egg-info/
 
+# Kaggle API credentials and downloaded dataset archives must never be committed.
+kaggle.json
+*.zip
+
 # Data and models: raw/generated data and trained artifacts stay out of Git.
 data/raw/
 data/processed/
