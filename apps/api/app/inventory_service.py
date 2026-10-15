@@ -31,8 +31,12 @@ def record_movement(
     quantity_change: int,
     reason: MovementReason,
     reference: str | None = None,
+    actor_user_id: int | None = None,
 ) -> InventoryMovement:
     """Apply one stock change and record it in the ledger.
+
+    `actor_user_id` is the user making the change. API routes must always pass it;
+    None is only for system processes such as the synthetic data seed.
 
     Example: 10 on hand, `quantity_change=-3` (a sale) gives on_hand 7 and a
     movement with `balance_after=7`. A change of -11 raises
@@ -73,6 +77,7 @@ def record_movement(
         balance_after=new_balance,
         reason=reason.value,
         reference=reference,
+        created_by_user_id=actor_user_id,
     )
     session.add(movement)
     session.flush()  # send to the database now so constraint errors surface here

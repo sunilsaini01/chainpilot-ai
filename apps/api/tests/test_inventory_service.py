@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.inventory_service import InsufficientStockError, movement_history, record_movement
-from app.models import Inventory, InventoryMovement, MovementReason, Product, Warehouse
+from app.models import Inventory, InventoryMovement, MovementReason, Product, Role, Warehouse
 
 
 def on_hand(session: Session, product: Product, warehouse: Warehouse) -> int:
@@ -238,3 +238,25 @@ def test_orm_sees_database_updated_at_after_update(
 
     # FetchedValue makes the ORM reload updated_at, which the trigger set.
     assert warehouse.updated_at > before
+
+
+def test_movement_records_the_acting_user(
+    db_session: Session, product: Product, warehouse: Warehouse, make_user
+) -> None:
+    manager = make_user(Role.MANAGER)
+
+    movement = record_movement(
+        db_session, product.id, warehouse.id, 5, MovementReason.RECEIPT, actor_user_id=manager.id
+    )
+    db_session.commit()
+
+    assert movement.created_by_user_id == manager.id
+
+
+def test_movement_with_unknown_actor_is_rejected(
+    db_session: Session, product: Product, warehouse: Warehouse
+) -> None:
+    with pytest.raises(IntegrityError, match="fk_inventory_movements_created_by_user_id_users"):
+        record_movement(
+            db_session, product.id, warehouse.id, 5, MovementReason.RECEIPT, actor_user_id=999_999
+        )

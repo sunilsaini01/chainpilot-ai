@@ -60,3 +60,28 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 
 ## D-017 — 2026-10-15 — `httpx2` for the test client
 - Starlette 1.8 deprecates `httpx` for `TestClient` in favour of `httpx2` (same author, official pydantic/httpx2 repository). Approved by the owner on 2026-10-15. It is a test-only dependency (`requirements-dev.txt`) and is not in the Docker image.
+
+## D-018 — 2026-10-15 — Passwords hashed with the standard library's scrypt
+- `hashlib.scrypt` is memory-hard and on OWASP's recommended list. Parameters N=2^14, r=8, p=5 match one of OWASP's equivalent settings (about 16 MiB per hash) and are stored in each hash string (`scrypt$N$r$p$salt$hash`), so they can be raised later. No extra dependency (argon2/bcrypt packages) is needed. Verification uses `hmac.compare_digest`. A dummy hash is checked when the email is unknown, so timing does not reveal which emails exist.
+- Password policy: 12–128 characters (length over complexity rules, as in NIST SP 800-63B; the upper bound limits hashing cost).
+
+## D-019 — 2026-10-15 — Opaque database tokens instead of JWTs
+- Login returns a random 256-bit token. The database stores its SHA-256 hash with an expiry and a `revoked_at`. Compared with JWTs: logout and deactivation take effect immediately, there is no signing key to manage or leak, and no token library is needed. The cost is one indexed lookup per request, which is fine at this scale.
+- Token lifetime defaults to 8 hours (`ACCESS_TOKEN_TTL_MINUTES`, 5 min to 7 days). There are no refresh tokens yet; the user logs in again.
+
+## D-020 — 2026-10-15 — Roles are a simple hierarchy, checked server-side
+- `analyst < manager < admin`; `require_role(minimum)` is a FastAPI dependency. A hierarchy is easy to explain and matches the spec (analyst read, manager approve, admin manage). If separation of duties is needed later (for example, an admin who may not approve), it can switch to explicit permission sets.
+- 401 is returned for missing, invalid, expired or revoked tokens, always with the same message; 403 for a role that is too low.
+- The first admin is created with `python -m app.cli create-user`. The password comes from a hidden prompt or `CHAINPILOT_NEW_USER_PASSWORD`, never a command-line argument (shell history). No default admin account exists.
+
+## D-021 — 2026-10-15 — Simple email validation, no extra package
+- A small regex (one `@`, a dot in the domain) plus lower-casing, instead of adding `email-validator`. Emails are used as login names in an internal tool, not to send mail, so strict validation adds little.
+
+## D-022 — 2026-10-15 — Login rate limiting stored in PostgreSQL
+- Failed attempts are rows in `login_attempts`; limits are counted with indexed queries over a 15-minute window. No Redis is needed (spec: Redis optional and must be justified), the data survives restarts and is shared by all API containers. Limits: 5 per email (reset by a successful login), 20 per IP. Blocks expire by themselves, so a deliberate lockout of someone else's account lasts at most 15 minutes. The check happens before scrypt, so blocked floods cost little CPU.
+
+## D-023 — 2026-10-15 — Audit events in the same transaction as the change
+- `record_event()` only adds a row to the session; the route commits it together with the change, so there is never a change without its audit record (or the reverse). Details are JSONB with old/new values and never secrets. Actor FKs use ON DELETE RESTRICT: users with history are deactivated, not deleted. Readable by managers and admins (the dashboard's audit timeline).
+
+## D-024 — 2026-10-15 — Review-queue items moved forward from P1-T3/P7 at the owner's request
+- The owner asked for the review queue to be cleared before committing P1-T2. Audit events, the actor on stock movements, user deactivation/role changes, login rate limiting and token cleanup were built now. P1-T3 keeps the product/warehouse/inventory APIs (which will use `record_event` and `actor_user_id`).

@@ -54,7 +54,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: supply-chain-hardened CI before deployment credentials exist.
 - Fix and regression test: acceptable for now, because the workflow has read-only permissions and no secrets. Pin to SHAs before adding AWS OIDC credentials in P8.
 - Update 2026-10-15: pinned now instead of waiting. SHAs taken from `git ls-remote` of the official repositories: `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1` (tag v7.0.1 = v7) and `actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97` (tag v7.0.0 = v7), with the version as a trailing comment. Both tags are lightweight (they point directly at commits).
-- Status: FIXED (verified on the next green CI run)
+- Update 2026-10-15: verified. GitHub Actions run 38724402173 (CI #2) on `c997ed9` concluded `success`: both jobs ran on the `ubuntu-24.04` label, every step succeeded (including "Check database migrations ran"), the actions ran from their pinned SHAs, and both jobs had 0 annotations.
+- Status: VERIFIED
 
 ## P0-T2-R4 — [MEDIUM] CI workflow not yet run on GitHub
 - Source: Claude self-review
@@ -83,7 +84,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `.github/workflows/ci.yml` uses `runs-on: ubuntu-latest`, so the runner OS would change without any commit.
 - Expected behavior: CI environment changes only when we choose.
 - Fix and regression test: pin both jobs to `ubuntu-24.04` (the image CI #1 passed on). Upgrade deliberately later.
-- Status: FIXED (verified on the next push)
+- Update 2026-10-15: verified. GitHub Actions run 38724402173 (CI #2) on `c997ed9` concluded `success`: both jobs ran on the `ubuntu-24.04` label, every step succeeded (including "Check database migrations ran"), the actions ran from their pinned SHAs, and both jobs had 0 annotations. The Ubuntu 26 migration notice no longer appears.
+- Status: VERIFIED
 
 ## P1-T1-R1 — [LOW] Alembic deprecation warning about `path_separator`
 - Source: test run (pytest `filterwarnings = error` turned it into a failure)
@@ -114,7 +116,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: every stock change records the acting user.
 - Fix and regression test: add `created_by_user_id` (FK to users) in a new migration in P1-T3, when the write APIs and audit events are built, with a test that the actor is stored.
 - Update 2026-10-15: still deferred on purpose. A foreign key needs the `users` table (P1-T2); a column without a real user to reference would be scaffolding.
-- Status: OPEN (scheduled for P1-T3)
+- Update 2026-10-15 (2): fixed now that users exist. Migration 0004 adds nullable `inventory_movements.created_by_user_id` (FK to users, ON DELETE RESTRICT; NULL only for system processes such as the seed). `record_movement(..., actor_user_id=...)` stores it. Tests: `test_movement_records_the_acting_user`, `test_movement_with_unknown_actor_is_rejected`.
+- Status: VERIFIED
 
 ## P1-T1-R5 — [LOW] Running `alembic` on the host does not read the root `.env`
 - Source: Claude self-review
@@ -122,3 +125,49 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: a documented way to run migrations.
 - Fix and regression test: README documents `docker compose run --rm migrate alembic …` as the main path. For host use, set the `POSTGRES_*` variables.
 - Status: FIXED (documentation)
+
+## P1-T2-R1 — [MEDIUM] No rate limiting or lockout on login
+- Source: Claude self-review
+- File and reproduction: `POST /auth/login` accepts unlimited attempts. Each attempt costs about 0.3 s of CPU (scrypt, by design), so it is open to password guessing and to CPU exhaustion.
+- Expected behavior: limit failed attempts per account and per client IP.
+- Fix and regression test: planned for P7 (approval/security phase), together with an audit trail of login failures; tests for the limit and the reset. Mitigations already in place: 12-character minimum, slow hash, generic error message.
+- Update 2026-10-15: fixed now at the owner's request. `login_attempts` table (migration 0004) and `app/login_throttle.py`: 5 failures per normalized email (counted since that email's last success) or 20 per client IP within 15 minutes gives 429 with `Retry-After: 900`. The check runs before scrypt. Tests in `tests/test_login_throttle.py` (8): block, case-insensitive email, password check skipped while blocked, reset on success, expiry after the window, other accounts unaffected, IP limit, attempts recorded. Mutations (throttle off, no reset) were caught. End-to-end: 6th bad login gave 429 and `Retry-After: 900`. Known limits: concurrent requests can exceed the limit by a few (count-then-insert is not locked); an attacker can lock a known email out for 15 minutes at a time; the client IP is the proxy's until P8 (P1-T2-R5).
+- Status: VERIFIED
+
+## P1-T2-R2 — [LOW] Expired and revoked tokens are never deleted
+- Source: Claude self-review
+- File and reproduction: `auth_tokens` grows with every login.
+- Expected behavior: periodic cleanup.
+- Fix and regression test: add a cleanup CLI command (or worker job) that deletes rows expired more than N days ago, with a test. Small now; needed before a long-running deployment (P8).
+- Update 2026-10-15: fixed. `python -m app.cli cleanup --days 30` deletes tokens expired or revoked more than N days ago and login attempts older than N days (`--days` must be at least 1). Tests: `test_cleanup_deletes_only_old_tokens_and_attempts` (valid token and recent attempt survive), `test_cleanup_rejects_zero_days`. Ran in Docker. Scheduling it (cron or worker) belongs to deployment (P8).
+- Status: VERIFIED
+
+## P1-T2-R3 — [LOW] Admins cannot yet deactivate users or change roles
+- Source: Claude self-review
+- File and reproduction: only `GET /users` and `POST /users` exist. `is_active` is enforced everywhere (login and tokens) but can only be changed in the database.
+- Expected behavior: `PATCH /users/{id}` for admins (role, is_active), with audit events, plus a guard so the last admin cannot demote or deactivate themselves.
+- Fix and regression test: P1-T3, together with the audit_events table.
+- Update 2026-10-15: fixed now. `PATCH /users/{id}` (admin) changes role, full name or `is_active`; returns 404/409/422. `update_user()` refuses to remove the last active admin and locks active admin rows (`SELECT … FOR UPDATE`) so two admins demoting each other at once cannot both succeed. Tests in `tests/test_user_management.py`, including a two-thread race. Mutations (lock removed, guard removed) were caught. End-to-end: self-demotion of the only admin gave 409; deactivation gave 200.
+- Status: VERIFIED
+
+## P1-T2-R4 — [LOW] Logins and user creation are logged, not audited
+- Source: Claude self-review against spec §4.A ("audit actor/timestamp")
+- File and reproduction: login, logout, failed login and user creation write JSON log lines with user ids, but there is no `audit_events` table yet.
+- Expected behavior: durable audit events for security-relevant actions.
+- Fix and regression test: P1-T3 adds `audit_events` (with P1-T1-R4). Record login/user-management events there, with tests.
+- Update 2026-10-15: fixed now. `audit_events` (migration 0004; actor FK RESTRICT, JSONB details) written by `app/audit.py` in the same transaction as the change: `user.login`, `user.logout`, `user.created`, `user.updated` (with old/new values; a no-op PATCH writes nothing). `GET /audit-events` for managers and admins, filterable, newest first (`id` tie-break). Tests check the actor, details, ordering, access by role, and that no password or token text appears in any event. Failed logins are recorded in `login_attempts` rather than as audit events.
+- Status: VERIFIED
+
+## P1-T2-R5 — [LOW] Client IP is the proxy's address behind a load balancer
+- Source: Claude self-review
+- File and reproduction: `app/routes/auth.py` uses `request.client.host`. Behind the AWS ALB (P8) every request would show the balancer's IP, so the per-IP login limit would apply to all users together.
+- Expected behavior: use the real client IP from `X-Forwarded-For`, but only when it is set by the trusted proxy.
+- Fix and regression test: in P8, run uvicorn with `--proxy-headers --forwarded-allow-ips=<ALB subnet>`, and test it.
+- Status: OPEN
+
+## P1-T2-R6 — [LOW] `login_attempts` stores emails typed at login
+- Source: Claude self-review (privacy)
+- File and reproduction: needed for per-account limits, but the table holds personal data, including mistyped emails.
+- Expected behavior: kept only as long as necessary.
+- Fix and regression test: `cleanup --days 30` deletes old rows (tested). Document the retention in the deployment/privacy notes (P9).
+- Status: OPEN

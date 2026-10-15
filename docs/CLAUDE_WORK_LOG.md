@@ -115,3 +115,56 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings and fixes: found and fixed a weak ordering test (above). Remaining open: P1-T1-R4 (scheduled for P1-T3).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: owner commits and pushes; confirm CI green; then P1-T2.
+
+## 2026-10-15 12:00 UTC — P1-T1 CI verification
+- Starting commit / branch: `c997ed9` on `main` (pushed by the owner), working tree clean.
+- Tests run / actual results: GitHub Actions run 38724402173 (CI #2) on `c997ed9` concluded `success`: both jobs ran on the `ubuntu-24.04` label, every step succeeded (including "Check database migrations ran"), the actions ran from their pinned SHAs, and both jobs had 0 annotations. Job logs were not read (they need authentication).
+- Outcome: P1-T1 approved by the owner ("it's done now check and then go ahead"). P0-T2-R3 and P0-T2-R7 verified.
+- Next recommended task: P1-T2 (users, password hashing, login tokens, roles), started next.
+
+## 2026-10-15 12:45 UTC — P1-T2
+- Starting commit / branch: `c997ed9` on `main`, working tree clean apart from the doc updates recording CI #2.
+- Objective and plan: users with roles, secure password hashing, login/logout tokens, server-side role checks, a CLI for the first admin. No new dependencies.
+- Files changed and why:
+  - `apps/api/app/security.py` (new): scrypt hash/verify, dummy hash, token generation and SHA-256.
+  - `apps/api/app/models.py`: `Role` (hierarchy with `at_least`), `User`, `AuthToken`.
+  - `apps/api/migrations/versions/20261015_0003_users_and_auth_tokens.py` (new): tables, constraints, users `updated_at` trigger.
+  - `apps/api/app/users_service.py` (new): `create_user`, `authenticate`, `issue_token`, `user_for_token`, `revoke_token`, email/password validation.
+  - `apps/api/app/dependencies.py` (new): `get_db_session`, `get_bearer_token`, `get_current_user`, `require_role`.
+  - `apps/api/app/schemas.py` (new), `app/routes/auth.py` (new), `app/routes/users.py` (new), `app/main.py` (routers), `app/cli.py` (new), `app/config.py` (`access_token_ttl_minutes`).
+  - Tests (counts from `pytest --collect-only`): `tests/test_security.py` (21), `tests/test_users_service.py` (17), `tests/test_auth_api.py` (19), `tests/test_cli.py` (3), i.e. 60 new; `tests/conftest.py` (`api_client`, `make_user`, `login`; TRUNCATE now covers every model table automatically).
+  - `docker-compose.yml`, `.env.example` (`ACCESS_TOKEN_TTL_MINUTES`), `README.md`, `docs/{DECISIONS,REVIEW_QUEUE,PROJECT_STATUS}.md`.
+- Tests run / actual results (Windows 11, Python 3.11.9, Docker 29.7.2):
+  - `ruff format` (5 files), one E501 fixed; `ruff check .` and `ruff format --check .` pass.
+  - No DB: 36 passed, 58 skipped. With `RUN_DB_TESTS=1`: 94 passed in 29.3 s (slower because each login and user creation runs scrypt).
+  - Mutation checks (each file restored afterwards, diff identical): role check disabled made 3 RBAC tests fail; revocation filter removed made 2 tests fail (API + service); expiry filter removed made 2 tests fail (API + service).
+  - End-to-end in an isolated Compose project `chainpilot-e2e` (ports 8002/5436, fresh volume): migrations 0001→0002→0003; CLI created admin (`id=1`, email lower-cased); wrong password gave 401 with the generic message; admin login gave a 43-character token; `/auth/me` 200; admin `POST /users` 201; analyst `GET /users` 403; admin `GET /users` 200; no token 401; logout 204 then the same token 401. DB: 0 rows contain the raw token, 2 tokens, 1 revoked; password hashes start with `scrypt$16384$8$5$`. API logs: 0 occurrences of either password or either token; log lines contain user ids only. The project was then removed with `down --volumes --rmi local` (its own volume and images only; `chainpilot-ai_postgres_data` untouched).
+  - Development stack: `docker compose up --build --wait` exit 0, "Running upgrade 0002 -> 0003", `alembic current` = `0003 (head)`, `/ready` 200, `/auth/me` without a token 401; stopped.
+  - NOT VERIFIED: CI on GitHub for this task (not pushed yet).
+- Self-review findings and fixes: fixed during the task: the TRUNCATE list would have missed new tables (now generated from the models); an unclear log comment. Open: P1-T2-R1 (MEDIUM, login rate limiting, planned P7), R2–R4 (LOW; P1-T3/P8).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner commits and pushes; confirm CI green; then P1-T3 (product/warehouse/inventory APIs with RBAC, audit_events, actor on stock movements, user deactivation).
+
+## 2026-10-15 13:30 UTC — P1-T2 review-queue fixes (owner request before commit)
+- Starting commit / branch: `c997ed9` on `main`, with P1-T2 uncommitted.
+- Objective and plan: fix every open review item before committing: P1-T2-R1 (rate limiting), P1-T2-R2 (token cleanup), P1-T2-R3 (PATCH users, last-admin guard), P1-T2-R4 (audit events), P1-T1-R4 (actor on stock movements).
+- Files changed and why:
+  - `apps/api/migrations/versions/20261015_0004_audit_login_attempts_actor.py` (new): `login_attempts`, `audit_events`, `inventory_movements.created_by_user_id`.
+  - `apps/api/app/models.py`: LoginAttempt, AuditEvent, actor column.
+  - `apps/api/app/login_throttle.py` (new), `app/audit.py` (new), `app/routes/audit.py` (new).
+  - `apps/api/app/routes/auth.py`: throttle check before authentication, attempt recording, login/logout audit events.
+  - `apps/api/app/routes/users.py`: audit on create; `PATCH /users/{id}`.
+  - `apps/api/app/users_service.py`: `update_user` (last-admin guard with row lock), `LastAdminError`, `delete_stale_tokens`.
+  - `apps/api/app/inventory_service.py`: `actor_user_id` parameter. `app/schemas.py`: UpdateUserRequest, AuditEventOut. `app/cli.py`: `cleanup` command. `app/main.py`: audit router.
+  - Tests (counts from `pytest --collect-only`): `tests/test_login_throttle.py` (8, new), `tests/test_user_management.py` (14, new), `tests/test_cli.py` (+2), `tests/test_inventory_service.py` (+2), i.e. 26 new; 120 in total.
+  - `README.md`, `docs/{REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`.
+- Tests run / actual results:
+  - Before new tests: existing suite 94 passed with migration 0004 (model/migration sync test included). `ruff format` 4 files; `ruff check .` passes.
+  - Full suite with DB: 120 passed in 44.2 s. `ruff check .` and `ruff format --check .` pass.
+  - Mutations (files restored, diff identical): throttle disabled gave 4 failed; last-admin lock removed gave 1 failed (the two-thread race test); success no longer resets gave 1 failed; last-admin guard removed gave 3 failed.
+  - Isolated Docker project `chainpilot-e2e` (ports 8002/5436): migrations 0001→0004; CLI admin created; admin created "victim"; 6 wrong logins gave `401 401 401 401 401 429`; correct password then gave `429` with `retry-after: 900`; admin login still 200; the only admin's self-demotion gave 409; deactivating the victim gave 200; `/audit-events` listed user.updated (`is_active [True, False]`), user.login, user.created (`email`, `role`), user.login, all with actor 1; `login_attempts` held 5 failures for the victim and 2 successes for the admin; `cleanup --days 30` ran ("Deleted 0 stale tokens and 0 old login attempts"). The project was removed with its own volume and images; `chainpilot-ai_postgres_data` untouched.
+  - Development stack: "Running upgrade 0003 -> 0004", `alembic current` = `0004 (head)`, `/ready` 200; stopped.
+  - NOT VERIFIED: CI on GitHub for these changes (not pushed yet).
+- Self-review findings and fixes: all five targeted items VERIFIED. New LOW items: P1-T2-R5 (real client IP behind the ALB, P8) and P1-T2-R6 (retention of emails in login_attempts, documented).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner commits and pushes; confirm CI green; then P1-T3 (product/warehouse/inventory APIs with RBAC, using `record_event` and `actor_user_id`).

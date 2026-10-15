@@ -6,19 +6,21 @@ A supply-chain control tower for retail operations, built as a portfolio project
 
 The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md). Current progress is in [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
-## What exists today (P0 foundation + P1-T1 inventory data model)
+## What exists today (P0 foundation, P1-T1 inventory model, P1-T2 users and login)
 
 | Component | What it does |
 |---|---|
 | `apps/api` | FastAPI backend. `GET /health` (process is alive) and `GET /ready` (PostgreSQL answers `SELECT 1`; returns 503 if not). OpenAPI docs at `/docs`. Logs are one JSON object per line. |
 | `apps/api/app/models.py` | Tables: `products`, `warehouses`, `inventory` (stock per product × warehouse) and `inventory_movements` (stock ledger). |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
+| `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
+| `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
 | `apps/api/migrations` | Alembic database migrations. |
 | `docker-compose.yml` | Runs PostgreSQL 16, a one-shot `migrate` job, then the API. Ports are published on `127.0.0.1` only. |
 | `apps/api/tests` | Unit tests (no database needed) and PostgreSQL integration tests (migrations, stock rules, a concurrency race). |
 | `.github/workflows/ci.yml` | On every push and pull request: Ruff lint/format, pytest against a real Postgres 16, then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: users/roles, data APIs, synthetic seed data, ML, agents, frontend, AWS.
+Not built yet: product/warehouse/inventory APIs and audit events (P1-T3), synthetic seed data (P1-T4), ML, agents, frontend, AWS.
 
 ## How stock changes
 
@@ -29,6 +31,45 @@ Stock is never overwritten. Every change goes through `record_movement(session, 
 3. It updates `inventory.on_hand` **and** appends an `inventory_movements` row (quantity, reason, resulting balance, optional reference such as a PO number) in the same transaction.
 
 So the sum of a product's movements always equals its `on_hand`, and every stock level can be explained. The database also enforces non-negative stock with a CHECK constraint, as a second safety net. Reasons are `receipt`, `sale`, `transfer_in`, `transfer_out` and `adjustment`. `movement_history()` returns a product's recent movements at a warehouse, newest first. `updated_at` columns are kept current by a database trigger, so they are right even for raw SQL updates.
+
+## Users, login and roles
+
+| Role | Can |
+|---|---|
+| `analyst` | read data |
+| `manager` | everything an analyst can, plus approve actions (later phases) |
+| `admin` | everything a manager can, plus manage users |
+
+| Endpoint | Who |
+|---|---|
+| `POST /auth/login` `{email, password}` returns `{access_token, expires_at, user}` | anyone |
+| `GET /auth/me` | any logged-in user |
+| `POST /auth/logout` (revokes the token) | any logged-in user |
+| `GET /users?limit=&offset=`, `POST /users`, `PATCH /users/{id}` (role, name, active) | admin |
+| `GET /audit-events?entity_type=&entity_id=&limit=&offset=` | manager, admin |
+
+Send the token as `Authorization: Bearer <token>`. A missing, unknown, expired or revoked token gives **401**; a role that is too low gives **403**. Tokens last `ACCESS_TOKEN_TTL_MINUTES` (default 480 = 8 hours).
+
+**Create the first admin** (prompts twice for the password; nothing is echoed or saved in shell history):
+
+```bash
+docker compose up -d
+docker compose run --rm api python -m app.cli create-user --email you@example.com --full-name "Your Name" --role admin
+```
+
+How it is kept safe:
+- Passwords are hashed with **scrypt** (Python standard library, OWASP-recommended settings, random salt per user) and must be 12–128 characters.
+- Tokens are 256-bit random values. The database stores only their SHA-256 hash, so a leaked database does not leak usable tokens. Logout revokes a token immediately.
+- Failed logins return the same message whether the email exists or not, and take about the same time either way.
+- Emails are stored lower-case, so `Ana@X.com` and `ana@x.com` are the same account.
+- Logs record user ids, never passwords, tokens or the emails used in failed attempts.
+- **Rate limiting:** after 5 failed logins for one email (or 20 from one IP) within 15 minutes, login returns **429** with `Retry-After: 900`, even for the right password. The check runs before the slow password hash. A successful login resets that email's count, and blocks expire on their own.
+- **Last admin protection:** the last active admin cannot be demoted or deactivated (409). The check locks the admin rows, so two admins demoting each other at the same moment cannot leave zero admins.
+- Deactivating a user (`PATCH /users/{id}` with `{"is_active": false}`) blocks their login and stops their existing tokens immediately.
+
+**Audit trail:** logins, logouts, user creation and user changes are written to `audit_events` (actor, action, entity, details such as `{"changes": {"role": ["analyst", "manager"]}}`) in the same transaction as the change itself. Stock movements record the acting user in `inventory_movements.created_by_user_id`.
+
+**Housekeeping:** `docker compose run --rm api python -m app.cli cleanup --days 30` deletes tokens that expired or were revoked more than 30 days ago, and login attempts older than 30 days. Safe to run daily.
 
 ## Run locally with Docker
 

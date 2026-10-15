@@ -7,19 +7,23 @@ data: each test run creates its own throwaway database (named
 
 import os
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session
 
 from app.config import Settings
-from app.models import Product, Warehouse
+from app.dependencies import get_db_session
+from app.main import app
+from app.models import Base, Product, Role, User, Warehouse
+from app.users_service import create_user
 
 API_DIR = Path(__file__).resolve().parent.parent
 
@@ -73,8 +77,8 @@ def db_session(db_engine: Engine) -> Iterator[Session]:
         with db_engine.begin() as connection:
             connection.execute(
                 text(
-                    "TRUNCATE inventory_movements, inventory, products, warehouses "
-                    "RESTART IDENTITY CASCADE"
+                    # Every table in the models, so new tables are cleaned automatically.
+                    f"TRUNCATE {', '.join(Base.metadata.tables)} RESTART IDENTITY CASCADE"
                 )
             )
 
@@ -99,3 +103,46 @@ def warehouse(db_session: Session) -> Warehouse:
     db_session.add(site)
     db_session.commit()
     return site
+
+
+# Long enough to pass the password policy; only used in tests.
+TEST_PASSWORD = "correct-horse-battery"
+
+
+@pytest.fixture
+def api_client(db_engine: Engine, db_session: Session) -> Iterator[TestClient]:
+    """Test client whose requests use the throwaway test database."""
+
+    def test_db_session() -> Iterator[Session]:
+        with Session(db_engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db_session] = test_db_session
+    with TestClient(app) as client:
+        yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def make_user(db_session: Session) -> Callable[..., User]:
+    """Factory: make_user(Role.ADMIN) creates and commits a user with TEST_PASSWORD."""
+
+    def _make_user(role: Role = Role.ANALYST, email: str | None = None) -> User:
+        user = create_user(
+            db_session,
+            email=email or f"{role.value}@example.com",
+            full_name=f"Test {role.value.title()}",
+            role=role,
+            password=TEST_PASSWORD,
+        )
+        db_session.commit()
+        return user
+
+    return _make_user
+
+
+def login(client: TestClient, email: str, password: str = TEST_PASSWORD) -> dict[str, str]:
+    """Log in through the API and return the Authorization header to use."""
+    response = client.post("/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200, response.text
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}

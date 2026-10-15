@@ -1,4 +1,4 @@
-"""Database tables for core supply-chain data (SQLAlchemy 2.0 declarative models).
+"""Database tables (SQLAlchemy 2.0 declarative models): inventory data, users and logins.
 
 Stock rule: `Inventory.on_hand` is never written directly by application code.
 Every change goes through `app.inventory_service.record_movement`, which also
@@ -22,7 +22,9 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Predictable constraint names, so migrations can refer to them by name.
@@ -145,4 +147,102 @@ class InventoryMovement(Base):
     reason: Mapped[str] = mapped_column(String(20))
     # Optional link to the business document, e.g. a purchase order or sales order number.
     reference: Mapped[str | None] = mapped_column(String(100))
+    # Who made the change. NULL only for system processes (e.g. synthetic seed data).
+    # RESTRICT: a user with stock history cannot be deleted (deactivate them instead).
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Role(StrEnum):
+    """User roles, lowest to highest privilege. Each role can do everything the roles below it can.
+
+    analyst: read data.  manager: also approve actions.  admin: also manage users.
+    """
+
+    ANALYST = "analyst"
+    MANAGER = "manager"
+    ADMIN = "admin"
+
+    @property
+    def rank(self) -> int:
+        return list(Role).index(self)
+
+    def at_least(self, minimum: "Role") -> bool:
+        return self.rank >= minimum.rank
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN (" + ", ".join(f"'{role.value}'" for role in Role) + ")",
+            name="role_allowed",
+        ),
+        # Emails are stored lower-case so "A@x.com" and "a@x.com" are one account.
+        CheckConstraint("email = lower(email)", name="email_lowercase"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True)
+    full_name: Mapped[str] = mapped_column(String(200))
+    role: Mapped[str] = mapped_column(String(20))
+    # scrypt hash from app.security.hash_password; never the password itself.
+    password_hash: Mapped[str] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = updated_at_column()
+
+
+class AuthToken(Base):
+    """A login session. Only the SHA-256 hash of the token is stored."""
+
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Set on logout; a revoked token is rejected even before it expires.
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LoginAttempt(Base):
+    """One login attempt, used to slow down password guessing (see app/login_throttle.py)."""
+
+    __tablename__ = "login_attempts"
+    __table_args__ = (
+        Index("ix_login_attempts_email_created_at", "email", "created_at"),
+        Index("ix_login_attempts_client_ip_created_at", "client_ip", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # The email as typed (normalized); it may not belong to any account.
+    email: Mapped[str] = mapped_column(String(254))
+    client_ip: Mapped[str | None] = mapped_column(String(45))  # 45 fits any IPv6 address
+    succeeded: Mapped[bool]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AuditEvent(Base):
+    """Append-only record of who did what, when. Written in the same transaction as the change."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_events_entity", "entity_type", "entity_id"),
+        Index("ix_audit_events_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # NULL for system actions. RESTRICT keeps the history of users who acted.
+    actor_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    action: Mapped[str] = mapped_column(String(50))  # e.g. "user.created"
+    entity_type: Mapped[str] = mapped_column(String(50))  # e.g. "user"
+    entity_id: Mapped[str | None] = mapped_column(String(64))
+    # Extra facts, e.g. {"changes": {"role": ["analyst", "manager"]}}. Never secrets.
+    details: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

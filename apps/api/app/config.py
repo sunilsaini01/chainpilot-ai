@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # Seconds to wait for Postgres before /ready reports the database as down.
     database_connect_timeout: int = Field(default=3, ge=1, le=60)
 
+    # How long a login token stays valid (default 8 hours = one working day; max 7 days).
+    access_token_ttl_minutes: int = Field(default=480, ge=5, le=7 * 24 * 60)
+
     @property
     def database_url(self) -> URL:
         """Build the SQLAlchemy URL from the separate connection fields."""
