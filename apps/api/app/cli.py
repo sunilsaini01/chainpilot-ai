@@ -4,6 +4,9 @@ Example (inside Docker, prompts for the password without echoing it):
     docker compose run --rm api python -m app.cli create-user \\
         --email admin@example.com --full-name "Demo Admin" --role admin
 
+Synthetic demo data (refuses to run twice):
+    docker compose run --rm api python -m app.cli seed --products 200 --warehouses 4 --seed 42
+
 Housekeeping (safe to run daily, e.g. from cron):
     docker compose run --rm api python -m app.cli cleanup --days 30
 
@@ -23,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.database import get_engine
 from app.login_throttle import delete_old_attempts
 from app.models import Role
+from app.seed import AlreadySeededError, build_plan, load_plan
 from app.users_service import UserAlreadyExistsError, create_user, delete_stale_tokens
 
 PASSWORD_ENV_VAR = "CHAINPILOT_NEW_USER_PASSWORD"
@@ -66,6 +70,24 @@ def cleanup_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def seed_command(args: argparse.Namespace) -> int:
+    """Load deterministic synthetic warehouses, products and opening stock."""
+    try:
+        plan = build_plan(seed=args.seed, n_products=args.products, n_warehouses=args.warehouses)
+        with Session(get_engine()) as session:
+            summary = load_plan(session, plan)
+            session.commit()
+    except (ValueError, AlreadySeededError) as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    print(
+        f"Loaded SYNTHETIC data (seed {args.seed}): {summary['warehouses']} warehouses, "
+        f"{summary['products']} products, {summary['opening_movements']} opening stock "
+        f"movements, {summary['units']} units"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli", description="ChainPilot admin tools")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -81,6 +103,12 @@ def main(argv: list[str] | None = None) -> int:
     # month of login history for investigations.
     cleanup.add_argument("--days", type=int, default=30)
     cleanup.set_defaults(handler=cleanup_command)
+
+    seed = commands.add_parser("seed", help="Load synthetic demo data (SYN- codes)")
+    seed.add_argument("--products", type=int, default=200, help="100 to 500")
+    seed.add_argument("--warehouses", type=int, default=4, help="3 to 5")
+    seed.add_argument("--seed", type=int, default=42, help="same seed, same data")
+    seed.set_defaults(handler=seed_command)
 
     args = parser.parse_args(argv)
     return args.handler(args)

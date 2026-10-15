@@ -1,0 +1,212 @@
+"""Deterministic synthetic demo data: warehouses, products and opening stock.
+
+SYNTHETIC DATA: nothing here describes a real company. Every SKU starts with
+"SYN-" and every warehouse code with "SYN-WH", so the data is easy to spot.
+
+Two steps keep this testable:
+1. `build_plan()` is pure Python: the same seed always gives the same plan.
+2. `load_plan()` writes the plan to the database. Opening stock goes through
+   `record_movement`, so the stock ledger and capacity rules apply as usual.
+"""
+
+import random
+from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.audit import record_event
+from app.inventory_service import record_movement
+from app.models import MovementReason, Product, Warehouse
+
+SKU_PREFIX = "SYN-"
+WAREHOUSE_PREFIX = "SYN-WH"
+OPENING_REFERENCE = "SEED-OPENING"
+
+# Bounds from the project spec (section 3).
+MIN_PRODUCTS, MAX_PRODUCTS = 100, 500
+MIN_WAREHOUSES, MAX_WAREHOUSES = 3, 5
+
+# Opening stock fills at most this share of each warehouse, leaving room for receipts.
+MAX_FILL_SHARE = Decimal("0.70")
+# Share of product/warehouse pairs that start with stock (the rest start empty).
+STOCKED_SHARE = 0.8
+# Share of stocked pairs that start nearly empty (1-20 units), so the demo has
+# low-stock items for stock-out detection to find.
+LOW_STOCK_SHARE = 0.1
+LOW_STOCK_MAX_UNITS = 20
+
+CATEGORIES = ["kitchen", "home", "office", "garden", "toys", "sports", "pets", "health"]
+ADJECTIVES = ["Classic", "Compact", "Deluxe", "Eco", "Large", "Mini", "Premium", "Smart"]
+NOUNS = {
+    "kitchen": ["Mug", "Pan", "Kettle", "Knife Set", "Blender"],
+    "home": ["Lamp", "Cushion", "Rug", "Clock", "Mirror"],
+    "office": ["Notebook", "Desk Tidy", "Stapler", "Monitor Arm", "Chair Mat"],
+    "garden": ["Hose", "Planter", "Trowel", "Bird Feeder", "Solar Light"],
+    "toys": ["Puzzle", "Building Kit", "Plush Bear", "Kite", "Board Game"],
+    "sports": ["Yoga Mat", "Water Bottle", "Dumbbell", "Football", "Skipping Rope"],
+    "pets": ["Dog Bed", "Cat Toy", "Food Bowl", "Lead", "Litter Tray"],
+    "health": ["First Aid Kit", "Thermometer", "Hand Gel", "Vitamins", "Face Masks"],
+}
+SITES = [
+    ("North DC", "Leeds", 60_000),
+    ("South DC", "Southampton", 50_000),
+    ("Midlands DC", "Birmingham", 80_000),
+    ("Scotland DC", "Glasgow", 40_000),
+    ("West DC", "Bristol", 45_000),
+]
+
+
+@dataclass(frozen=True)
+class PlannedWarehouse:
+    code: str
+    name: str
+    city: str
+    capacity_units: int
+
+
+@dataclass(frozen=True)
+class PlannedProduct:
+    sku: str
+    name: str
+    category: str
+    unit_cost: Decimal
+    unit_price: Decimal
+
+
+@dataclass(frozen=True)
+class PlannedStock:
+    sku: str
+    warehouse_code: str
+    quantity: int
+
+
+@dataclass(frozen=True)
+class SeedPlan:
+    seed: int
+    warehouses: list[PlannedWarehouse]
+    products: list[PlannedProduct]
+    opening_stock: list[PlannedStock]
+
+
+def _money(value: float) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def build_plan(seed: int = 42, n_products: int = 200, n_warehouses: int = 4) -> SeedPlan:
+    """Create the synthetic data plan. Raises ValueError for sizes outside the spec bounds."""
+    if not MIN_PRODUCTS <= n_products <= MAX_PRODUCTS:
+        raise ValueError(f"products must be between {MIN_PRODUCTS} and {MAX_PRODUCTS}")
+    if not MIN_WAREHOUSES <= n_warehouses <= MAX_WAREHOUSES:
+        raise ValueError(f"warehouses must be between {MIN_WAREHOUSES} and {MAX_WAREHOUSES}")
+
+    # One private generator, never the global `random`, so the plan depends only on `seed`.
+    rng = random.Random(seed)
+
+    warehouses = [
+        PlannedWarehouse(f"{WAREHOUSE_PREFIX}{number}", name, city, capacity)
+        for number, (name, city, capacity) in enumerate(SITES[:n_warehouses], start=1)
+    ]
+
+    products = []
+    for number in range(1, n_products + 1):
+        category = rng.choice(CATEGORIES)
+        name = f"{rng.choice(ADJECTIVES)} {rng.choice(NOUNS[category])}"
+        unit_cost = _money(rng.uniform(1.0, 60.0))
+        # Retail markup between 30% and 120% over cost.
+        unit_price = _money(float(unit_cost) * rng.uniform(1.3, 2.2))
+        products.append(
+            PlannedProduct(f"{SKU_PREFIX}{number:04d}", name, category, unit_cost, unit_price)
+        )
+
+    opening_stock = []
+    for warehouse in warehouses:
+        budget = int(warehouse.capacity_units * MAX_FILL_SHARE)
+        stocked = [product for product in products if rng.random() < STOCKED_SHARE]
+        low = [product for product in stocked if rng.random() < LOW_STOCK_SHARE]
+        regular = [product for product in stocked if product not in low]
+
+        for product in low:
+            quantity = rng.randint(1, LOW_STOCK_MAX_UNITS)
+            opening_stock.append(PlannedStock(product.sku, warehouse.code, quantity))
+            budget -= quantity
+
+        # Random weights split the remaining budget between the regular products,
+        # so the total can never exceed it (each share is rounded down).
+        weights = [rng.uniform(0.2, 1.0) for _ in regular]
+        total_weight = sum(weights)
+        for product, weight in zip(regular, weights, strict=True):
+            quantity = int(budget * weight / total_weight)
+            if quantity > 0:
+                opening_stock.append(PlannedStock(product.sku, warehouse.code, quantity))
+
+    return SeedPlan(seed, warehouses, products, opening_stock)
+
+
+class AlreadySeededError(Exception):
+    """Raised when synthetic data is already in the database."""
+
+
+def already_seeded(session: Session) -> bool:
+    count = session.execute(
+        select(func.count()).select_from(Product).where(Product.sku.startswith(SKU_PREFIX))
+    ).scalar_one()
+    return count > 0
+
+
+def load_plan(session: Session, plan: SeedPlan) -> dict[str, int]:
+    """Write the plan in the caller's transaction. Never deletes or overwrites anything.
+
+    Raises AlreadySeededError if synthetic products already exist, so running
+    the command twice cannot double the stock.
+    """
+    if already_seeded(session):
+        raise AlreadySeededError("Synthetic data is already loaded (SYN- products exist)")
+
+    warehouse_ids = {}
+    for planned in plan.warehouses:
+        warehouse = Warehouse(
+            code=planned.code,
+            name=planned.name,
+            city=planned.city,
+            capacity_units=planned.capacity_units,
+        )
+        session.add(warehouse)
+        session.flush()
+        warehouse_ids[planned.code] = warehouse.id
+
+    product_ids = {}
+    for planned in plan.products:
+        product = Product(
+            sku=planned.sku,
+            name=planned.name,
+            category=planned.category,
+            unit_cost=planned.unit_cost,
+            unit_price=planned.unit_price,
+        )
+        session.add(product)
+        session.flush()
+        product_ids[planned.sku] = product.id
+
+    for stock in plan.opening_stock:
+        # actor None = system process (see record_movement).
+        record_movement(
+            session,
+            product_ids[stock.sku],
+            warehouse_ids[stock.warehouse_code],
+            stock.quantity,
+            MovementReason.RECEIPT,
+            reference=OPENING_REFERENCE,
+        )
+
+    summary = {
+        "warehouses": len(plan.warehouses),
+        "products": len(plan.products),
+        "opening_movements": len(plan.opening_stock),
+        "units": sum(stock.quantity for stock in plan.opening_stock),
+    }
+    record_event(
+        session, "seed.loaded", "seed", None, actor=None, details={"seed": plan.seed, **summary}
+    )
+    return summary
