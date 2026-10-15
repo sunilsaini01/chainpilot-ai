@@ -23,13 +23,16 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import asdict
 from pathlib import Path
 
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
 from demand_forecasting import m5_data
 from demand_forecasting.baselines import BASELINES
+from demand_forecasting.lgbm_model import ModelSettings, make_forecaster
 from demand_forecasting.metrics import bias, mae, mean_rmsse, rmsse_scales, wape
 
 Forecaster = Callable[[pd.DataFrame, int], pd.DataFrame]
@@ -113,9 +116,33 @@ def score(results: pd.DataFrame, scales_by_origin: dict[pd.Timestamp, pd.Series]
                 "rmsse": round(sum(rmsse_values) / sum(rmsse_counts), 4),
                 "rmsse_series": int(sum(rmsse_counts)),
                 "actual_units": int(actual.sum()),
+                **interval_metrics(part),
             }
         )
     return rows
+
+
+def interval_metrics(part: pd.DataFrame) -> dict[str, float]:
+    """For models with an 80% interval (columns lower, upper): how often the actual
+    falls inside (ideal 0.80), the average width in units, and the average pinball
+    loss of the two bounds (lower is better; it rewards narrow but honest intervals)."""
+    if "lower" not in part or "upper" not in part:
+        return {}
+    actual = part["actual"].to_numpy(dtype=float)
+    lower = part["lower"].to_numpy(dtype=float)
+    upper = part["upper"].to_numpy(dtype=float)
+    inside = (actual >= lower) & (actual <= upper)
+    return {
+        "interval_coverage_80": round(float(inside.mean()), 4),
+        "interval_width": round(float(np.mean(upper - lower)), 4),
+        "pinball_10_90": round((pinball(actual, lower, 0.1) + pinball(actual, upper, 0.9)) / 2, 4),
+    }
+
+
+def pinball(actual: np.ndarray, quantile_forecast: np.ndarray, q: float) -> float:
+    """Quantile (pinball) loss: under-forecasts cost q per unit, over-forecasts 1 - q."""
+    error = actual - quantile_forecast
+    return float(np.mean(np.maximum(q * error, (q - 1) * error)))
 
 
 def scales_for(series: pd.DataFrame, origins: list[pd.Timestamp]) -> dict[pd.Timestamp, pd.Series]:
@@ -146,12 +173,18 @@ def git_commit() -> str:
 
 
 def backtest_stores(
-    raw_dir: Path, stores: list[str], horizon: int, n_origins: int
+    raw_dir: Path,
+    stores: list[str],
+    horizon: int,
+    n_origins: int,
+    lightgbm_settings: ModelSettings | None = None,
 ) -> dict[str, object]:
-    """Run every baseline for each store (one store in memory at a time)."""
+    """Run every baseline (and LightGBM, if settings are given) for each store,
+    keeping one store in memory at a time."""
     paths = m5_data.find_files(raw_dir)
     calendar = m5_data.load_calendar(paths["calendar"])
-    all_results: dict[str, list[pd.DataFrame]] = {name: [] for name in BASELINES}
+    model_names = [*BASELINES, *(["lightgbm"] if lightgbm_settings else [])]
+    all_results: dict[str, list[pd.DataFrame]] = {name: [] for name in model_names}
     all_scales: dict[str, dict] = {}
     origins: list[pd.Timestamp] = []
     store_rows = []
@@ -165,12 +198,16 @@ def backtest_stores(
         scales = scales_for(series, origins)
         for origin, scale in scales.items():
             all_scales.setdefault(store, {})[origin] = scale
-        for name, forecaster in BASELINES.items():
+        forecasters = dict(BASELINES)
+        if lightgbm_settings:
+            forecasters["lightgbm"] = make_forecaster(long, lightgbm_settings)
+        for name, forecaster in forecasters.items():
+            print(f"  {store}: {name}", file=sys.stderr, flush=True)
             results = run_backtest(series, forecaster, origins, horizon)
             results["store"] = store
             all_results[name].append(results)
             store_rows.append({"store": store, "model": name, "metrics": score(results, scales)})
-        del long, series, sales, prices
+        del long, series, sales, prices, forecasters
 
     # Pool all stores: ids are unique across stores, so scales can simply be combined.
     pooled_scales = {
@@ -198,6 +235,8 @@ def backtest_stores(
             "git_commit": git_commit(),
             "python": platform.python_version(),
             "pandas": pd.__version__,
+            "lightgbm": lgb.__version__,
+            "lightgbm_settings": asdict(lightgbm_settings) if lightgbm_settings else None,
             "numpy": np.__version__,
             "data_sha256": {name: file_sha256(path) for name, path in paths.items()},
         },
@@ -205,12 +244,18 @@ def backtest_stores(
 
 
 def format_table(report: dict[str, object]) -> str:
-    lines = [f"{'model':<20}{'horizon':>8}{'MAE':>9}{'WAPE':>9}{'bias':>9}{'RMSSE':>9}"]
+    header = f"{'model':<20}{'horizon':>8}{'MAE':>9}{'WAPE':>9}{'bias':>9}{'RMSSE':>9}"
+    lines = [header + f"{'cover80':>9}{'width':>8}"]
     for entry in report["overall"]:
         for row in entry["metrics"]:
+            interval = (
+                f"{row['interval_coverage_80']:>9.3f}{row['interval_width']:>8.2f}"
+                if "interval_coverage_80" in row
+                else ""
+            )
             lines.append(
                 f"{entry['model']:<20}{row['horizon_days']:>8}{row['mae']:>9.3f}"
-                f"{row['wape']:>9.3f}{row['bias']:>+9.3f}{row['rmsse']:>9.3f}"
+                f"{row['wape']:>9.3f}{row['bias']:>+9.3f}{row['rmsse']:>9.3f}{interval}"
             )
     return "\n".join(lines)
 
@@ -224,12 +269,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--horizon", type=int, default=28)
     parser.add_argument("--origins", type=int, default=3)
     parser.add_argument("--output", type=Path, help="write the full report as JSON")
+    parser.add_argument(
+        "--with-lightgbm", action="store_true", help="also backtest the LightGBM model (slow)"
+    )
     args = parser.parse_args(argv)
 
     stores = ALL_STORES if args.all_stores else args.store
     started = time.perf_counter()
     try:
-        report = backtest_stores(args.raw_dir, stores, args.horizon, args.origins)
+        settings = ModelSettings() if args.with_lightgbm else None
+        report = backtest_stores(args.raw_dir, stores, args.horizon, args.origins, settings)
     except (FileNotFoundError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

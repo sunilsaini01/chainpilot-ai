@@ -1,3 +1,5 @@
 # ML dependencies, pinned exactly. numpy 2.4.x is the newest line with Python 3.11 wheels.
 pandas==3.0.6
 numpy==2.4.6
+# Gradient-boosted trees for demand forecasting (pulls in scipy and narwhals).
+lightgbm==4.7.0

@@ -24,6 +24,8 @@ data/synthetic/
 *.parquet
 *.joblib
 *.pkl
+# Trained model files (rebuild with: python -m demand_forecasting.train_final)
+ml/artifacts/
 mlruns/
 
 # Node / frontend (later phases)
