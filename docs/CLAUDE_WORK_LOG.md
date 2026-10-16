@@ -588,3 +588,39 @@ Append-only. Each entry records what was actually done and actually run.
 - P4 gate ("stockout detection, reorder/transfer recommendations, simulator; deterministic tests and baseline comparison"): met locally; waits for CI.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P5-T1 (policy documents for retrieval, the start of the AI copilot), after the owner's check.
+
+## 2026-10-17 00:10 UTC — P4 complete; P5 plan; P5-T1 plan (written before coding)
+- Owner pushed `95bc044`, `643f276`, `2f28e04`; CI #19 on `2f28e04`: `success`, all three jobs, 0 annotations. P4-T4 approved; P4 complete.
+- **P5 split** (spec section 4.F; gate "grounded output; tool and safety evaluation"): P5-T1 policy documents + retrieval (no external service); P5-T2 typed read-only tools with citations (risks, recommendations, supplier performance, forecasts, policy search); P5-T3 LangGraph supervisor with an LLM (**needs the owner's choice of provider, an API key and approval of the cost; tests will use a scripted fake model so CI never calls a paid API**); P5-T4 grounding, tool and safety evaluation.
+- **P5-T1 plan:**
+  1. Six short policy documents for the simulated company in `apps/api/policies/` (shipped in the API image), labelled as written for the demo: replenishment, stock transfers, supplier performance, approvals, receiving goods, data and AI use. Numbers must match what the code does (95% default service level, transfers first, 60-day excess rule, minimum order and packs, manager approval).
+  2. `document_chunks` table: one chunk per `##` section (long sections split at paragraphs), with the document's checksum. `load-policies` syncs the folder in one transaction: unchanged documents are skipped, changed ones replaced, removed ones deleted; audited.
+  3. Search with PostgreSQL full-text search (`websearch_to_tsquery`, `ts_rank`, English stemming); no embeddings, no index (the corpus is a few dozen chunks). Each hit has a citation `policy:<document>#<section>`. API `GET /policies/search?q=` and `GET /policies` (analyst+).
+  4. Retrieval check, questions fixed now, before any search runs (I write both the policies and the questions, so this tests the mechanics, not real-world quality; 4 questions are deliberately paraphrased, without the policy's own words, to measure the known weakness of keyword search). Metric: is the expected section the first hit (hit@1) or in the top 3 (hit@3)?
+     1. "What service level do replenishment calculations use by default?" -> replenishment / service level
+     2. "minimum order quantity and pack size" -> replenishment / order quantities
+     3. "When is stock considered excess?" -> replenishment / stock status
+     4. "Can a warehouse give away stock it needs itself?" -> transfers / which stock can move
+     5. "Who is allowed to approve a purchase order?" -> approvals / who approves
+     6. "late deliveries supplier on-time rate threshold" -> supplier performance / measuring
+     7. "What happens if a delivery does not fit in the warehouse?" -> receiving / capacity
+     8. "Is Olist data joined with the simulated suppliers?" -> data and AI use / data labels
+     9. "Can the AI copilot place orders?" -> data and AI use / AI copilot limits
+     10. (paraphrase) "How sure do we want to be that shelves stay filled?" -> replenishment / service level
+     11. (paraphrase) "Which vendors are unreliable?" -> supplier performance / measuring
+     12. (paraphrase) "Who signs off on buying more stock?" -> approvals / who approves
+- Plan change before any search ran: `websearch_to_tsquery` requires every word to match, so most natural questions would find nothing. The search uses `plainto_tsquery` (same stemming and stop words) with its terms joined by OR instead, ranked by `ts_rank`, so chunks matching more of the question's words come first.
+
+## 2026-10-17 01:00 UTC — P5-T1 results
+- Files changed and why: `apps/api/policies/*.md` (new: 6 labelled policies), `app/models.py` + migration `0010` (`document_chunks`), `app/policies_service.py` (new: parse, folder sync, search), `app/policy_eval.py` (new: the pre-registered retrieval check), `app/routes/policies.py` (new: `/policies`, `/policies/search`), `app/schemas.py`, `app/main.py`, `app/cli.py` (`load-policies`), `apps/api/Dockerfile` (ships the policies), `tests/test_policies.py` (new, 19 tests).
+- Tests run / actual results:
+  - `apps/api` with `RUN_DB_TESTS=1`: 317 passed (298 + 19). `ml`: 131 passed. Ruff check and format pass.
+  - Mutations: 10 of 10 caught (OR matching, English stemming, unchanged-skip, removal, replace, long-section split, query length, file names, ranking, duplicate sections).
+  - My mistakes fixed along the way: three policy statements that said slightly more than the code (P5-T1-R2); a wrong chunk count in my own test; an inline script turned `\n` into a real line break again (fixed with the editor).
+  - Retrieval check (pre-registered, isolated Docker stack): direct 9/9 hit@1 and hit@3; paraphrased 0/3 (P5-T1-R1).
+  - Isolated Docker project `chainpilot-e2e`: migration 0009 -> 0010; `load-policies` with the image's default folder: 6 added; again: 6 unchanged; `GET /policies` lists 6 documents (26 sections); search "Can the AI copilot approve purchase orders?" returned approvals / what-needs-approval first, in 0.02 s, with a highlighted snippet; 401 without a token; both loads audited. Removed afterwards (0 volumes, 0 containers).
+  - Dev database upgraded to 0010 (policies not loaded there; run `load-policies` when wanted).
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings: P5-T1-R1 (MEDIUM, P5-T3), P5-T1-R2 (LOW, fixed).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P5-T2 (typed read-only tools with citations). P5-T3 needs the owner's choice of model provider, an API key and approval of the cost.

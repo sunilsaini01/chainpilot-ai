@@ -491,3 +491,17 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: documented, so the demo is read correctly.
 - Fix and regression test: none now; revisit with the dashboard (P6) and approvals (P7).
 - Status: OPEN (documented limitation)
+
+## P5-T1-R1 — [MEDIUM] Policy search misses questions that use other words
+- Source: pre-registered retrieval check (docs/results/p5_policy_retrieval.json)
+- File and reproduction: `apps/api/app/policies_service.py::search_policies`. Paraphrased questions found the right section 0 times out of 3, e.g. "Which vendors are unreliable?" returns nothing because the policy says "supplier".
+- Expected behavior: the copilot finds the relevant policy however the user phrases the question.
+- Fix and regression test: decide in P5-T3 together with the model provider: (a) the copilot turns the question into policy terms before searching, and/or (b) embeddings. Then re-run the same 12 questions plus new unseen ones. Not tuned on the 3 failing questions.
+- Status: OPEN (P5-T3)
+
+## P5-T1-R2 — [LOW] First policy drafts said slightly more than the system does
+- Source: Claude self-review (comparing every policy statement with the code)
+- File and reproduction: `apps/api/policies/`. The first drafts said the service level could be set "between 50% and 99.9%" (the API accepts anything from 50% to just under 100%), that stock adjustments "need approval" (managers record them directly) and that a discrepancy needs "a note" (the movement has a reference field).
+- Expected behavior: policies the copilot cites must match what the system does.
+- Fix and regression test: wording corrected; `test_shipped_policies_are_labelled_and_parse`. A test cannot check meaning; P5-T4 will check the copilot's answers against the records.
+- Status: VERIFIED

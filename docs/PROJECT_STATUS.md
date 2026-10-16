@@ -1,26 +1,25 @@
 # Project Status
 
-Current phase: P4 (Inventory decisions)
-Current task: P4-T4, stock-out risks and reorder/transfer recommendations
+Current phase: P5 (AI copilot)
+Current task: P5-T1, policy documents and retrieval
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 7c52c18 (CI #18 green). P4-T4 is uncommitted.
+Last commit: 2f28e04 (CI #19 green; P4 complete). P5-T1 is uncommitted.
 
-## P4-T4 acceptance criteria
-- [x] Labelled, deterministic demand link from SYN- products/warehouses to M5 forecasts (D-044 default; never overwritten)
-- [x] Stock-out detection per product and warehouse (out of stock, at risk, ok, excess) from stock + open orders + forecast
-- [x] Transfer and reorder recommendations: spare stock first, supplier rules, shared warehouse space; inputs stored; proposals only
-- [x] API: `/inventory/risks`, `/inventory/recommendations` (manager to generate), audited
-- [x] Tests: API 298, ML 131; 16/16 mutations caught; real-data Docker end-to-end
+## P5-T1 acceptance criteria
+- [x] Six labelled policy documents that match what the system does, shipped in the API image
+- [x] `document_chunks` table (migration 0010); `load-policies` syncs the folder (add, replace, delete), audited
+- [x] Search with citations (`policy:<document>#<section>`), API for analysts and up
+- [x] Pre-registered retrieval check: direct 9/9, paraphrased 0/3 (gap recorded, P5-T1-R1)
+- [x] Tests: API 317, ML 131; 10/10 mutations caught; isolated Docker end-to-end
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-P4 gate ("stockout detection, reorder/transfer recommendations, simulator; deterministic tests and baseline comparison"): met locally; waits for CI.
-
-Open findings: P4-T4-R3 (LOW, documented), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
-Next action: Owner checks and pushes; then P5.
-Blockers: none.
+Open findings: P5-T1-R1 (MEDIUM, P5-T3), P4-T4-R3 (LOW, documented), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
+Owner decision needed before P5-T3: model provider, API key, cost approval.
+Next action: Owner checks and pushes; then P5-T2.
+Blockers: none for P5-T2.
 
 ## Roadmap progress
 | Phase / task | Status |
@@ -43,8 +42,12 @@ Blockers: none.
 | P4-T1 Inventory policy math | APPROVED (CI #16 green on 154eafb) |
 | P4-T2 Replay simulator vs simple reorder baseline | APPROVED (CI #17 green on ae39d72) |
 | P4-T3 Suppliers, purchase orders, lead times (DB + seed) | APPROVED (CI #18 green on 7c52c18) |
-| P4-T4 Stock-out risks and recommendations API | READY_FOR_USER_CHECK |
-| P5–P9 | NOT_STARTED |
+| P4-T4 Stock-out risks and recommendations API | APPROVED (CI #19 green on 2f28e04; P4 complete) |
+| P5-T1 Policy documents and retrieval | READY_FOR_USER_CHECK |
+| P5-T2 Typed read-only tools with citations | NOT_STARTED |
+| P5-T3 LangGraph supervisor with an LLM (needs provider decision) | NOT_STARTED |
+| P5-T4 Grounding, tool and safety evaluation | NOT_STARTED |
+| P6–P9 | NOT_STARTED |
 
 ## History
 - 2026-10-08 to 2026-10-15: first attempt under the two-agent Claude↔Codex workflow. On 2026-10-15 the owner deleted it entirely, including Git history. See DECISIONS D-001.
@@ -70,3 +73,4 @@ Blockers: none.
 - 2026-10-16: P4-T2: replay on real demand; the forecast-driven policy needs 17–34% less stock than a simple reorder rule at the same fill rate.
 - 2026-10-16: P4-T3: suppliers, purchasing rules and purchase orders (seeded history; receive through the ledger).
 - 2026-10-16: P4-T4: stock-out risks and transfer/reorder recommendations (proposals); P4 gate met locally.
+- 2026-10-17: P4 complete (CI #19). P5 started; P5-T1 policy documents and search.

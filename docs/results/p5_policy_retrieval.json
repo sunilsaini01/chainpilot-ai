@@ -1,0 +1,153 @@
+{
+  "summary": {
+    "direct_hit_at_1": "9/9",
+    "direct_hit_at_3": "9/9",
+    "paraphrased_hit_at_1": "0/3",
+    "paraphrased_hit_at_3": "0/3"
+  },
+  "questions": [
+    {
+      "question": "What service level do replenishment calculations use by default?",
+      "expected": "policy:replenishment#service-level",
+      "paraphrased": false,
+      "top3": [
+        "policy:replenishment#service-level",
+        "policy:data-and-ai-use#ai-copilot-limits",
+        "policy:replenishment#order-quantities"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true
+    },
+    {
+      "question": "minimum order quantity and pack size",
+      "expected": "policy:replenishment#order-quantities",
+      "paraphrased": false,
+      "top3": [
+        "policy:replenishment#order-quantities",
+        "policy:receiving#discrepancies",
+        "policy:data-and-ai-use#ai-copilot-limits"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true
+    },
+    {
+      "question": "When is stock considered excess?",
+      "expected": "policy:replenishment#stock-status",
+      "paraphrased": false,
+      "top3": [
+        "policy:replenishment#stock-status",
+        "policy:stock-transfers#transfers-come-first",
+        "policy:supplier-performance#what-to-do-about-late-suppliers"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true
+    },
+    {
+      "question": "Can a warehouse give away stock it needs itself?",
+      "expected": "policy:stock-transfers#which-stock-can-move",
+      "paraphrased": false,
+      "top3": [
+        "policy:stock-transfers#which-stock-can-move",
+        "policy:stock-transfers#transfers-come-first",
+        "policy:approvals#what-needs-approval"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true
+    },
+    {
+      "question": "Who is allowed to approve a purchase order?",
+      "expected": "policy:approvals#who-approves",
+      "paraphrased": false,
+      "top3": [
+        "policy:approvals#who-approves",
+        "policy:approvals#what-needs-approval",
+        "policy:receiving#receiving-a-purchase-order"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true
+    },
+    {
+      "question": "late deliveries supplier on-time rate threshold",
+      "expected": "policy:supplier-performance#measuring-delivery-performance",
+      "paraphrased": false,
+      "top3": [
+        "policy:supplier-performance#measuring-delivery-performance",
+        "policy:supplier-performance#lead-time-data",
+        "policy:supplier-performance#what-to-do-about-late-suppliers"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true
+    },
+    {
+      "question": "What happens if a delivery does not fit in the warehouse?",
+      "expected": "policy:receiving#warehouse-capacity",
+      "paraphrased": false,
+      "top3": [
+        "policy:receiving#warehouse-capacity",
+        "policy:data-and-ai-use#data-labels",
+        "policy:replenishment#stock-status"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true
+    },
+    {
+      "question": "Is Olist data joined with the simulated suppliers?",
+      "expected": "policy:data-and-ai-use#data-labels",
+      "paraphrased": false,
+      "top3": [
+        "policy:data-and-ai-use#data-labels",
+        "policy:supplier-performance#lead-time-data",
+        "policy:supplier-performance#overview"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true
+    },
+    {
+      "question": "Can the AI copilot place orders?",
+      "expected": "policy:data-and-ai-use#ai-copilot-limits",
+      "paraphrased": false,
+      "top3": [
+        "policy:data-and-ai-use#ai-copilot-limits",
+        "policy:approvals#what-needs-approval",
+        "policy:data-and-ai-use#data-labels"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true
+    },
+    {
+      "question": "How sure do we want to be that shelves stay filled?",
+      "expected": "policy:replenishment#service-level",
+      "paraphrased": true,
+      "top3": [
+        "policy:receiving#warehouse-capacity"
+      ],
+      "hit_at_1": false,
+      "hit_at_3": false
+    },
+    {
+      "question": "Which vendors are unreliable?",
+      "expected": "policy:supplier-performance#measuring-delivery-performance",
+      "paraphrased": true,
+      "top3": [],
+      "hit_at_1": false,
+      "hit_at_3": false
+    },
+    {
+      "question": "Who signs off on buying more stock?",
+      "expected": "policy:approvals#who-approves",
+      "paraphrased": true,
+      "top3": [
+        "policy:stock-transfers#transfers-come-first",
+        "policy:replenishment#stock-status",
+        "policy:approvals#what-needs-approval"
+      ],
+      "hit_at_1": false,
+      "hit_at_3": false
+    }
+  ],
+  "provenance": {
+    "code": "2f28e04-dirty",
+    "run": "python -m app.policy_eval inside an isolated Docker stack (PostgreSQL 16, migration 0010)",
+    "plan": "docs/CLAUDE_WORK_LOG.md, 'P5-T1 plan' (questions fixed before the first run)"
+  }
+}

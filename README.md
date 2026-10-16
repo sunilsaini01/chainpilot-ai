@@ -14,6 +14,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/app/models.py` | Tables: `products` (with supplier, minimum order and pack size), `warehouses`, `inventory` (stock per product × warehouse), `inventory_movements` (stock ledger), `suppliers`, `purchase_orders` and `purchase_order_lines`, plus users, audit, forecasts and delivery-risk tables. |
 | `apps/api/app/purchasing_service.py` | Units on order (open purchase orders) and receiving an order into stock through the ledger. |
 | `apps/api/app/replenishment_service.py` | Stock-out risks and reorder/transfer recommendations for the simulated stock, using the replay-tested policy math and borrowed M5 demand. |
+| `apps/api/policies/`, `apps/api/app/policies_service.py` | Six policy documents for the simulated company (written for the demo, labelled as such) and their search, the grounding for the AI copilot (P5). |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
@@ -29,7 +30,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/inventory_sim/` | Replay simulator (P4): real M5 sales are replayed day by day through the inventory policy (weekly review, random 5–9 day lead times, lost sales) and compared with a simple reorder rule. With LightGBM forecasts the policy needed 17–34% less stock for the same fill rate. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `.github/workflows/ci.yml` | On every push and pull request: API and ML Ruff lint/format and tests (API tests against a real Postgres 16, ML tests on tiny M5-format fixtures), then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: forecast and scoring jobs from the API (needs the background worker), approving and executing recommendations (P7), agents, frontend, AWS.
+Not built yet: forecast and scoring jobs from the API (needs the background worker), approving and executing recommendations (P7), the AI copilot itself (P5-T2 onwards), frontend, AWS.
 
 ## How stock changes
 
@@ -175,6 +176,23 @@ Recommendations are **proposals** (`pending`). Nothing is ordered or moved until
 | `GET /inventory/recommendations?status=pending&kind=&warehouse_id=` | analyst+ |
 
 With seed 42 and the real forecasts, 800 pairs are assessed: 146 out of stock, 23 at risk, 89 ok and 242 excess (the seed overstocks). The recommendations are 148 transfers (4,607 units) and 23 supplier orders (1,293 units).
+
+## Policy documents (grounding for the AI copilot)
+
+> **SIMULATED COMPANY POLICIES**, written for this demo, not any real company's. They describe the rules the system follows (service level, transfers first, supplier rules, approvals, receiving, data labels and the copilot's limits), and say where a rule is not enforced by the system yet.
+
+```powershell
+python -m app.cli load-policies        # syncs apps/api/policies/*.md into document_chunks (also inside the Docker image)
+```
+
+Each `## ` section becomes one searchable chunk with a citation such as `policy:replenishment#order-quantities`. Loading only changes what changed: new and edited files are (re)loaded, removed files are deleted, and every load is audited.
+
+Search uses PostgreSQL full-text search with English stemming. Any word of the question may match, and sections matching more of the words rank higher. It does not know synonyms. In the pre-registered check, direct questions found the right section first 9 times out of 9, and paraphrased ones ("vendors" for suppliers) 0 times out of 3. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md).
+
+| Endpoint | Who |
+|---|---|
+| `GET /policies` (documents, chunk counts, checksums) | analyst+ |
+| `GET /policies/search?q=&limit=` (best sections first, with citation and highlighted snippet) | analyst+ |
 
 ## Users, login and roles
 

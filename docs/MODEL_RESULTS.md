@@ -320,3 +320,21 @@ Cycle service level = share of item-weeks with no lost sale (the quantity the se
 **Provenance** (`docs/results/p4_inventory_replay.json`): code `154eafb-dirty` (154eafb plus the uncommitted P4-T2 code), runtime 1,349 s, data checksums included.
 
 Reproduce: `python -m inventory_sim.experiment ..\data\raw\m5 --output ..\docs\results\p4_inventory_replay.json`
+
+## Policy search: retrieval check (P5-T1)
+
+Twelve questions fixed before the first search ran (work log 2026-10-17 00:10). I wrote both the policies and the questions, so this measures the search mechanics, not real-world quality. Three questions are deliberate paraphrases that avoid the policies' own words.
+
+| Group | Right section first (hit@1) | In the top 3 (hit@3) |
+|---|---|---|
+| Direct questions | 9 / 9 | 9 / 9 |
+| Paraphrased questions | 0 / 3 | 0 / 3 |
+
+The paraphrases that failed:
+- "How sure do we want to be that shelves stay filled?" should find the service level; it found receiving / warehouse capacity.
+- "Which vendors are unreliable?" found nothing ("vendor" is not "supplier").
+- "Who signs off on buying more stock?" should find who approves; it found transfers and stock status.
+
+**Honest reading:** keyword search with stemming is reliable when a question uses the policies' words and fails when it does not. The search was not tuned on these three questions (that would only fit the check). How to close the gap is decided in P5-T3 (P5-T1-R1): the copilot rewriting questions into policy terms, or embeddings from the chosen model provider.
+
+**Provenance** (`docs/results/p5_policy_retrieval.json`): code `2f28e04-dirty`, run with `python -m app.policy_eval` in an isolated Docker stack (PostgreSQL 16).

@@ -194,3 +194,10 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - Recommendations follow the replay-tested order-up-to rule (D-045): any item below its target gets an order, not only items below the reorder point. Transfers come first, because moving spare stock is cheaper and faster than buying. Transfer travel time is not modelled.
 - Recommendations are stored as `pending` proposals with their inputs; a new run marks the old pending ones `superseded`. Approval, rejection and execution (creating the purchase order or the transfer movements) belong to the approval workflow (P7), as the spec's section 4.G describes.
 - A lead time longer than 21 days (lead + 7-day review > 28 forecast days) makes an item unassessable rather than guessed.
+
+## D-048 — 2026-10-17 — Policy retrieval with PostgreSQL full-text search (P5-T1)
+- The copilot's policy grounding uses PostgreSQL full-text search: no embedding model, no external service, no extra database, and results that are easy to explain (which words matched). The corpus is small (26 sections), so no index is needed.
+- Any word may match (the stemmed terms are joined with OR), ranked by `ts_rank`. The first plan (`websearch_to_tsquery`, all words required) was changed before any search ran, because most natural questions would have found nothing.
+- Known gap, measured: no synonyms (paraphrased questions 0/3). Closing it is a P5-T3 decision, together with the model provider.
+- The policies live in `apps/api/policies/` and are copied into the API image, so `load-policies` works the same locally, in Docker and later on AWS. They are labelled as simulated policies written for the demo, and say plainly where a rule is not enforced by the system yet, so the copilot cannot claim more than the system does.
+- Loading syncs the folder (add, replace, delete) so the copilot never cites a removed policy.
