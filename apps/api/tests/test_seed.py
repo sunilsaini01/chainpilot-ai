@@ -20,6 +20,7 @@ from app.models import (
     Supplier,
     Warehouse,
 )
+from app.purchasing_service import rating_for
 from app.seed import (
     CATEGORY_SUPPLIERS,
     HISTORY_DAYS,
@@ -210,18 +211,29 @@ def test_purchase_orders_are_labelled_numbered_and_consistent() -> None:
             assert line.unit_cost == product.unit_cost
 
 
-def test_history_has_open_overdue_orders_and_an_unreliable_supplier() -> None:
-    plan = build_plan()
+@pytest.mark.parametrize("seed", [42, 7])
+def test_history_gives_the_supplier_ratings_a_clear_signal(seed: int) -> None:
+    # Rated as the supplier policy does: received orders of the last 90 days.
+    plan = build_plan(seed=seed)
     open_orders = [order for order in plan.purchase_orders if order.received_date is None]
     overdue = [order for order in open_orders if order.expected_date < plan.as_of]
 
-    def late_share(code: str) -> float:
-        received = [o for o in plan.purchase_orders if o.supplier_code == code and o.received_date]
-        return sum(o.received_date > o.expected_date for o in received) / len(received)
+    def rating(code: str) -> str:
+        start = plan.as_of - timedelta(days=90)
+        received = [
+            o
+            for o in plan.purchase_orders
+            if o.supplier_code == code and o.received_date and o.received_date >= start
+        ]
+        return rating_for(sum(o.received_date <= o.expected_date for o in received), len(received))
 
     assert open_orders and overdue
-    # SUP04 is simulated as often late, SUP01 as reliable.
-    assert late_share("SYN-SUP04") > 0.6 > 0.2 > late_share("SYN-SUP01")
+    # Simulated as reliable (97% and 95% on time) and as unreliable (50% on time).
+    assert (rating("SYN-SUP01"), rating("SYN-SUP05"), rating("SYN-SUP04")) == (
+        "good",
+        "good",
+        "at_risk",
+    )
 
 
 def test_as_of_date_only_shifts_the_order_dates() -> None:
