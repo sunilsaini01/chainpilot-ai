@@ -52,15 +52,20 @@ def add_features(long: pd.DataFrame, min_lag: int = DEFAULT_MIN_LAG) -> pd.DataF
     return frame
 
 
-FEATURE_COLUMNS = [
-    *(f"lag_{DEFAULT_MIN_LAG + offset}" for offset in LAG_OFFSETS),
-    *(f"rolling_mean_{window}" for window in ROLLING_WINDOWS),
-    "rolling_std_28",
-    "wday",
-    "month",
-    "day_of_month",
-    "is_event",
-    "snap",
-    "sell_price",
-    "price_change_week",
-]
+def feature_columns(min_lag: int = DEFAULT_MIN_LAG) -> list[str]:
+    """Names of the model features that add_features(..., min_lag) creates."""
+    return [
+        *(f"lag_{min_lag + offset}" for offset in LAG_OFFSETS),
+        *(f"rolling_mean_{window}" for window in ROLLING_WINDOWS),
+        "rolling_std_28",
+        "wday",
+        "month",
+        "day_of_month",
+        "is_event",
+        "snap",
+        "sell_price",
+        "price_change_week",
+    ]
+
+
+FEATURE_COLUMNS = feature_columns(DEFAULT_MIN_LAG)

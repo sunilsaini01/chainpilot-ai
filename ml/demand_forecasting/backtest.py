@@ -23,7 +23,6 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import asdict
 from pathlib import Path
 
 import lightgbm as lgb
@@ -32,6 +31,7 @@ import pandas as pd
 
 from demand_forecasting import m5_data
 from demand_forecasting.baselines import BASELINES
+from demand_forecasting.conformal import ConformalIntervals
 from demand_forecasting.lgbm_model import ModelSettings, make_forecaster
 from demand_forecasting.metrics import bias, mae, mean_rmsse, rmsse_scales, wape
 
@@ -172,19 +172,37 @@ def git_commit() -> str:
         return "unknown"
 
 
+Factory = Callable[[pd.DataFrame], Forecaster]  # builds a forecaster from one store's long table
+
+
+def baseline_factories() -> dict[str, Factory]:
+    return {name: (lambda long, fn=fn: fn) for name, fn in BASELINES.items()}
+
+
+def lightgbm_factory(settings: ModelSettings) -> Factory:
+    return lambda long: make_forecaster(long, settings)
+
+
 def backtest_stores(
     raw_dir: Path,
     stores: list[str],
     horizon: int,
     n_origins: int,
-    lightgbm_settings: ModelSettings | None = None,
-) -> dict[str, object]:
-    """Run every baseline (and LightGBM, if settings are given) for each store,
-    keeping one store in memory at a time."""
+    factories: dict[str, Factory] | None = None,
+    end_date: pd.Timestamp | None = None,
+    intervals: dict[str, ConformalIntervals] | None = None,
+) -> tuple[dict[str, object], dict[str, pd.DataFrame]]:
+    """Backtest every model for each store, keeping one store in memory at a time.
+
+    `end_date` moves the last test window earlier (used for the validation period);
+    by default it ends on the last day of data. If `intervals` has calibrated bounds
+    for a model, they are added to its forecasts and scored too.
+    Returns the report and, per model, all result rows (for calibration).
+    """
+    factories = factories or baseline_factories()
     paths = m5_data.find_files(raw_dir)
     calendar = m5_data.load_calendar(paths["calendar"])
-    model_names = [*BASELINES, *(["lightgbm"] if lightgbm_settings else [])]
-    all_results: dict[str, list[pd.DataFrame]] = {name: [] for name in model_names}
+    all_results: dict[str, list[pd.DataFrame]] = {name: [] for name in factories}
     all_scales: dict[str, dict] = {}
     origins: list[pd.Timestamp] = []
     store_rows = []
@@ -194,30 +212,30 @@ def backtest_stores(
         prices = m5_data.load_prices(paths["prices"], [store])
         long = m5_data.to_long(sales, calendar, prices)
         series = long[["id", "date", "sales"]]
-        origins = make_origins(series["date"].max(), horizon, n_origins)
+        origins = make_origins(end_date or series["date"].max(), horizon, n_origins)
         scales = scales_for(series, origins)
         for origin, scale in scales.items():
             all_scales.setdefault(store, {})[origin] = scale
-        forecasters = dict(BASELINES)
-        if lightgbm_settings:
-            forecasters["lightgbm"] = make_forecaster(long, lightgbm_settings)
-        for name, forecaster in forecasters.items():
+        for name, factory in factories.items():
             print(f"  {store}: {name}", file=sys.stderr, flush=True)
-            results = run_backtest(series, forecaster, origins, horizon)
+            results = run_backtest(series, factory(long), origins, horizon)
+            if intervals and name in intervals:
+                results = intervals[name].apply(results)
             results["store"] = store
             all_results[name].append(results)
             store_rows.append({"store": store, "model": name, "metrics": score(results, scales)})
-        del long, series, sales, prices, forecasters
+        del long, series, sales, prices
 
     # Pool all stores: ids are unique across stores, so scales can simply be combined.
     pooled_scales = {
         origin: pd.concat([all_scales[store][origin] for store in stores]) for origin in origins
     }
+    pooled = {name: pd.concat(parts, ignore_index=True) for name, parts in all_results.items()}
     overall = [
-        {"model": name, "metrics": score(pd.concat(parts, ignore_index=True), pooled_scales)}
-        for name, parts in all_results.items()
+        {"model": name, "metrics": score(results, pooled_scales)}
+        for name, results in pooled.items()
     ]
-    return {
+    report = {
         "dataset": "M5 Forecasting - Accuracy (sales_train_validation.csv)",
         "stores": stores,
         "horizon_days": horizon,
@@ -235,12 +253,12 @@ def backtest_stores(
             "git_commit": git_commit(),
             "python": platform.python_version(),
             "pandas": pd.__version__,
-            "lightgbm": lgb.__version__,
-            "lightgbm_settings": asdict(lightgbm_settings) if lightgbm_settings else None,
             "numpy": np.__version__,
+            "lightgbm": lgb.__version__,
             "data_sha256": {name: file_sha256(path) for name, path in paths.items()},
         },
     }
+    return report, pooled
 
 
 def format_table(report: dict[str, object]) -> str:
@@ -270,15 +288,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--origins", type=int, default=3)
     parser.add_argument("--output", type=Path, help="write the full report as JSON")
     parser.add_argument(
-        "--with-lightgbm", action="store_true", help="also backtest the LightGBM model (slow)"
+        "--with-lightgbm", action="store_true", help="also backtest both LightGBM layouts (slow)"
     )
     args = parser.parse_args(argv)
 
     stores = ALL_STORES if args.all_stores else args.store
     started = time.perf_counter()
     try:
-        settings = ModelSettings() if args.with_lightgbm else None
-        report = backtest_stores(args.raw_dir, stores, args.horizon, args.origins, settings)
+        factories = baseline_factories()
+        if args.with_lightgbm:
+            factories["lightgbm_single"] = lightgbm_factory(ModelSettings())
+            factories["lightgbm_weekly"] = lightgbm_factory(ModelSettings(weekly_models=True))
+        report, _ = backtest_stores(args.raw_dir, stores, args.horizon, args.origins, factories)
     except (FileNotFoundError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
