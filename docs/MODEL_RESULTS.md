@@ -86,3 +86,60 @@ python -m demand_forecasting.train_final ..\data\raw\m5 --store CA_1      # fina
 ```
 
 The final CA_1 model (trained 2014-04-26 to 2016-04-24, 2,187,494 rows, 40.5 s) was saved and reloaded, and it predicts real feature rows with ordered intervals. Model files are not in Git.
+
+## Demand forecasting: improved model, chosen on a validation period (P2-T3b)
+
+The plan below was written in `docs/CLAUDE_WORK_LOG.md` **before** any of these numbers existed, so the test result could not influence the choice.
+
+1. **Validation period** (all 10 stores), entirely before the test windows: origins 2015-11-08, 2015-12-06, 2016-01-03; windows 2015-11-09 to 2016-01-31.
+2. **Candidates** (same fixed settings as P2-T3, point forecasts): LightGBM single model (all sales features ≥ 28 days old) and LightGBM **weekly models** (one model per forecast week, with sales features ≥ 7, 14, 21 and 28 days old). Reference: 28-day moving average.
+3. **Selection rule:** lowest mean WAPE over 7/14/28 days on validation (ties within 0.001 broken by RMSSE).
+4. **80% intervals:** conformal calibration from each model's validation errors, in 10 bins by forecast size (2,561,160 validation rows), replacing the quantile models of P2-T3.
+5. **Test:** the chosen model and the moving average, **once**, on the same test windows as before.
+
+**Validation** (Nov 2015 – Jan 2016):
+
+| Model | Horizon | MAE | WAPE | Bias | RMSSE |
+|---|---|---|---|---|---|
+| Moving average, 28 days | 7 days | 0.982 | 0.775 | -0.038 | 0.636 |
+| Moving average, 28 days | 14 days | 0.984 | 0.782 | -0.031 | 0.665 |
+| Moving average, 28 days | 28 days | 1.000 | 0.817 | -0.003 | 0.689 |
+| LightGBM, single model | 7 days | 0.998 | 0.787 | -0.007 | 0.646 |
+| LightGBM, single model | 14 days | 0.989 | 0.786 | -0.017 | 0.672 |
+| LightGBM, single model | 28 days | 0.978 | 0.800 | -0.025 | 0.686 |
+| LightGBM, weekly models | 7 days | 0.954 | 0.752 | -0.005 | 0.628 |
+| LightGBM, weekly models | 14 days | 0.955 | 0.759 | -0.017 | 0.658 |
+| LightGBM, weekly models | 28 days | 0.958 | 0.784 | -0.026 | 0.678 |
+
+Mean WAPE over 7/14/28 days: single 0.7910, weekly 0.7651. **Chosen: weekly models.**
+
+**Test** (Feb – Apr 2016, the same windows as the earlier tables):
+
+| Model | Horizon | MAE | WAPE | Bias | RMSSE | 80% interval coverage | Interval width |
+|---|---|---|---|---|---|---|---|
+| Moving average, 28 days | 7 days | 1.020 | 0.736 | -0.030 | 0.675 | 0.868 | 2.64 |
+| Moving average, 28 days | 14 days | 1.037 | 0.737 | -0.044 | 0.714 | 0.863 | 2.64 |
+| Moving average, 28 days | 28 days | 1.040 | 0.753 | -0.025 | 0.736 | 0.861 | 2.64 |
+| LightGBM, weekly models | 7 days | 0.996 | 0.718 | -0.010 | 0.665 | 0.809 | 2.71 |
+| LightGBM, weekly models | 14 days | 1.020 | 0.725 | -0.023 | 0.705 | 0.804 | 2.72 |
+| LightGBM, weekly models | 28 days | 1.022 | 0.740 | -0.038 | 0.728 | 0.799 | 2.68 |
+
+WAPE at 28 days by store (moving average / weekly LightGBM; ✓ = LightGBM better): CA_1 0.7483 / 0.7349 ✓, CA_2 0.7874 / 0.7611 ✓, CA_3 0.6718 / 0.6595 ✓, CA_4 0.8943 / 0.8941 ✓, TX_1 0.7920 / 0.7952, TX_2 0.7444 / 0.7366 ✓, TX_3 0.7503 / 0.7530, WI_1 0.7899 / 0.7662 ✓, WI_2 0.7240 / 0.6999 ✓, WI_3 0.7483 / 0.7295 ✓.
+
+**Reading**
+- **The weekly LightGBM beats the 28-day moving average at every horizon**: WAPE 0.718 / 0.725 / 0.740 vs 0.736 / 0.737 / 0.753 at 7 / 14 / 28 days (about 2% lower), RMSSE also lower, better in 8 of 10 stores at 28 days (CA_4 only by a hair, effectively a tie; TX_1 and TX_3 slightly worse). The gain is real but modest; item-level daily demand is very noisy.
+- The improvement over the first LightGBM version comes from letting the model for next week use last week's sales (the cause identified in P2-T3).
+- **Intervals are now calibrated:** coverage 0.799–0.809 for the weekly model (target 0.80; per store 0.789–0.809), about as wide as the moving average's intervals, which over-cover (0.86). The old quantile intervals covered 0.87.
+- **Bias:** closer to 0 than the moving average at 7 and 14 days (−1.0%, −2.3%), slightly further at 28 days (−3.8% vs −2.5%).
+- The moving average's test numbers are identical to the earlier runs (a consistency check).
+- Same caveats as above: unweighted RMSSE (not comparable with the Kaggle leaderboard); test windows cover February–April only.
+
+**Provenance** (`docs/results/p2_model_selection.json`): code `7ead45b-dirty` (commit 7ead45b plus the uncommitted P2-T3b code, committed with these results), LightGBM 4.7.0, same data checksums as above, runtime 5,594 s (93 min). A first run of the same plan crashed in the calibration step before showing any numbers (see the work log); this is the second run of the unchanged plan.
+
+**Reproduce**
+
+```powershell
+cd ml
+python -m demand_forecasting.model_selection ..\data\raw\m5 --all-stores --output ..\docs\results\p2_model_selection.json
+python -m demand_forecasting.train_final ..\data\raw\m5 --all-stores --weekly --selection-report ..\docs\results\p2_model_selection.json
+```

@@ -135,3 +135,8 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - One model per store (memory and time: ~45 s per store-origin for three boosters), Tweedie objective for zero-heavy counts, product/department/category as categorical features, 730 training days, fixed settings (no tuning on test data), deterministic seeds. Intervals from separate 10%/90% quantile models, ordered after prediction. Days without a price are excluded from training and forecast as 0.
 - Models are saved in LightGBM's text format (not pickle, so loading cannot run code) with a metadata JSON (features, window, settings, data checksums, code version) in `ml/artifacts/` (ignored by Git).
 - The first backtest did not beat the 28-day moving average (P2-T3-R1). Decision: report it as is and let the owner choose whether to invest in a validated second version.
+
+## D-038 — 2026-10-16 — Production forecast model: weekly LightGBM with conformal intervals
+- Chosen by the pre-registered rule on a validation period, then confirmed once on the untouched test windows (`docs/MODEL_RESULTS.md`). Four models per store (days 1–7, 8–14, 15–21, 22–28) with minimum feature lags 7/14/21/28, so each forecast uses the freshest sales it is allowed to without leakage.
+- Intervals from split-conformal calibration (validation errors, 10 bins by forecast size) instead of quantile boosters: calibrated by construction, cheaper (no extra models), and model-agnostic (the moving average gets intervals the same way). Bounds are stored in each model's metadata.
+- The 28-day moving average remains the documented fallback and benchmark.

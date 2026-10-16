@@ -348,3 +348,40 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings and fixes: R3 VERIFIED. Open: R1 (MEDIUM, model does not beat the baseline; owner decision), R2 (LOW, interval too wide).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: owner decides on P2-T3-R1 (improve with a validation period, or accept the moving average as the production forecast for now and continue to P2-T4).
+
+## 2026-10-15 23:20 UTC — P2-T3 CI verification, and the P2-T3b plan (written before any new run)
+- CI: GitHub Actions run 38776281581 (CI #9) on `7ead45b` (owner pushed `35de6cc`, `0da0e33`, `7ead45b`) concluded `success`; all three jobs, 0 annotations. LightGBM installs and runs on ubuntu-24.04.
+- Owner decision on P2-T3-R1: "Improve the model properly". New task P2-T3b.
+- **Pre-registered plan** (fixed before any validation or test numbers are seen):
+  - Validation origins 2015-11-08, 2015-12-06, 2016-01-03 (28-day windows ending 2016-01-31 = the first test origin; no overlap with the test windows 2016-02-01 to 2016-04-24). All 10 stores.
+  - Candidates, settings unchanged from P2-T3 (point model only): (A) single LightGBM, features with min lag 28; (B) one LightGBM per forecast week, min lag 7/14/21/28 for days 1–7/8–14/15–21/22–28. Reference: 28-day moving average.
+  - Selection rule: lowest mean of WAPE at 7, 14 and 28 days on validation; ties within 0.001 broken by mean RMSSE.
+  - Intervals: split-conformal calibration per model from its validation residuals, grouped into 10 bins by forecast size; 80% interval = forecast + 10th/90th residual percentile of its bin, clipped at 0. Replaces the quantile boosters (P2-T3-R2).
+  - Test: the chosen model and the moving average run once on the original test origins (2016-01-31, 2016-02-28, 2016-03-27) with calibrated intervals; results reported whatever they are.
+
+## 2026-10-16 00:40 UTC — P2-T3b first official run crashed (conformal bug); fixed and relaunched
+- The first all-stores `model_selection` run (~1 h) finished validation, then crashed in `ConformalIntervals.fit` with `IndexError: index -1 is out of bounds for axis 0 with size 0` before printing or saving anything. No validation or test numbers were seen, so the pre-registered plan is unaffected.
+- Cause: many forecasts are exactly 0 (especially the moving average); the lowest quantile edge was 0, and `np.digitize` (right-open bins) put the zeros in bin 1, leaving bin 0 empty; the percentile of an empty array crashed. The unit tests used continuous forecasts without ties, so they missed it.
+- Fix: `_bin_of` uses `right=True` in both fit and apply; bins with fewer than 100 rows fall back to the overall percentiles. Regression tests `test_many_exact_zero_forecasts_are_handled` and `test_tiny_bins_fall_back_to_overall_bounds`; restoring the old code reproduces the exact IndexError.
+- Also: `model_selection.run` now writes a checkpoint JSON right after validation, so a later failure cannot lose the expensive step again. A smoke run of the whole pipeline on CA_1 with 5-round models (numbers meaningless by design) passed in 88 s.
+- `ml`: 65 passed; Ruff passes. Official run relaunched.
+
+## 2026-10-16 02:30 UTC — P2-T3b results
+- Starting commit / branch: `7ead45b` on `main`, all P2-T3b changes uncommitted.
+- Files changed and why:
+  - `ml/demand_forecasting/conformal.py` (new): split-conformal 80% intervals (10 bins by forecast size, right-closed bins, small-bin fallback).
+  - `ml/demand_forecasting/lgbm_model.py`: rewritten around `Bucket` layouts (single, weekly), point forecasts only, `predict_rows`, `rows_for_steps`, save/load with per-model lag and steps.
+  - `ml/demand_forecasting/features.py`: `feature_columns(min_lag)`.
+  - `ml/demand_forecasting/backtest.py`: model factories, `end_date`, optional intervals, returns raw results; `--with-lightgbm` runs both layouts.
+  - `ml/demand_forecasting/model_selection.py` (new): the pre-registered plan, with a checkpoint after validation.
+  - `ml/demand_forecasting/train_final.py`: model sets, `--weekly`, `--selection-report` (stores interval bounds).
+  - `ml/tests/test_lgbm_model.py` (rewritten, 14 tests), `ml/tests/test_conformal_and_selection.py` (new, 7 tests). ML total 65.
+  - `docs/results/p2_model_selection.json` (new), `docs/{MODEL_RESULTS,REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`, `README.md`.
+- Tests run / actual results:
+  - `ml`: 65 passed; Ruff passes. Mutations: lag-7 model forecasting days 8–14 (leakage) caught; 90% bounds caught; old conformal code reproduces the crash.
+  - Official run (second attempt, plan unchanged): exit 0, 5,593.5 s. Validation mean WAPE single 0.7910, weekly 0.7651, so weekly chosen. Test, weekly vs moving average: WAPE 0.718/0.725/0.740 vs 0.736/0.737/0.753; RMSSE 0.665/0.705/0.728 vs 0.675/0.714/0.736; coverage 0.809/0.804/0.799 vs 0.868/0.863/0.861; better in 8 of 10 stores at 28 days (CA_4 a tie). Moving-average test numbers identical to the earlier runs.
+  - `train_final --all-stores --weekly --selection-report …`: exit 0; 10 stores, 4 models each, trained through 2016-04-24, 80.9–87.6 s per store, interval bounds stored in each `metadata.json`; reloaded all 10; 222 MB in `ml/artifacts/` (ignored by Git, `git check-ignore` confirmed).
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings and fixes: P2-T3-R1 and R2 VERIFIED; P2-T3b-R1 (conformal crash) VERIFIED; P2-T3b-R2 (wrong test premise) FIXED.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner commits and pushes; confirm CI; then P2-T4 (forecast tables and API serving the weekly LightGBM forecasts with intervals; moving average as fallback).

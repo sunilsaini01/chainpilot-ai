@@ -274,14 +274,16 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `ml/demand_forecasting/lgbm_model.py` with `features.DEFAULT_MIN_LAG = 28`. All stores, 3 origins: WAPE at 7/14/28 days 0.753/0.751/0.755 vs moving average 0.736/0.737/0.753; RMSSE at 28 days 0.736 for both. Better in 5 of 10 stores.
 - Expected behavior: a tree model that clearly beats the strongest baseline, or a documented decision to use the baseline.
 - Fix and regression test: not fixed, on purpose. Changing the model while scoring on these same windows would tune it to the test set. Proposed next step (owner decision): carve out a validation period before 2016-01-31; compare (a) one model per forecast week with minimum lags 7/14/21/28 and (b) origin-anchored "recent level" features; choose on validation only, then report once on the existing test windows.
-- Status: OPEN (needs owner decision)
+- Update 2026-10-16: owner chose "Improve the model properly". Pre-registered plan (work log, 2026-10-15 23:20 UTC) executed: on validation (Nov 2015 – Jan 2016) the weekly-model layout won (mean WAPE 0.7651 vs single 0.7910). On the unchanged test windows it beats the 28-day moving average at all horizons (WAPE 0.718/0.725/0.740 vs 0.736/0.737/0.753; RMSSE 0.665/0.705/0.728 vs 0.675/0.714/0.736), in 8 of 10 stores (CA_4 effectively a tie). Leakage tests cover both layouts (future-perturbation test; mutation "lag-7 model also forecasts days 8–14" caught).
+- Status: VERIFIED
 
 ## P2-T3-R2 — [LOW] 80% interval covers 87% (too wide)
 - Source: real backtest
 - File and reproduction: the 10th-percentile model predicts 0 for most zero-heavy series, so `[lower, upper]` contains most zero days. Coverage 0.870–0.873 at all horizons; per store 0.856–0.881.
 - Expected behavior: coverage close to 0.80 with the narrowest honest width.
 - Fix and regression test: calibrate on a validation window (e.g. conformal adjustment of the bounds, or a different lower-quantile approach for intermittent demand), then check coverage on the test windows.
-- Status: OPEN
+- Update 2026-10-16: replaced the quantile boosters with split-conformal calibration (`conformal.py`, 10 bins by forecast size, fitted on 2,561,160 validation rows). Test coverage 0.809/0.804/0.799 at 7/14/28 days (per store 0.789–0.809), width 2.68–2.72. Tests: coverage on fresh data within 0.78–0.82, zero-heavy data, tiny-bin fallback; mutation "90% bounds" caught.
+- Status: VERIFIED
 
 ## P2-T3-R3 — [LOW] Unclear error when there is nothing to train on
 - Source: Claude self-review (a passing test that passed for the wrong reason)
@@ -289,3 +291,17 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: a clear message.
 - Fix and regression test: `train_models` raises "no training rows: each series needs more than 28 days of history (with prices) before the origin"; `test_train_final_command_on_fixtures` checks that message.
 - Status: VERIFIED
+
+## P2-T3b-R1 — [MEDIUM] Conformal fit crashed on many exact-zero forecasts
+- Source: the first official run (crashed after ~1 h of validation, before any numbers were shown)
+- File and reproduction: `ml/demand_forecasting/conformal.py`. With right-open bins (`np.digitize` default), forecasts equal to the lowest edge (0) went into bin 1, leaving bin 0 empty; `np.percentile` of an empty array raised IndexError.
+- Expected behavior: robust calibration on zero-heavy data.
+- Fix and regression test: `right=True` in fit and apply; bins with fewer than 100 rows use the overall percentiles. `test_many_exact_zero_forecasts_are_handled`, `test_tiny_bins_fall_back_to_overall_bounds` (the old code reproduces the exact IndexError). `model_selection` now checkpoints after validation. Second run completed.
+- Status: VERIFIED
+
+## P2-T3b-R2 — [LOW] My test premise about the single model was wrong
+- Source: Claude self-review (test failure)
+- File and reproduction: a new test claimed the single model's forecast cannot react to last week's sales. It does, legitimately: last week's sales are training targets (dated before the origin). Not leakage.
+- Expected behavior: the test checks the real difference between layouts.
+- Fix and regression test: replaced by `test_next_weeks_inputs_include_last_week_only_with_a_7_day_lag`, which checks the *input features* for days 1–7 (they change with a 7-day lag and not with a 28-day lag).
+- Status: FIXED
