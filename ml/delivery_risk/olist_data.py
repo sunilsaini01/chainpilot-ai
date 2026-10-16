@@ -83,6 +83,7 @@ FORBIDDEN_FEATURES = {
     "review_score",
     "review_comment_message",
     "review_creation_date",
+    "outcome_known_at",
 }
 
 
@@ -284,7 +285,17 @@ def build_orders(tables: dict[str, pd.DataFrame]) -> tuple[pd.DataFrame, dict[st
     for column in CATEGORY_FEATURES:
         orders[column] = orders[column].fillna("unknown").astype("category")
 
-    columns = ["order_id", "split", "order_purchase_timestamp", "late", *FEATURE_COLUMNS]
+    # When the outcome (late or not) became known: the delivery time. NOT a feature;
+    # rolling.py uses it to decide which orders a model was allowed to learn from.
+    orders["outcome_known_at"] = orders["order_delivered_customer_date"]
+    columns = [
+        "order_id",
+        "split",
+        "order_purchase_timestamp",
+        "outcome_known_at",
+        "late",
+        *FEATURE_COLUMNS,
+    ]
     return orders[columns].sort_values("order_purchase_timestamp").reset_index(drop=True), dropped
 
 
