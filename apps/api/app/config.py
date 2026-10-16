@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # How long a login token stays valid (default 8 hours = one working day; max 7 days).
     access_token_ttl_minutes: int = Field(default=480, ge=5, le=7 * 24 * 60)
 
+    # AI copilot (P5-T3, OpenAI). Without a key the copilot endpoints answer 503.
+    openai_api_key: SecretStr = SecretStr("")
+    openai_model: str = ""
+    # Cost control: investigations each user may start per hour.
+    copilot_runs_per_hour: int = Field(default=20, ge=1, le=1000)
+
     @property
     def database_url(self) -> URL:
         """Build the SQLAlchemy URL from the separate connection fields."""

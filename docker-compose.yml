@@ -17,6 +17,11 @@ x-api-environment: &api-environment
   POSTGRES_USER: ${POSTGRES_USER:-chainpilot}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
   POSTGRES_DB: ${POSTGRES_DB:-chainpilot}
+  # AI copilot (P5-T3). Empty = copilot switched off (its endpoints answer 503).
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_MODEL: ${OPENAI_MODEL:-}
+  # LangGraph ships LangSmith tracing; keep it off so run data goes nowhere else.
+  LANGSMITH_TRACING: "false"
 
 services:
   postgres:

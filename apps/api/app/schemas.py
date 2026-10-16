@@ -257,6 +257,33 @@ class RecommendationOut(BaseModel):
     created_at: datetime
 
 
+# --- AI copilot (P5) -----------------------------------------------------------
+
+
+class InvestigateRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+
+
+class AgentRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    question: str
+    status: Literal["completed", "limit_reached", "failed"]
+    # {answer, citations, limitations, grounded, unsupported_citations}
+    answer: dict[str, Any] | None
+    trace: list[dict[str, Any]]
+    model: str
+    model_calls: int
+    tool_calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    duration_ms: int
+    error: str | None
+    created_by_user_id: int | None
+    created_at: datetime
+
+
 # --- Policies (P5) ------------------------------------------------------------
 
 

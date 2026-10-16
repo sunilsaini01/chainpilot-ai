@@ -19,6 +19,9 @@ Demo link from SYN- products to M5 demand (after import-forecasts and seed):
 Policy documents for the AI copilot (default folder: apps/api/policies):
     python -m app.cli load-policies
 
+AI copilot (needs OPENAI_API_KEY and OPENAI_MODEL; each question costs a little):
+    python -m app.cli investigate "Which suppliers are at risk?"
+
 Housekeeping (safe to run daily, e.g. from cron):
     docker compose run --rm api python -m app.cli cleanup --days 30
 
@@ -37,6 +40,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.audit import record_event
+from app.copilot.service import CopilotNotConfiguredError, configured_model, run_and_save
 from app.database import get_engine
 from app.delivery_risk_import import DeliveryRiskImportError, import_delivery_risk
 from app.forecast_import import ForecastImportError, import_forecasts
@@ -165,6 +169,33 @@ def link_demand_profiles_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def investigate_command(args: argparse.Namespace) -> int:
+    """Ask the AI copilot one question (calls OpenAI) and print the answer."""
+    try:
+        model = configured_model()
+        with Session(get_engine()) as session:
+            run = run_and_save(session, model, args.question, actor=None)
+            session.commit()
+            # Printed while the session is open: the run's fields are reloaded after commit.
+            answer = run.answer or {}
+            print(f"Run {run.id}: {run.status}, grounded={answer.get('grounded')}")
+            print(answer.get("answer") or run.error or "(no answer)")
+            print(f"Citations: {', '.join(answer.get('citations', [])) or 'none'}")
+            if answer.get("unsupported_citations"):
+                removed = ", ".join(answer["unsupported_citations"])
+                print(f"Removed (not supported by the tools): {removed}")
+            print(
+                f"Model {run.model}: {run.model_calls} calls, {run.tool_calls} tool calls, "
+                f"{run.prompt_tokens} + {run.completion_tokens} tokens, "
+                f"{run.duration_ms / 1000:.1f} s"
+            )
+            completed = run.status == "completed"
+    except (CopilotNotConfiguredError, ValueError) as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    return 0 if completed else 1
+
+
 def load_policies_command(args: argparse.Namespace) -> int:
     """Make the policy table match the policy folder (added, updated, removed documents)."""
     try:
@@ -252,6 +283,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     policies.add_argument("folder", type=Path, nargs="?", default=POLICY_FOLDER)
     policies.set_defaults(handler=load_policies_command)
+
+    ask = commands.add_parser(
+        "investigate", help="Ask the AI copilot a question (calls OpenAI; costs money)"
+    )
+    ask.add_argument("question")
+    ask.set_defaults(handler=investigate_command)
 
     args = parser.parse_args(argv)
     return args.handler(args)

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.routes import (
+    agents,
     audit,
     auth,
     delivery_risk,
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
     app.include_router(purchasing.router)
     app.include_router(replenishment.router)
     app.include_router(policies.router)
+    app.include_router(agents.router)
     app.include_router(forecasts.router)
     app.include_router(delivery_risk.router)
     app.include_router(audit.router)

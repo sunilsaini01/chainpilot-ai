@@ -532,6 +532,41 @@ class DeliveryRiskScore(Base):
     reasons: Mapped[list] = mapped_column(JSONB)
 
 
+class AgentRun(Base):
+    """One copilot investigation: the question, the answer and every step taken (P5-T3).
+
+    `trace` records each supervisor choice, tool call (with its arguments and the
+    citations it returned), specialist note and verification, so an answer can
+    always be checked afterwards.
+    """
+
+    __tablename__ = "agent_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('completed', 'limit_reached', 'failed')", name="status_allowed"
+        ),
+        Index("ix_agent_runs_user_created", "created_by_user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    question: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20))
+    # {answer, citations, limitations, grounded, unsupported_citations}
+    answer: Mapped[dict | None] = mapped_column(JSONB)
+    trace: Mapped[list] = mapped_column(JSONB)
+    model: Mapped[str] = mapped_column(String(100))
+    model_calls: Mapped[int]
+    tool_calls: Mapped[int]
+    prompt_tokens: Mapped[int]
+    completion_tokens: Mapped[int]
+    duration_ms: Mapped[int]
+    error: Mapped[str | None] = mapped_column(Text)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class DocumentChunk(Base):
     """One section of a policy document, for retrieval by the AI copilot (P5).
 
