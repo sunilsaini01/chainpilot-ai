@@ -3,3 +3,5 @@ pandas==3.0.6
 numpy==2.4.6
 # Gradient-boosted trees for demand forecasting (pulls in scipy and narwhals).
 lightgbm==4.7.0
+# Logistic-regression baseline, metrics and calibration for delivery risk (P3).
+scikit-learn==1.9.1
