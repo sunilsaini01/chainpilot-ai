@@ -379,11 +379,34 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: monthly late rate 1.2%–19%; calibrated mean prediction 5.7%–16.1% in the test months vs 1.2%–6.6% actual; the fixed alert cut-off flags 3.8%–23.8% of orders per month.
 - Expected behavior: users get a stable, understandable risk signal and a predictable review workload.
 - Fix and regression test: in P3-T3, serve a risk **tier/percentile** (relative to recent dispatches) as the main signal, label probabilities as approximate, and make the alert "top N% of the same day's dispatches". Test that the daily flagged share equals N% and that tiers are computed only from same-day or earlier orders.
-- Status: OPEN (P3-T3)
+- Update 2026-10-16 (P3-T3): served as designed. Tiers are ranked within each dispatch day (`ml/delivery_risk/scoring.py::assign_tiers`); the API and README present the tier as the main signal and the probability as approximate. Tests: `test_tiers_follow_the_daily_ranking` (daily share), `test_scores_ignore_outcomes_that_were_not_known_yet` (no future outcomes). On the real file the daily flagged share is 10.0%–11.1% on every day with at least 50 dispatches (monthly 3.8%–23.8% before). Small days: P3-T3-R3.
+- Status: VERIFIED
 
 ## P3-T2b-R2 — [LOW] Rolling simulation only sees orders that were eventually delivered
 - Source: Claude self-review
 - File and reproduction: the order table (P3-T1) keeps delivered orders only, so the "recent purchases" used for the alert cut-off exclude orders that were later cancelled or never delivered. In a live system those would be scored too.
 - Expected behavior: documented; small effect (about 3% of orders are not delivered).
 - Fix and regression test: none needed for the experiment; a live scorer (P3-T3) scores every dispatched order.
+- Update 2026-10-16 (P3-T3): the published scores are historical, so they also cover delivered orders only (the order table has no others). A live scorer would score every dispatched order; there is none in this project yet.
+- Status: OPEN (documented limitation)
+
+## P3-T3-R1 — [LOW] Reasons named the seller's state for almost every order
+- Source: Claude self-review (reading real explanations before publishing)
+- File and reproduction: `ml/delivery_risk/scoring.py`. The first version ranked features by coefficient × scaled value. One-hot categories are never centred, so a common category with a positive coefficient (for example a frequent seller state) became a "reason" for most orders, although it describes the typical order.
+- Expected behavior: reasons say what makes this order riskier than a typical order.
+- Fix and regression test: contributions are measured from the training average (coefficient × (value − training mean)), summed per source feature; `test_contributions_add_up_to_the_log_odds_difference` checks the exact identity and `test_reasons_are_the_strongest_positive_contributions` checks the reasons.
+- Status: VERIFIED
+
+## P3-T3-R2 — [LOW] One import-validation test did not test what it said
+- Source: mutation check
+- File and reproduction: `apps/api/tests/test_delivery_risk.py`. The "dispatch day outside the period" case changed only `dispatch_date`, so the "day differs from dispatched_at" check rejected it first. Removing the period check left all tests passing.
+- Expected behavior: each validation has a test that fails without it.
+- Fix and regression test: split into two cases (day mismatch; a self-consistent order after the period). All 7 import-check mutations are now caught.
+- Status: VERIFIED
+
+## P3-T3-R3 — [LOW] Very small dispatch days flag more than 10%
+- Source: Claude self-review (real published file)
+- File and reproduction: `ml/delivery_risk/scoring.py::assign_tiers`. The riskiest order of a day is always high tier, so 13 days with 2–9 dispatches (82 orders, mostly Saturdays and the last days of the data) flag one order each: 11%–50% of those days.
+- Expected behavior: a predictable review workload. At least one review per day is a reasonable rule, and it adds only a handful of alerts.
+- Fix and regression test: none; documented in MODEL_RESULTS and here. Revisit if real daily volumes are small (for example ranking against the last 7 days of dispatches).
 - Status: OPEN (documented limitation)

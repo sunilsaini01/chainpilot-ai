@@ -22,9 +22,10 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/demand_forecasting/{lgbm_model,conformal,model_selection,train_final}.py` | LightGBM demand model (one model per forecast week), chosen on a validation period, with calibrated 80% intervals; it beats the 28-day moving average on the test windows (WAPE 0.740 vs 0.753 at 28 days). `train_final` saves the models per store in `ml/artifacts/` (not in Git). See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `ml/demand_forecasting/{baselines,backtest,metrics,features}.py` | Baseline forecasts (seasonal naive, 28-day moving average), rolling-origin backtests with MAE/WAPE/bias/RMSSE for 7/14/28 days, and leakage-safe features. Results: [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `ml/delivery_risk/olist_data.py` | Prepares the Olist marketplace data for delivery-delay risk: one row per delivered order, a `late` label, and features known at dispatch time (no delivery dates, no reviews), with a time-based split. See [docs/DATASETS.md](docs/DATASETS.md). |
+| `ml/delivery_risk/{models,evaluation,rolling,scoring,tier_check}.py` | Delivery-delay risk: logistic regression retrained every month with calibration on recent outcomes (chosen in a rolling monthly evaluation), scoring of dispatched orders into daily high/medium/low tiers with the top 3 reasons, and an after-the-fact check of the tiers. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `.github/workflows/ci.yml` | On every push and pull request: API and ML Ruff lint/format and tests (API tests against a real Postgres 16, ML tests on tiny M5-format fixtures), then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: forecast jobs from the API (needs the background worker), delivery-risk models (P3-T2), inventory decisions, agents, frontend, AWS.
+Not built yet: forecast and scoring jobs from the API (needs the background worker), inventory decisions, agents, frontend, AWS.
 
 ## How stock changes
 
@@ -92,6 +93,38 @@ The import checks the file against its manifest (checksum, row count, column nam
 |---|---|
 | `GET /forecasts/runs` (newest first) | analyst+ |
 | `GET /forecasts?run_id=&store_id=&item_id=&series_id=&date_from=&date_to=&limit=&offset=` (default: newest run; point forecast plus 80% interval `lower`/`upper`) | analyst+ |
+
+## Delivery-delay risk (Olist public data)
+
+> **Data label:** these scores are for historical orders in the public **Olist** Brazilian marketplace dataset (April–August 2018). They are not ChainPilot's simulated suppliers or purchase orders and are never joined to them. Every response carries an `X-Dataset` header saying so.
+
+How scores get from the model to the API:
+
+```powershell
+cd ml
+python -m delivery_risk.scoring ..\data\raw\olist          # -> data/processed/delivery_risk/<run>/ (not in Git)
+cd ..\apps\api
+python -m app.cli import-delivery-risk ..\..\data\processed\delivery_risk\olist_logistic_2018-04-02_2018-08-31
+```
+
+Each dispatched order is scored by the model of its month, which only learned from outcomes known before that month started. It gets:
+
+| Field | Meaning |
+|---|---|
+| `tier` / `alert` | **The main signal.** Among the orders dispatched the same day: `high` = riskiest 10% (these are the alerts), `medium` = next 20%, `low` = the rest. |
+| `day_percentile` | Its rank among the same day's dispatches (1.0 = riskiest). |
+| `probability` | Approximate chance of arriving late. It drifts with the monthly late rate (1%–19% in this data), so compare orders by tier, not by this number. |
+| `reasons` | The 3 features that raised its risk the most compared with a typical order (logistic-regression contribution in log-odds), e.g. a long handling time or a long distance. |
+
+Measured afterwards on these months: high-tier orders were late 19.9% of the time, medium 6.8%, low 2.0% (all orders 4.8%); the daily alerts caught 42.5% of the late orders. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md).
+
+The import checks the file against its manifest (checksum, row count, column names, probability and percentile ranges, `alert` exactly for the high tier, consistent dates inside the period) before writing, loads all rows in one transaction with PostgreSQL `COPY`, writes an audit event, and refuses to import the same file twice.
+
+| Endpoint | Who |
+|---|---|
+| `GET /delivery-risk/runs` (newest first) | analyst+ |
+| `GET /delivery-risk/scores?run_id=&dispatch_date=&tier=&alert=&order_id=&limit=&offset=` (default: newest run; newest day first, riskiest first) | analyst+ |
+| `GET /delivery-risk/alerts?date=2018-05-15` (that day's alerts, riskiest first) | analyst+ |
 
 ## Users, login and roles
 

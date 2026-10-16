@@ -1,24 +1,26 @@
 # Project Status
 
 Current phase: P3 (Delivery ML)
-Current task: P3-T2b, delivery-risk rolling monthly evaluation
+Current task: P3-T3, delivery-risk scores in the API
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 66a6915 "Record first delivery-risk experiment results" (CI #13 green). P3-T2b is uncommitted.
+Last commit: 3f32f42 (CI #14 green). P3-T3 is uncommitted.
 
-## P3-T2b acceptance criteria
-- [x] Plan written before running; rolling monthly simulation that learns only from outcomes already known
-- [x] 9 development months for model and calibration choice; test months used once
-- [x] Calibration much better than the first experiment on the same test orders (ECE 0.137 -> 0.059)
-- [x] Fixed alert rule (top 10%): precision 17.3%, recall 53.2% on test
-- [x] Stable ranking every month (ROC-AUC 0.79–0.83)
-- [ ] Probabilities still ~2x too high on average because monthly late rates swing: serving design in P3-T3 (P3-T2b-R1)
+## P3-T3 acceptance criteria
+- [x] Serving design written before scoring; each month scored only with outcomes known before it
+- [x] Daily tiers (high = top 10% = alert, medium, low), approximate probability, top-3 reasons; no outcomes in the published file
+- [x] Validated all-or-nothing import (migration 0007), audit event, duplicate refused
+- [x] Analyst API `/delivery-risk/runs`, `/scores`, `/alerts`, labelled as Olist data with `X-Dataset`
+- [x] Tier check on real outcomes: high 19.9% late, medium 6.8%, low 2.0% (second look at test, rule fixed beforehand)
+- [x] Tests: API 216, ML 119; import-check mutations 7/7 caught; isolated Docker import of the real 32,422 scores
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Open findings: P3-T2b-R1 (MEDIUM, P3-T3), P3-T2b-R2 (LOW, documented), P2-T4-R1 (MEDIUM, P4), P1-T4-R2 (LOW, P3/P4). See docs/REVIEW_QUEUE.md.
-Next action: Owner commits and pushes P3-T2b; then P3-T3.
+P3 gate ("no leakage; evaluated and calibrated scores"): met locally (leakage tests, rolling evaluation, calibration measured, tiers checked); waits for CI.
+
+Open findings: P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented), P2-T4-R1 (MEDIUM, P4), P1-T4-R2 (LOW, P4). See docs/REVIEW_QUEUE.md.
+Next action: Owner checks and pushes P3-T3; then P4.
 Blockers: none.
 
 ## Roadmap progress
@@ -37,8 +39,8 @@ Blockers: none.
 | P2-T4 Forecast tables, import and API | APPROVED (CI #11 green on 8c07d78; P2 complete) |
 | P3-T1 Olist loader, label, dispatch features, split | APPROVED (pushed 0b891fb; CI #12) |
 | P3-T2 Delivery-risk models (logistic baseline, tree), calibration | APPROVED as first experiment (CI #13 green on 66a6915) |
-| P3-T2b Rolling monthly evaluation, recent calibration | READY_FOR_USER_CHECK |
-| P3-T3 Delivery-risk scores in the API | NOT_STARTED |
+| P3-T2b Rolling monthly evaluation, recent calibration | APPROVED (CI #14 green on 3f32f42) |
+| P3-T3 Delivery-risk scores in the API | READY_FOR_USER_CHECK |
 | P4–P9 | NOT_STARTED |
 
 ## History
@@ -59,3 +61,4 @@ Blockers: none.
 - 2026-10-16: P2 complete (CI #11). P3 started: Olist downloaded; P3-T1 built.
 - 2026-10-16: P3-T2 first experiment: ranking good, calibration and model choice unstable across periods.
 - 2026-10-16: P3-T2b: rolling monthly evaluation; logistic regression + recent Platt chosen; calibration much improved; rank-first serving recommended.
+- 2026-10-16: P3-T3: delivery-risk scores published (daily tiers with reasons), imported and served under /delivery-risk; tiers checked on real outcomes.

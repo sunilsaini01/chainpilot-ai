@@ -479,3 +479,25 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P3-T2-R1 VERIFIED (improved), P3-T2b-R1 (MEDIUM, serving design in P3-T3), P3-T2b-R2 (LOW, documented).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P3-T3 (delivery-risk scores in the API with rank-based tiers and a same-day alert share; clearly labelled Olist data, separate from the simulated suppliers).
+
+## 2026-10-16 15:00 UTC — P3-T2b CI verification; P3-T3 start
+- Owner pushed `65d3454`, `a8db302`, `3f32f42`. CI #14 on `3f32f42`: `success`, all three jobs, 0 annotations. P3-T2b approved ("ci is green so go for next task").
+- P3-T3 design (serving, decided before scoring; addresses P3-T2b-R1): score the test months (Apr–Aug 2018) with the chosen procedure (logistic regression, recent Platt, retrained at each month start on outcomes known before it). Per order: approximate probability; percentile among the same dispatch day's orders; tier high (top 10%, = alert) / medium (next 20%) / low; top-3 reasons from the logistic regression's per-feature contributions. No outcomes in the published file. Import into the API (migration 0007) and serve under `/delivery-risk/`, labelled as Olist data, separate from the simulated suppliers.
+
+## 2026-10-16 16:40 UTC — P3-T3 results
+- Files changed and why:
+  - `ml/delivery_risk/scoring.py` (new): monthly scoring, daily tiers, reasons, publish CSV + manifest. `ml/delivery_risk/tier_check.py` (new): joins the published tiers to real outcomes afterwards. `ml/delivery_risk/rolling.py`: `fit_recent_platt` shared by evaluation and scoring. `ml/delivery_risk/olist_data.py`: keeps `dispatched_at` for scoring.
+  - API: `app/models.py` + migration `0007` (`delivery_risk_runs`, `delivery_risk_scores` with range/tier/alert checks), `app/delivery_risk_import.py` (new), `app/routes/delivery_risk.py` (new: `/runs`, `/scores`, `/alerts`), `app/schemas.py`, `app/main.py`, `app/cli.py` (`import-delivery-risk`), `app/files.py` (new, shared checksum; `forecast_import.py` uses it).
+  - Tests: `ml/tests/test_delivery_scoring.py` (8), `apps/api/tests/test_delivery_risk.py` (21).
+- Tests run / actual results:
+  - `apps/api` with `RUN_DB_TESTS=1` (local Postgres): 216 passed. `ml`: 119 passed. Ruff check and format pass in both.
+  - Mutations: scoring (3 caught, earlier in this task); import checks 7 of 7 caught after fixing a weak test (P3-T3-R2; the period check first survived).
+  - Real publish: 32,422 orders, dispatch 2018-04-02 to 2018-08-31 (129 days), run_key `4dd623f190f92541`, tiers 3,301 / 6,485 / 22,636.
+  - Tier check (second look at test, rule fixed beforehand): late rate high 19.87%, medium 6.82%, low 1.97%; alert precision 0.1987, recall 0.4249, flagged 0.1018. Re-run via the new `tier_check` module: identical numbers.
+  - Daily flagged share 0.100–0.111 on days with at least 50 dispatches; 13 small days flag one order each (P3-T3-R3).
+  - Isolated Docker project `chainpilot-e2e` (ports 8002/5436): migrations to 0007; `import-delivery-risk` of the real folder 32,422 rows (whole `compose run` 4.7 s); second import refused with exit 1; analyst `GET /delivery-risk/runs` OK; `GET /delivery-risk/alerts?date=2018-05-15` 45 alerts of 441 dispatches (`X-Total-Count: 45`, `X-Dataset` label), first alert probability 0.701 with reasons handling_days, customer_state, distance_km; a 1,000-row page in 0.070 s; 401 without a token; DB: 32,422 rows, 3,301 alerts, audit `delivery_risk_run.imported` with no actor. Removed afterwards (`down --volumes --rmi local`; 0 volumes, 0 images left).
+  - Dev database upgraded to 0007.
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings: P3-T2b-R1 VERIFIED; P3-T3-R1 (reasons, fixed), P3-T3-R2 (weak test, fixed), P3-T3-R3 (small days, documented); P3-T2b-R2 still a documented limitation.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner check of P3-T3 and push; then P4 (inventory decisions), starting with P2-T4-R1 (forecast bias) and P1-T4-R2 (seed suppliers/purchase orders).

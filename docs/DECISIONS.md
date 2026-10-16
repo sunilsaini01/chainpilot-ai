@@ -162,3 +162,9 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - Model chosen by a pre-registered rolling monthly simulation (outcomes visible only after delivery): logistic regression with Platt calibration on the last 56 days of known outcomes. It beat LightGBM on 9 development months (mean PR-AUC 0.295 vs 0.260) and improved test calibration a lot (ECE 0.137 -> 0.059).
 - Because the monthly late rate swings strongly (1.2%–19%), P3-T3 will present risk mainly as a relative tier/percentile and alert on a fixed share of each day's dispatches; probabilities are shown as approximate.
 - Logistic regression is also easier to explain (coefficients per feature) and to store safely as plain numbers instead of a pickle.
+
+## D-043 — 2026-10-16 — Delivery risk is served as daily tiers with reasons, from validated files
+- Each order's main signal is its tier among the same day's dispatches (high = top 10% = alert, medium = next 20%, low = rest). The probability is shown but labelled approximate because the monthly late rate swings (D-042).
+- Reasons come straight from the logistic regression: coefficient × (value − training average), top 3 positive. This needs no extra explanation library and is exact for this model.
+- Scores reach the API like forecasts (D-039): a CSV + manifest written by `ml/`, checked and loaded in one transaction by `import-delivery-risk`. The file holds no outcomes; outcomes are joined only in the separate `tier_check` report.
+- `app/files.py::sha256_of` is shared by both imports instead of a copy in each.

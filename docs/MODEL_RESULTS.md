@@ -249,3 +249,33 @@ Chosen by the rule: **Logistic regression** (highest mean PR-AUC), with **recent
 **Provenance** (`docs/results/p3_delivery_risk_rolling.json`): code `66a6915-dirty` (commit 66a6915 plus the uncommitted P3-T2b code), scikit-learn 1.9.1, LightGBM 4.7.0, runtime 29.9 s.
 
 Reproduce: `python -m delivery_risk.rolling ..\data\raw\olist --output ..\docs\results\p3_delivery_risk_rolling.json`
+
+## Delivery-delay risk: published scores and tier check (P3-T3)
+
+Serving design fixed before scoring (P3-T2b recommendation, work log 2026-10-16 15:00): each order dispatched from 2018-04-02 to 2018-08-31 is scored by the model of its month (logistic regression + recent Platt, retrained at each month start on outcomes known by then). Within each dispatch day: **high** = riskiest 10% (the alert), **medium** = next 20%, **low** = the rest. The published file contains no outcomes.
+
+**Tier check** (`docs/results/p3_delivery_risk_tiers.json`). This joins the published tiers to the real outcomes afterwards. It is the **second look at the Apr–Aug 2018 test months** (the first was P3-T2b); the rule was fixed before this check and was not tuned on it.
+
+| Tier | Orders | Late rate | Share of all late orders |
+|---|---|---|---|
+| high (alert) | 3,301 (10.2%) | **19.9%** | **42.5%** |
+| medium | 6,485 (20.0%) | 6.8% | 28.6% |
+| low | 22,636 (69.8%) | 2.0% | 28.9% |
+| all | 32,422 | 4.8% | 100% |
+
+**Honest reading**
+- The tiers separate risk clearly: a high-tier order was late about 10 times as often as a low-tier one (19.9% vs 2.0%).
+- The same-day rule keeps the review workload fixed: on every day with at least 50 dispatches, 10.0%–11.1% of orders were flagged, compared with 3.8%–23.8% per month for P3-T2b's fixed cut-off. Small days (13 days with 2–9 dispatches, mostly Saturdays) still flag one order each, so up to 50% of a 2-order day (P3-T3-R3).
+- Compared with P3-T2b's cut-off rule (flagging 13.8%, precision 17.3%, recall 53.2%), the daily rule flags fewer orders (10.2%) with higher precision (19.9%) and lower recall (42.5%). This is mostly the smaller flagged share, not a better model.
+- Four out of five alerts are still delivered on time. An alert means "check this shipment", not "this will be late".
+- These numbers come from 2018 Olist marketplace orders. They do not say how ChainPilot's simulated suppliers would behave.
+
+**Explanations:** each order's 3 reasons are the features with the largest positive contribution, coefficient × (its transformed value − the training average). Comparing with the average stops features that are high for everyone, such as the seller's state, from appearing as a reason for every order (P3-T3-R1). The contributions add up exactly to the model's raw score minus the average order's score; a test checks this.
+
+**Provenance:** published run `4dd623f190f92541` (32,422 orders; code `3f32f42-dirty`, i.e. 3f32f42 plus the uncommitted P3-T3 code), 5 monthly models. The tier check was produced by `delivery_risk.tier_check` and re-run from the same file with identical numbers.
+
+Reproduce:
+```
+python -m delivery_risk.scoring ..\data\raw\olist
+python -m delivery_risk.tier_check ..\data\raw\olist ..\data\processed\delivery_risk\olist_logistic_2018-04-02_2018-08-31 --output ..\docs\results\p3_delivery_risk_tiers.json
+```
