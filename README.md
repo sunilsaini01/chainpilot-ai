@@ -11,7 +11,8 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | Component | What it does |
 |---|---|
 | `apps/api` | FastAPI backend. `GET /health` (process is alive) and `GET /ready` (PostgreSQL answers `SELECT 1`; returns 503 if not). OpenAPI docs at `/docs`. Logs are one JSON object per line. |
-| `apps/api/app/models.py` | Tables: `products`, `warehouses`, `inventory` (stock per product × warehouse) and `inventory_movements` (stock ledger). |
+| `apps/api/app/models.py` | Tables: `products` (with supplier, minimum order and pack size), `warehouses`, `inventory` (stock per product × warehouse), `inventory_movements` (stock ledger), `suppliers`, `purchase_orders` and `purchase_order_lines`, plus users, audit, forecasts and delivery-risk tables. |
+| `apps/api/app/purchasing_service.py` | Units on order (open purchase orders) and receiving an order into stock through the ledger. |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
@@ -41,7 +42,7 @@ So the sum of a product's movements always equals its `on_hand`, and every stock
 
 ## Synthetic demo data
 
-> **SYNTHETIC DATA.** The seed invents a small retail operation. It is not any real company's data. Every SKU starts with `SYN-` and every warehouse code with `SYN-WH`.
+> **SYNTHETIC DATA.** The seed invents a small retail operation. It is not any real company's data. Every SKU starts with `SYN-`, every warehouse code with `SYN-WH`, every supplier code with `SYN-SUP` and every purchase order with `SYN-PO-`.
 
 ```bash
 docker compose up -d
@@ -49,11 +50,11 @@ docker compose run --rm api python -m app.cli seed                     # 4 wareh
 docker compose run --rm api python -m app.cli seed --products 500 --warehouses 5 --seed 7
 ```
 
-- **Deterministic:** the same `--seed` always produces exactly the same warehouses, products, prices and stock.
+- **Deterministic:** the same `--seed` always produces exactly the same warehouses, products, prices and stock. Order dates are counted back from the day you run it (the same seed on the same day gives the same orders).
 - Sizes follow the spec: 100–500 products, 3–5 warehouses.
 - Opening stock is recorded as `receipt` movements (reference `SEED-OPENING`, no user), so the ledger adds up and capacity rules apply. Each warehouse is filled to at most 70% of capacity. About 80% of product/warehouse pairs are stocked, and about 10% of those start low (1–20 units), so there is something for stock-out detection to find.
 - It refuses to run when `SYN-` products already exist; it never deletes or overwrites data. It creates no user accounts (use `create-user`).
-- Suppliers, purchase orders, lead times and shipments are added with the phases that use them (P3/P4).
+- **Suppliers and purchase orders:** 6 simulated suppliers with promised lead times (4–21 days) and their variation; two are deliberately unreliable. Each product gets a supplier for its category, a pack size and a minimum order (whole packs). About 120 days of order history per supplier and warehouse: delivered orders are history (their goods are part of the opening stock, so they make no stock movements); orders not yet delivered are open, and some are overdue. With seed 42: 208 orders, 21 open.
 
 ## Products, warehouses and stock (API)
 
@@ -127,6 +128,17 @@ The import checks the file against its manifest (checksum, row count, column nam
 | `GET /delivery-risk/runs` (newest first) | analyst+ |
 | `GET /delivery-risk/scores?run_id=&dispatch_date=&tier=&alert=&order_id=&limit=&offset=` (default: newest run; newest day first, riskiest first) | analyst+ |
 | `GET /delivery-risk/alerts?date=2018-05-15` (that day's alerts, riskiest first) | analyst+ |
+
+## Suppliers and purchase orders (API)
+
+| Endpoint | Who |
+|---|---|
+| `GET /suppliers` | analyst+ |
+| `GET /purchase-orders?status=&warehouse_id=&supplier_id=&product_id=&limit=&offset=` (newest first, with lines) | analyst+ |
+| `GET /purchase-orders/{id}` | analyst+ |
+| `POST /purchase-orders/{id}/receive`: books every line into stock (`receipt` movements, reference = PO number) | manager+ |
+
+Receiving is all or nothing: if the warehouse has no room for the whole delivery, nothing is booked (409) and the order stays open. An order can be received only once; two managers receiving at the same moment book it once (the order row is locked). Open orders count as "on order" in the inventory position (`purchasing_service.on_order_quantities`). New orders will come from approved recommendations (P4-T4).
 
 ## Users, login and roles
 

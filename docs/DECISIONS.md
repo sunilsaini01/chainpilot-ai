@@ -179,3 +179,11 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - In the replay (P4-T2) this combination reached a 94% cycle service level and 96% fill rate with 17–34% less stock than a simple reorder rule at the same fill rate. The safety-stock formula fed by calibrated forecast intervals handles the forecast's under-forecast bias (P2-T4-R1), so no separate bias correction is added.
 - 95% is the default service level; it stays a setting, because the right level depends on the product's margin and the cost of a lost sale.
 - The simulator imports the same `app/inventory_policy.py` as the API (`ml/inventory_sim/__init__.py` adds `apps/api` to the path; `ml/pyproject.toml` does the same for tests), so the evaluated math is the deployed math.
+
+## D-046 — 2026-10-16 — Purchasing data model (P4-T3)
+- One supplier per product, with the purchasing rules (minimum order, pack size) on the product. Enough for reorder recommendations; a many-suppliers-per-product table can come later if needed.
+- A purchase order goes to one supplier for one warehouse and is received in full, once. Partial deliveries and cancellation through the API are not built yet. There is no separate shipments table: an order's promised (`expected_date`) and actual (`received_date`) dates are the delivery record that supplier risk will use.
+- Receiving goes through `record_movement`, so the stock ledger and the capacity check apply, and the order row is locked to stop double booking.
+- Seeded order history is a set of documents, not stock changes: delivered orders are already part of the opening stock. Only receiving an open order changes stock.
+- The seed takes an "as of" date (the command passes today); tests use a fixed date so the plan stays the same.
+- Not done in P4-T3, deliberately: linking `SYN-` products to M5 demand profiles. That needs the imported forecasts, so it belongs with the recommendations (P4-T4), still following the D-044 proposal unless the owner decides otherwise.

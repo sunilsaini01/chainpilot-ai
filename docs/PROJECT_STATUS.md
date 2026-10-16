@@ -1,25 +1,25 @@
 # Project Status
 
 Current phase: P4 (Inventory decisions)
-Current task: P4-T2, replay simulator vs simple reorder baseline
+Current task: P4-T3, suppliers, purchase orders and lead times
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 154eafb (CI #16 green). P4-T2 is uncommitted.
+Last commit: ae39d72 (CI #17 green). P4-T3 is uncommitted.
 
-## P4-T2 acceptance criteria
-- [x] Plan written before any simulation code or run
-- [x] Day-by-day replay of real M5 demand (3 stores, 9,147 items, 77 days), lost sales, random lead times, no future information
-- [x] Uses the same policy module as the API (D-044)
-- [x] Compared with a simple reorder baseline: 17–34% less stock at the same fill rate (LightGBM forecasts)
-- [x] P2-T4-R1: 95% setting reaches 94.0% cycle service level (criterion ≥ 93%)
-- [x] Tests: ML 131, API 253; 13/13 mutations caught; clean run reproduced exactly from cache
+## P4-T3 acceptance criteria
+- [x] Suppliers with lead time and its variation; purchasing rules per product (supplier, minimum order, pack size)
+- [x] Purchase orders and lines (migration 0008), with promised and actual delivery dates
+- [x] Deterministic seed: suppliers, rules and order history (open, overdue, delivered); old seed output unchanged
+- [x] On-order totals for the inventory position; receiving through the stock ledger, all or nothing, once only (row lock, race tested)
+- [x] API: `/suppliers`, `/purchase-orders`, receive (manager+), audited
+- [x] Tests: API 271; 13 of 14 mutations caught (survivor fixed, P4-T3-R1); isolated Docker end-to-end
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Open findings: P4-T2-R3 (LOW, P4-T4), P1-T4-R2 (LOW, P4-T3), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
-Owner question for P4-T3: how simulated SYN- products get demand (proposal in DECISIONS D-044).
-Next action: Owner checks and pushes; answers the SYN- demand question; then P4-T3.
+Open findings: P4-T3-R3 (LOW, P4-T4), P4-T2-R3 (LOW, P4-T4), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
+Owner question for P4-T4: how simulated SYN- products get demand (proposal in DECISIONS D-044; used by default).
+Next action: Owner checks and pushes; then P4-T4.
 Blockers: none.
 
 ## Roadmap progress
@@ -41,8 +41,8 @@ Blockers: none.
 | P3-T2b Rolling monthly evaluation, recent calibration | APPROVED (CI #14 green on 3f32f42) |
 | P3-T3 Delivery-risk scores in the API | APPROVED (CI #15 green on ba3a841; P3 complete) |
 | P4-T1 Inventory policy math | APPROVED (CI #16 green on 154eafb) |
-| P4-T2 Replay simulator vs simple reorder baseline | READY_FOR_USER_CHECK |
-| P4-T3 Suppliers, purchase orders, lead times (DB + seed) | NOT_STARTED |
+| P4-T2 Replay simulator vs simple reorder baseline | APPROVED (CI #17 green on ae39d72) |
+| P4-T3 Suppliers, purchase orders, lead times (DB + seed) | READY_FOR_USER_CHECK |
 | P4-T4 Stock-out risks and recommendations API | NOT_STARTED |
 | P5–P9 | NOT_STARTED |
 
@@ -68,3 +68,4 @@ Blockers: none.
 - 2026-10-16: P3 complete (CI #15). Import hardening for both imports (P3-T3-R4).
 - 2026-10-16: P4 started (D-044); P4-T1 policy math built.
 - 2026-10-16: P4-T2: replay on real demand; the forecast-driven policy needs 17–34% less stock than a simple reorder rule at the same fill rate.
+- 2026-10-16: P4-T3: suppliers, purchasing rules and purchase orders (seeded history; receive through the ledger).

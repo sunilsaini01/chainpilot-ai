@@ -230,7 +230,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: no supplier, PO or shipment tables exist yet.
 - Expected behavior: the seed grows with the data model.
 - Fix and regression test: extend `build_plan`/`load_plan` when those tables are added (P3 delivery data, P4 replenishment), with determinism and bounds tests like the existing ones.
-- Status: OPEN (P3/P4)
+- Update 2026-10-16 (P4-T3): the seed now creates suppliers (lead time and variation), purchasing rules per product and about 120 days of purchase orders (open, overdue and delivered). Tests: labels, numbering, date and quantity consistency, unreliable vs reliable supplier, `as_of` only shifting dates, the products and stock of seed 42 unchanged, and loading without extra stock movements. Shipping events are represented by the orders' promised and actual delivery dates (D-046).
+- Status: VERIFIED
 
 ## P2-T1-R1 — [MEDIUM] Loader not yet run on the real M5 files
 - Source: Claude self-review
@@ -448,4 +449,23 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: LightGBM rarely forecasts exactly 0, so slow items get frequent small orders (67.5k orders vs 61–64k for the baseline). The replay has no ordering cost, minimum order or pack size.
 - Expected behavior: recommendations should not create many tiny orders.
 - Fix and regression test: in P4-T4, apply the supplier's minimum order and pack size (already in `order_quantity`) and test that tiny shortfalls are raised or skipped as the rules say.
+- Status: OPEN (P4-T4)
+
+## P4-T3-R1 — [LOW] A comment claimed a separate random generator protected the old seed data
+- Source: mutation check
+- File and reproduction: `apps/api/app/seed.py`. The purchasing data had its own generator "so adding it did not change the products and stock". Using the main generator instead left every test passing, because the purchasing data is drawn after the products and stock anyway; the extra generator protected nothing.
+- Fix and regression test: removed the extra generator; the comment now gives the real reason. `test_products_and_stock_are_unchanged_by_the_purchasing_data` pins seed 42's first product and stock totals. 14 purchasing and seed mutations were run; the only survivor was this one.
+- Status: VERIFIED
+
+## P4-T3-R2 — [LOW] The first migration downgrade used the wrong constraint names
+- Source: test failure (`test_downgrade_then_upgrade_round_trip`)
+- File and reproduction: `migrations/versions/20261016_0008_suppliers_purchase_orders.py`. Alembic applies the naming convention when dropping check constraints too, so `drop_constraint("ck_products_pack_size_positive")` looked for `ck_products_ck_products_...`.
+- Fix and regression test: use the short names, as in the upgrade; the round-trip test passes.
+- Status: VERIFIED
+
+## P4-T3-R3 — [LOW] Purchasing is read-and-receive only
+- Source: Claude self-review
+- File and reproduction: there is no endpoint to create, cancel or partly receive an order, and a product's supplier, minimum order and pack size cannot be changed through the API.
+- Expected behavior: new orders come from approved recommendations (P4-T4, approval in the spec's section 4.F/P7); admins can edit purchasing rules.
+- Fix and regression test: P4-T4 (orders from approved recommendations) and a later catalogue update for the purchasing fields.
 - Status: OPEN (P4-T4)

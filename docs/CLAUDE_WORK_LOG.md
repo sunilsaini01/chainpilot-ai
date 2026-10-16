@@ -550,3 +550,19 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P2-T4-R1 VERIFIED; P4-T2-R1 (HIGH, fixed before reporting), P4-T2-R2 (LOW, fixed), P4-T2-R3 (LOW, for P4-T4).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P4-T3 (suppliers, purchase orders and lead times in the database and seed). Needs the owner's choice on the SYN- demand profile (D-044).
+
+## 2026-10-16 21:30 UTC — P4-T2 pushed; P4-T3 suppliers and purchase orders
+- Owner pushed `3cac0c1`, `45cbca0`, `ae39d72`; CI #17 on `ae39d72`: `success`, all three jobs, 0 annotations. P4-T2 approved.
+- Owner said "go for next task" without answering the SYN- demand-profile question. P4-T3 does not need it (the link needs the imported forecasts, so it moves to P4-T4, D-046); still following the D-044 proposal unless the owner decides otherwise.
+- Files changed and why: `apps/api/app/models.py` + migration `0008` (`suppliers`, purchasing columns on `products`, `purchase_orders`, `purchase_order_lines`, triggers), `app/purchasing_service.py` (new: on-order totals, receiving through the ledger with a row lock), `app/routes/purchasing.py` (new: `/suppliers`, `/purchase-orders`, receive), `app/schemas.py`, `app/main.py`, `app/seed.py` (suppliers, purchasing rules, order history, `as_of`), `app/cli.py` (seed passes today's date; prints the new counts), `tests/test_purchasing.py` (new, 12 tests), `tests/test_seed.py` (+6).
+- Tests run / actual results:
+  - `apps/api` with `RUN_DB_TESTS=1`: 271 passed (253 + 18). Ruff check and format pass.
+  - Mutations: 14 run; 13 caught. The survivor showed a misleading comment and a useless extra generator (P4-T3-R1), now removed. A downgrade bug was found by the round-trip test (P4-T3-R2).
+  - Forced race: two threads receiving the same order book it exactly once.
+  - Seed 42 (200 products, 4 warehouses): products and opening stock unchanged (654 rows, 160,712 units); 208 orders, 21 open, 1 overdue; late deliveries 5/32 for SUP01 (reliable) up to 24/27 for SUP04 and 20/29 for SUP06 (simulated as unreliable).
+  - Isolated Docker project `chainpilot-e2e` (ports 8002/5436): migration 0007 -> 0008; seed printed "6 suppliers, 208 purchase orders (21 open)"; `GET /suppliers` lists 6; `GET /purchase-orders?status=open` `X-Total-Count: 21`; analyst receive 403; manager receive of SYN-PO-000208 200: stock of its 8 lines 755 -> 968 (+213), 8 receipt movements totalling 213, audit `purchase_order.received` 213 units; second receive 409 "is received, not open"; orders now 20 open / 188 received; products show supplier, minimum order and pack size. Removed afterwards (0 volumes left).
+  - Dev database upgraded to 0008 (it has no seeded data, so nothing to reload).
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings: P1-T4-R2 VERIFIED; P4-T3-R1, P4-T3-R2 (fixed); P4-T3-R3 (LOW, P4-T4).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P4-T4 (stock-out risks and reorder recommendations, with the SYN- demand profile link).
