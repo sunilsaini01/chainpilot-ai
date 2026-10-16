@@ -11,6 +11,7 @@ from app.routes import (
     forecasts,
     health,
     inventory,
+    policies,
     products,
     purchasing,
     replenishment,
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(inventory.router)
     app.include_router(purchasing.router)
     app.include_router(replenishment.router)
+    app.include_router(policies.router)
     app.include_router(forecasts.router)
     app.include_router(delivery_risk.router)
     app.include_router(audit.router)

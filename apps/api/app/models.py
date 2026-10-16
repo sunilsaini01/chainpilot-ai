@@ -20,6 +20,7 @@ from sqlalchemy import (
     MetaData,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     func,
     text,
@@ -529,3 +530,26 @@ class DeliveryRiskScore(Base):
     # Top 3 reasons from the model, e.g.
     # [{"feature": "distance_km", "value": 2808.4, "effect": 1.27}]
     reasons: Mapped[list] = mapped_column(JSONB)
+
+
+class DocumentChunk(Base):
+    """One section of a policy document, for retrieval by the AI copilot (P5).
+
+    Loaded from apps/api/policies/*.md by `python -m app.cli load-policies`.
+    A citation points to a section: policy:<document>#<section_slug>.
+    """
+
+    __tablename__ = "document_chunks"
+    __table_args__ = (
+        UniqueConstraint("document", "chunk_index", name="uq_document_chunks_document_chunk"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document: Mapped[str] = mapped_column(String(100))  # file name without .md
+    title: Mapped[str] = mapped_column(String(200))
+    section: Mapped[str] = mapped_column(String(200))
+    section_slug: Mapped[str] = mapped_column(String(100))
+    chunk_index: Mapped[int]  # order within the document
+    content: Mapped[str] = mapped_column(Text)
+    document_sha256: Mapped[str] = mapped_column(String(64))  # detects changed files
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

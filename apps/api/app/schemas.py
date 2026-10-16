@@ -240,6 +240,29 @@ class RecommendationOut(BaseModel):
     created_at: datetime
 
 
+# --- Policies (P5) ------------------------------------------------------------
+
+
+class PolicyDocumentOut(BaseModel):
+    document: str
+    title: str
+    chunks: int
+    sha256: str
+    loaded_at: datetime
+
+
+class PolicyHitOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    citation: str  # policy:<document>#<section_slug>
+    document: str
+    title: str
+    section: str
+    rank: float
+    snippet: str  # matching words marked with <b>...</b>
+    content: str
+
+
 # --- Inventory ---------------------------------------------------------------
 
 

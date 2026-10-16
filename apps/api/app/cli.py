@@ -16,6 +16,9 @@ Delivery-risk scores from the ML pipeline (Olist public data):
 Demo link from SYN- products to M5 demand (after import-forecasts and seed):
     python -m app.cli link-demand-profiles
 
+Policy documents for the AI copilot (default folder: apps/api/policies):
+    python -m app.cli load-policies
+
 Housekeeping (safe to run daily, e.g. from cron):
     docker compose run --rm api python -m app.cli cleanup --days 30
 
@@ -39,6 +42,8 @@ from app.delivery_risk_import import DeliveryRiskImportError, import_delivery_ri
 from app.forecast_import import ForecastImportError, import_forecasts
 from app.login_throttle import delete_old_attempts
 from app.models import Role
+from app.policies_service import DEFAULT_FOLDER as POLICY_FOLDER
+from app.policies_service import PolicyError, sync_policies
 from app.replenishment_service import NoForecastRunError, link_demand_profiles
 from app.seed import AlreadySeededError, build_plan, load_plan
 from app.users_service import UserAlreadyExistsError, create_user, delete_stale_tokens
@@ -160,6 +165,24 @@ def link_demand_profiles_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def load_policies_command(args: argparse.Namespace) -> int:
+    """Make the policy table match the policy folder (added, updated, removed documents)."""
+    try:
+        with Session(get_engine()) as session:
+            result = sync_policies(session, args.folder)
+            record_event(session, "policies.loaded", "policy", None, actor=None, details=result)
+            session.commit()
+    except PolicyError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    counts = ", ".join(f"{len(names)} {kind}" for kind, names in result.items())
+    print(f"Policies: {counts}")
+    for kind in ("added", "updated", "removed"):
+        for name in result[kind]:
+            print(f"  {kind}: {name}")
+    return 0
+
+
 def import_delivery_risk_command(args: argparse.Namespace) -> int:
     """Load a delivery-risk scoring folder (scores.csv + manifest.json) into the database."""
     try:
@@ -223,6 +246,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Give SYN- products and warehouses borrowed M5 demand (after import-forecasts)",
     )
     link.set_defaults(handler=link_demand_profiles_command)
+
+    policies = commands.add_parser(
+        "load-policies", help="Load the policy documents for the AI copilot"
+    )
+    policies.add_argument("folder", type=Path, nargs="?", default=POLICY_FOLDER)
+    policies.set_defaults(handler=load_policies_command)
 
     args = parser.parse_args(argv)
     return args.handler(args)

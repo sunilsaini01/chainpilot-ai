@@ -13,6 +13,8 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY app ./app
+# Policy documents for the AI copilot (loaded with `python -m app.cli load-policies`).
+COPY policies ./policies
 # Migrations ship in the same image; the Compose `migrate` service runs them.
 COPY alembic.ini .
 COPY migrations ./migrations
