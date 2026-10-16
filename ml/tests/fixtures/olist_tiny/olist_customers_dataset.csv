@@ -1,0 +1,5 @@
+customer_id,customer_unique_id,customer_zip_code_prefix,customer_city,customer_state
+c1,u1,01001,sao paulo,SP
+c2,u2,30110,belo horizonte,MG
+c3,u3,20010,rio de janeiro,RJ
+c4,u4,99999,nowhere,AM
