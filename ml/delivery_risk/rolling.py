@@ -48,18 +48,24 @@ def known_before(orders: pd.DataFrame, moment: pd.Timestamp) -> pd.DataFrame:
     return orders[orders["outcome_known_at"] < moment]
 
 
+def fit_recent_platt(orders: pd.DataFrame, start: pd.Timestamp, model_name: str):
+    """Model trained on outcomes known before start - 56 days, plus a Platt calibrator
+    fitted on the outcomes that became known in the 56 days before `start`."""
+    model = MODELS[model_name](known_before(orders, start - RECENT))
+    recent = orders[
+        (orders["outcome_known_at"] >= start - RECENT) & (orders["outcome_known_at"] < start)
+    ]
+    calibrator = PlattCalibrator().fit(recent["late"], predict(model, recent))
+    return model, calibrator
+
+
 def fit_scorer(orders: pd.DataFrame, start: pd.Timestamp, model_name: str, variant: str) -> Scorer:
     """Train (and maybe calibrate) a model as it could have been at time `start`."""
-    fit = MODELS[model_name]
     if variant == "none":
-        model = fit(known_before(orders, start))
+        model = MODELS[model_name](known_before(orders, start))
         return lambda rows: predict(model, rows)
     if variant == "recent_platt":
-        model = fit(known_before(orders, start - RECENT))
-        recent = orders[
-            (orders["outcome_known_at"] >= start - RECENT) & (orders["outcome_known_at"] < start)
-        ]
-        calibrator = PlattCalibrator().fit(recent["late"], predict(model, recent))
+        model, calibrator = fit_recent_platt(orders, start, model_name)
         return lambda rows: calibrator.predict(predict(model, rows))
     raise ValueError(f"unknown variant {variant!r}")
 

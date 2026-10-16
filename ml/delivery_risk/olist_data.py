@@ -288,10 +288,14 @@ def build_orders(tables: dict[str, pd.DataFrame]) -> tuple[pd.DataFrame, dict[st
     # When the outcome (late or not) became known: the delivery time. NOT a feature;
     # rolling.py uses it to decide which orders a model was allowed to learn from.
     orders["outcome_known_at"] = orders["order_delivered_customer_date"]
+    # When the order was handed to the carrier: known at dispatch, used to group the
+    # day's dispatches for ranking (scoring.py). Not a model feature.
+    orders["dispatched_at"] = orders["order_delivered_carrier_date"]
     columns = [
         "order_id",
         "split",
         "order_purchase_timestamp",
+        "dispatched_at",
         "outcome_known_at",
         "late",
         *FEATURE_COLUMNS,
