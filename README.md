@@ -16,6 +16,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/app/replenishment_service.py` | Stock-out risks and reorder/transfer recommendations for the simulated stock, using the replay-tested policy math and borrowed M5 demand. |
 | `apps/api/policies/`, `apps/api/app/policies_service.py` | Six policy documents for the simulated company (written for the demo, labelled as such) and their search, the grounding for the AI copilot (P5). |
 | `apps/api/app/copilot/tools.py` | The AI copilot's seven read-only tools (P5-T2): typed inputs, results with citations to real records, run in a database transaction that PostgreSQL keeps read-only. |
+| `apps/api/app/copilot/{graph,model,service}.py` | The AI copilot (P5-T3): a LangGraph supervisor with demand, inventory, supplier and decision specialists, OpenAI behind a small adapter, verified citations, limits on calls and tools, and every run stored with its trace. |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
@@ -31,7 +32,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/inventory_sim/` | Replay simulator (P4): real M5 sales are replayed day by day through the inventory policy (weekly review, random 5–9 day lead times, lost sales) and compared with a simple reorder rule. With LightGBM forecasts the policy needed 17–34% less stock for the same fill rate. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `.github/workflows/ci.yml` | On every push and pull request: API and ML Ruff lint/format and tests (API tests against a real Postgres 16, ML tests on tiny M5-format fixtures), then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: forecast and scoring jobs from the API (needs the background worker), approving and executing recommendations (P7), the AI copilot itself (P5-T2 onwards), frontend, AWS.
+Not built yet: forecast and scoring jobs from the API (needs the background worker), approving and executing recommendations (P7), the copilot's evaluation (P5-T4), frontend, AWS.
 
 ## How stock changes
 
@@ -211,6 +212,30 @@ The copilot (P5-T3, OpenAI) will answer questions only through these tools; it n
 | `search_policies` | policy sections with citations |
 
 Each call runs in its own transaction that PostgreSQL itself keeps **read-only**, with a 5-second statement timeout, and is always rolled back. `resolve_citation` checks that a citation names a real record. On the real demo data, all 52 citations the seven tools returned resolved.
+
+## AI copilot (OpenAI)
+
+```powershell
+# .env: OPENAI_API_KEY=<your key>   OPENAI_MODEL=gpt-5.4-mini   (never commit .env)
+python -m app.cli investigate "Which suppliers are unreliable, and which orders are overdue?"
+```
+
+How a question is answered (LangGraph):
+1. **Supervisor:** picks the next specialist, or finishes.
+2. **Specialists**, each with only its own read-only tools:
+   - demand: forecasts
+   - inventory: stock status and recommendations
+   - supplier: delivery performance and purchase orders
+   - decision: recommendations and policies
+3. **Answer:** written only from tool results, with citations.
+4. **Verify:** plain code, not the model. Every citation must come from this run's tool results and name a real record. Anything else is removed and listed, after one retry. `grounded` is true only when at least one citation is valid and none was invented.
+
+Limits per question: 500 characters, 12 model calls, 12 tool calls, 3 tool rounds per specialist, each specialist at most once; 60-second model timeout with 2 retries; 20 questions per user per hour (`COPILOT_RUNS_PER_HOUR`). The copilot cannot approve, order or change anything: it has no such tool, and its tools run in read-only transactions. LangSmith tracing is switched off, so run data goes only to OpenAI. Without a key, the endpoints answer 503.
+
+| Endpoint | Who |
+|---|---|
+| `POST /agents/investigate` `{"question": "..."}`: runs the investigation (calls OpenAI) and stores it; a model error is stored as a `failed` run | analyst+ |
+| `GET /agents/runs`, `GET /agents/runs/{id}`: answer, citations, `grounded`, full trace, tokens, duration | analyst+ |
 
 ## Users, login and roles
 

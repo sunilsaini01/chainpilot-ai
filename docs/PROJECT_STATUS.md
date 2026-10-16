@@ -1,25 +1,25 @@
 # Project Status
 
 Current phase: P5 (AI copilot)
-Current task: P5-T2, typed read-only tools with citations
+Current task: P5-T3, LangGraph supervisor with OpenAI
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
-Status: READY_FOR_USER_CHECK
+Status: READY_FOR_USER_CHECK (code); real-model check BLOCKED on OpenAI credits
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 988d83e (CI #20 green). P5-T2 is uncommitted.
+Last commit: 69d4f77 (CI #21 green). P5-T3 is uncommitted.
 
-## P5-T2 acceptance criteria
-- [x] Seven typed tools reusing the system's services (no inventory math in the copilot)
-- [x] Every result carries citations; `resolve_citation` checks them (52/52 resolved on real data)
-- [x] Read-only enforced by PostgreSQL, with a statement timeout; strict inputs; errors as messages
-- [x] Supplier performance per the supplier policy, also as `GET /suppliers/risks`; seed history fixed so ratings mean something (P5-T2-R1)
-- [x] Tests: see the work log; 17/17 mutations caught; real-data Docker check
+## P5-T3 acceptance criteria
+- [x] LangGraph supervisor with demand, inventory, supplier and decision specialists; each sees only its own read-only tools
+- [x] Structured outputs (routing, final answer); citations verified by code; invented ones removed and reported
+- [x] Limits: question length, model calls, tool calls, tool rounds, one run per specialist, timeout, retries, hourly limit per user
+- [x] Runs stored with full trace and tokens (migration 0011), audited; API and CLI
+- [x] Tests with a scripted model (no network): API 360; 12/12 mutations caught
+- [ ] Real answers from `gpt-5.4-mini`. BLOCKED: the OpenAI account has no credits (429 insufficient_quota; nothing charged)
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Open findings: P5-T1-R1 (MEDIUM, P5-T3), P4-T4-R3 (LOW, documented), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
-Model provider: OpenAI, `gpt-5.4-mini` (D-049); key in the owner's `.env`. Cost approval for real calls: still to confirm.
-Next action: Owner checks and pushes; then P5-T3.
-Blockers: none for building P5-T3 with a fake model; real calls wait for the cost confirmation.
+Open findings: P5-T3-R1 (BLOCKED, owner adds credits), P5-T1-R1 (MEDIUM, P5-T4), P4-T4-R3 (LOW, documented), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
+Next action: Owner pushes P5-T3 and adds OpenAI credits; then the real-model check and P5-T4.
+Blockers: OpenAI credits (for real answers only).
 
 ## Roadmap progress
 | Phase / task | Status |
@@ -44,8 +44,8 @@ Blockers: none for building P5-T3 with a fake model; real calls wait for the cos
 | P4-T3 Suppliers, purchase orders, lead times (DB + seed) | APPROVED (CI #18 green on 7c52c18) |
 | P4-T4 Stock-out risks and recommendations API | APPROVED (CI #19 green on 2f28e04; P4 complete) |
 | P5-T1 Policy documents and retrieval | APPROVED (CI #20 green on 988d83e) |
-| P5-T2 Typed read-only tools with citations | READY_FOR_USER_CHECK |
-| P5-T3 LangGraph supervisor with an LLM (needs provider decision) | NOT_STARTED |
+| P5-T2 Typed read-only tools with citations | APPROVED (CI #21 green on 69d4f77) |
+| P5-T3 LangGraph supervisor with OpenAI | READY_FOR_USER_CHECK (real-model check blocked on credits) |
 | P5-T4 Grounding, tool and safety evaluation | NOT_STARTED |
 | P6–P9 | NOT_STARTED |
 
@@ -75,3 +75,4 @@ Blockers: none for building P5-T3 with a fake model; real calls wait for the cos
 - 2026-10-16: P4-T4: stock-out risks and transfer/reorder recommendations (proposals); P4 gate met locally.
 - 2026-10-17: P4 complete (CI #19). P5 started; P5-T1 policy documents and search.
 - 2026-10-17: OpenAI chosen for the copilot (gpt-5.4-mini). P5-T2: seven read-only tools with citations; supplier ratings; seed delivery history fixed.
+- 2026-10-17: P5-T3: LangGraph copilot built and tested with a scripted model; first real OpenAI calls refused for lack of credits (nothing charged).

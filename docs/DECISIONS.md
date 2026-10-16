@@ -215,3 +215,12 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - `stock_risks` uses the default 95% service level (D-045); changing it is a planner decision through the recommendations API, not something the copilot chooses.
 - `demand_forecast` adds up only point forecasts. Summing daily 80% bounds would not give an 80% range for the total, so ranges are given per day.
 - `supplier_performance` implements the supplier policy (90%/75% thresholds, 90 days, at least 5 orders) and also serves `GET /suppliers/risks`.
+
+## D-051 — 2026-10-17 — Copilot graph, limits and storage (P5-T3)
+- LangGraph `StateGraph` with a supervisor and four specialists, matching the spec (demand, inventory, supplier, decision). Each specialist sees only its own tools; each runs at most once, so a run has at most four specialist steps. This rule replaced a separate step limit that could never trigger.
+- OpenAI Chat Completions with function calling for the tools and strict JSON schemas for the supervisor's choice and the final answer, behind `ChatModel` (`app/copilot/model.py`), so tests use a scripted model and never call the paid API. The SDK's own retries (2) and a 60-second timeout apply.
+- Grounding is checked by code, not trusted from the model: citations must appear in this run's tool results and name a real record (`resolve_citation`). One retry tells the model exactly which citations were wrong; what remains invented is removed and reported, and the run is marked not grounded.
+- The model is told to quote tool numbers and not calculate quantities. Code does not yet check the numbers in the answer text; that is part of the P5-T4 evaluation.
+- Every run (including failures) is stored in `agent_runs` with its trace and token counts, and audited. A model error does not crash the request: it is stored as a `failed` run and returned with HTTP 201, because the run itself was created; the client reads `status`.
+- Runs execute inside the request (typically several seconds). A background worker can come later (spec `POST /forecasts/jobs`, `GET /jobs/{id}`); the per-user hourly limit caps cost meanwhile.
+- `LANGSMITH_TRACING=false` in Compose: LangGraph includes LangSmith, which would otherwise be able to send traces to a third party.

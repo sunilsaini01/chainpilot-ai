@@ -518,3 +518,22 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `apps/api/tests/test_copilot_tools.py`. (1) I again forgot that lead-time spread adds safety stock (expected a target of 28; the code's 32 is right, as in P4-T2-R2); (2) I forgot the two open orders already on order (expected 32 to order; 12 is right); (3) my "old" order was received exactly 90 days back, which the window includes. Mutations then showed no test for early deliveries (counted as negative lateness) and that bad policy-section citations failed only because no policies were loaded.
 - Fix and regression test: corrected expectations with the arithmetic in comments; an early delivery and loaded policies in the tests. Final: 17 of 17 mutations caught in two repeated runs (one earlier run reported 16 of 17; I did not record which mutation and could not reproduce it).
 - Status: VERIFIED
+
+## P5-T3-R1 — [BLOCKER for real use] The real model has not answered yet: the OpenAI account has no credits
+- Source: first real run (isolated Docker stack, full demo data, 5 questions + 1 API call)
+- File and reproduction: every call returned `429 insufficient_quota` ("You have no credits remaining", code `credit_balance_exhausted`). The key was accepted; 0 tokens were used, so nothing was charged. The copilot stored each run as `failed` with the error, and no key text appeared in logs or stored errors.
+- Expected behavior: real answers from `gpt-5.4-mini`, checked for grounding.
+- Fix and regression test: the owner adds credits (OpenAI billing settings). Then re-run the same five questions (`copilot_smoke` questions in the work log) and record the results. Until then the real-model behavior is NOT VERIFIED; everything else is tested with a scripted model.
+- Status: BLOCKED (owner action: add OpenAI credits)
+
+## P5-T3-R2 — [LOW] The first `investigate` command read the run after its session had closed
+- Source: test failure (`DetachedInstanceError`)
+- File and reproduction: `apps/api/app/cli.py::investigate_command` printed the run after the `with Session(...)` block; after commit the fields must be reloaded from an open session.
+- Fix and regression test: print inside the session; `test_investigate_command`.
+- Status: VERIFIED
+
+## P5-T3-R3 — [LOW] Three limits were untested, and one could never trigger
+- Source: mutation check (11 mutations; 3 survived at first)
+- File and reproduction: `apps/api/app/copilot/graph.py`. The tool-call limit was never reached in tests (the model-call limit always came first), the 3-rounds-per-specialist limit was not checked, and the "citation must name a real record" half of verification had no test (tools only return real citations). A separate 4-step limit was redundant: each of the four specialists may run once.
+- Fix and regression test: a model asking for 5 tools per reply (tool limit reached exactly), a check of exactly 3 rounds, a tool returning a citation to a missing record, and the redundant limit replaced by "finish once every specialist has reported" (saves a model call; tested). Final: 12 of 12 caught.
+- Status: VERIFIED
