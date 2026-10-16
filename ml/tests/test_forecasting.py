@@ -11,7 +11,15 @@ from demand_forecasting import backtest
 from demand_forecasting.backtest import make_origins, run_backtest, scales_for, score
 from demand_forecasting.baselines import moving_average_28, seasonal_naive
 from demand_forecasting.features import FEATURE_COLUMNS, add_features
-from demand_forecasting.metrics import bias, mae, mean_rmsse, rmsse_scales, wape
+from demand_forecasting.metrics import (
+    bias,
+    mae,
+    mean_rmsse,
+    rmsse_scales,
+    sales_value_weights,
+    wape,
+    weighted_rmsse,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "m5_tiny"
 START = pd.Timestamp("2016-01-02")  # a Saturday
@@ -261,3 +269,42 @@ def test_all_feature_columns_exist_and_min_lag_is_checked() -> None:
     assert set(FEATURE_COLUMNS) <= set(features.columns)
     with pytest.raises(ValueError):
         add_features(feature_frame(list(range(10))), min_lag=0)
+
+
+# --- Weighted RMSSE --------------------------------------------------------------
+
+
+def test_sales_value_weights_use_only_the_last_28_days_before_the_origin() -> None:
+    history = make_series({"a": [100] * 10 + [2] * 28, "b": [0] * 38})
+    history["sell_price"] = 3.0
+
+    weights = sales_value_weights(history)
+
+    assert weights["a"] == pytest.approx(2 * 3.0 * 28)  # the early 100s are too old
+    assert weights["b"] == 0
+
+
+def test_weighted_rmsse_by_hand() -> None:
+    per_series = pd.Series({"a": 0.5, "b": 1.5, "c": 9.0})
+    weights = pd.Series({"a": 300.0, "b": 100.0})  # c sold nothing: weight 0
+
+    assert weighted_rmsse(per_series, weights) == pytest.approx((0.5 * 300 + 1.5 * 100) / 400)
+    assert np.isnan(weighted_rmsse(per_series, pd.Series({"c": 0.0})))
+
+
+def test_score_adds_weighted_rmsse_and_weights_ignore_the_test_window() -> None:
+    series = make_series({"a": [3, 1, 4, 1, 5, 9, 2] * 12, "b": [1, 0, 2, 0, 1, 0, 1] * 12})
+    long = series.assign(sell_price=2.0)
+    origins = make_origins(series["date"].max(), horizon=28, n_origins=1)
+    results = run_backtest(series, moving_average_28, origins, horizon=28)
+
+    weights = backtest.weights_for(long, origins)
+    changed = long.copy()
+    changed.loc[changed["date"] > origins[0], "sales"] += 100
+    metrics = score(results, scales_for(series, origins), weights)
+
+    assert all("rmsse_weighted" in row for row in metrics)
+    pd.testing.assert_series_equal(
+        weights[origins[0]], backtest.weights_for(changed, origins)[origins[0]]
+    )
+    assert "rmsse_weighted" not in score(results, scales_for(series, origins))[0]

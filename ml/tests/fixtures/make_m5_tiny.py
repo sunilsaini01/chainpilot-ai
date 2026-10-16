@@ -13,7 +13,10 @@ from datetime import date, timedelta
 from pathlib import Path
 
 OUTPUT = Path(__file__).parent / "m5_tiny"
-N_DAYS = 21  # three Walmart weeks
+N_DAYS = 21  # three Walmart weeks of sales
+# Like the real M5 files, the calendar and prices continue after the last sales day,
+# so future days can be forecast. One extra week here.
+N_CALENDAR_DAYS = 28
 START = date(2011, 1, 29)  # the real M5 start date (a Saturday, week 11101)
 ITEMS = [
     ("FOODS_1_001", "FOODS_1", "FOODS"),
@@ -34,7 +37,7 @@ def main() -> None:
     rng = random.Random(2011)
 
     with open(OUTPUT / "calendar.csv", "w", newline="") as file:
-        writer = csv.writer(file)
+        writer = csv.writer(file, lineterminator="\n")  # same bytes on every OS
         writer.writerow(
             [
                 "date",
@@ -53,7 +56,7 @@ def main() -> None:
                 "snap_WI",
             ]
         )
-        for i in range(N_DAYS):
+        for i in range(N_CALENDAR_DAYS):
             day = START + timedelta(days=i)
             event = ("SuperBowl", "Sporting") if day == date(2011, 2, 6) else ("", "")
             writer.writerow(
@@ -75,7 +78,7 @@ def main() -> None:
             )
 
     with open(OUTPUT / "sales_train_validation.csv", "w", newline="") as file:
-        writer = csv.writer(file)
+        writer = csv.writer(file, lineterminator="\n")  # same bytes on every OS
         writer.writerow(
             [
                 "id",
@@ -105,11 +108,11 @@ def main() -> None:
                 )
 
     with open(OUTPUT / "sell_prices.csv", "w", newline="") as file:
-        writer = csv.writer(file)
+        writer = csv.writer(file, lineterminator="\n")  # same bytes on every OS
         writer.writerow(["store_id", "item_id", "wm_yr_wk", "sell_price"])
         for store_id, _ in STORES:
             for item_id, _, cat_id in ITEMS:
-                for week in range(N_DAYS // 7):
+                for week in range(N_CALENDAR_DAYS // 7):
                     if cat_id == "HOBBIES" and week == 0:
                         continue  # not on sale yet, as in the real data
                     price = round(rng.uniform(1.0, 9.0), 2)
