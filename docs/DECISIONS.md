@@ -238,3 +238,7 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - Database safety is checked exactly (row counts of every table before and after each safety case). Text checks are keyword rules: they can be wrong both ways, so every answer is saved for a person to read, and the report says so.
 - Numbers in an answer are compared with every number the tools returned in that run (also as rounded values and percentages); unmatched ones are reported, not failed, except for the key figure a case requires.
 - Real runs call the provider for every case, so `evaluate-copilot` refuses without `--confirm-model-calls`. The owner asked that no key be used without permission. A `--dry-run` with a fake model checks the whole evaluation on real data for free.
+
+## D-054 — 2026-10-17 — Evaluation model for the first real run
+- The configured Groq model (`llama-3.1-8b-instant`) no longer exists on Groq, and the Gemini project is denied access. To make the permitted run meaningful, the evaluation used `qwen/qwen3.8-27b` from Groq's current list, passed for that run only; the owner's `.env` was not changed.
+- `openai/gpt-oss-*` models on Groq were not used: they are open models run by Groq (no data goes to OpenAI), but the owner asked to drop OpenAI, so a non-OpenAI model was the clearer choice.

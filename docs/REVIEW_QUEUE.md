@@ -497,7 +497,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `apps/api/app/policies_service.py::search_policies`. Paraphrased questions found the right section 0 times out of 3, e.g. "Which vendors are unreliable?" returns nothing because the policy says "supplier".
 - Expected behavior: the copilot finds the relevant policy however the user phrases the question.
 - Fix and regression test: decide in P5-T3 together with the model provider: (a) the copilot turns the question into policy terms before searching, and/or (b) embeddings. Then re-run the same 12 questions plus new unseen ones. Not tuned on the 3 failing questions.
-- Status: OPEN (P5-T3)
+- Update 2026-10-17: option (a) is in the copilot's rules (search in the policy's own words). In the P5-T4 run the paraphrase "Who signs off on buying more stock?" got the right policy citation through the copilot. The search endpoint by itself is unchanged and still misses paraphrases; embeddings are not needed for the copilot now.
+- Status: VERIFIED (for the copilot path)
 
 ## P5-T1-R2 — [LOW] First policy drafts said slightly more than the system does
 - Source: Claude self-review (comparing every policy statement with the code)
@@ -525,7 +526,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: real answers from `gpt-5.4-mini`, checked for grounding.
 - Fix and regression test: the owner adds credits (OpenAI billing settings). Then re-run the same five questions (`copilot_smoke` questions in the work log) and record the results. Until then the real-model behavior is NOT VERIFIED; everything else is tested with a scripted model.
 - Update 2026-10-17: the owner switched to Groq and Gemini (free tiers, D-052) instead of buying OpenAI credits. The same five questions will be run with the chosen provider once its key and model are in `.env`.
-- Status: BLOCKED (owner action: Groq or Gemini key and model in `.env`)
+- Update 2026-10-17: real answers obtained from Groq `qwen/qwen3.8-27b` in the evaluation run (P5-T4).
+- Status: VERIFIED
 
 ## P5-T3-R2 — [LOW] The first `investigate` command read the run after its session had closed
 - Source: test failure (`DetachedInstanceError`)
@@ -550,4 +552,26 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: the evaluation is built and tested offline (scripted models; 13 of 13 mutations caught) and dry-run on the real demo data with a fake model (6 of 14, as expected for a model that declines everything; expected citations computed correctly). No Groq or Gemini call was made.
 - Expected behavior: a real run with the owner's permission, reported as it comes out, including failures.
 - Fix and regression test: owner gives permission; then `evaluate-copilot --confirm-model-calls` with Groq (`llama-3.1-8b-instant`) and, if wanted, Gemini. This also answers P5-T3-R1 and P5-T1-R1.
-- Status: BLOCKED (owner permission to call the provider)
+- Update 2026-10-17: with the owner's permission, run against Groq `qwen/qwen3.8-27b`: 12/14 cases, gate passed (docs/MODEL_RESULTS.md). The configured Groq model no longer exists (404) and the Gemini project is denied access (403), so neither of those was evaluated.
+- Status: VERIFIED
+
+## P5-T4-R3 — [MEDIUM] Groq's free tier refuses the copilot's larger requests
+- Source: real evaluation run (docs/results/p5_copilot_eval_groq.json)
+- File and reproduction: `apps/api/app/copilot/graph.py`. Two of 14 cases failed with HTTP 413 "Request too large ... input tokens per minute: Limit 7000" because tool results (up to 6,000 characters each) and the answer prompt (up to 18,000 characters) add up. Questions also took 6–139 s, mostly waiting for rate limits.
+- Expected behavior: questions fit the free tier, or the run says clearly that the limit was hit.
+- Fix and regression test (next task, then a second evaluation run reported next to the first): send the model compact tool results (fewer fields, smaller limits), and on a 413 retry once with half the evidence. A paid Groq tier is the alternative (owner's choice).
+- Status: OPEN
+
+## P5-T4-R4 — [LOW] The checks do not catch every factual slip
+- Source: reading the saved answers
+- File and reproduction: in the injection-data case the answer says "Four suppliers are rated good" and lists three. Numbers are checked against the tools, but counts written as words are not.
+- Expected behavior: documented; answers are saved for reading.
+- Fix and regression test: none now; a stricter check (counts against tool data) could come later.
+- Status: OPEN (documented limitation)
+
+## P5-T4-R5 — [LOW] The configured models do not work as set
+- Source: real evaluation run
+- File and reproduction: the owner's `.env` has `GROQ_MODEL=llama-3.1-8b-instant`, which Groq no longer offers (404), and the Gemini project behind `GEMINI_API_KEY` is denied access by Google (403, also for a single test request).
+- Expected behavior: `.env` names a model that exists, with a key that is allowed.
+- Fix and regression test: owner's choice: set `GROQ_MODEL=qwen/qwen3.8-27b` (the model that passed), and for Gemini create a key in a new Google AI Studio project. Not changed by Claude (owner's file and choice).
+- Status: OPEN (owner action)

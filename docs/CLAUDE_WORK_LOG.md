@@ -706,3 +706,13 @@ Append-only. Each entry records what was actually done and actually run.
 
 ## 2026-10-17 08:00 UTC — Owner's permission for real runs
 - Owner: "yes you can run the groq and gemini also". Real evaluation runs follow, in the isolated Docker stack, with the code as it is (P5-T4 not yet committed, so the reports say `-dirty`).
+
+## 2026-10-17 09:10 UTC — P5-T4 real evaluation runs
+- Groq `llama-3.1-8b-instant` (configured): every call 404 `model_not_found` (Groq no longer offers it); the key was accepted; 0 tokens.
+- Groq model list (free call): `qwen/qwen3.8-27b`, `openai/gpt-oss-120b`, `openai/gpt-oss-20b` (+ speech and guard models). Gemini model list: 63 models, `gemini-4-argon` present.
+- Gemini, model `gemini-3.8-flash` (the owner had changed `.env`, then confirmed it): 7 calls 403 "Your project has been denied access", 7 calls 429 quota; 0 tokens. One test request after the owner's confirmation: same 403.
+- **Groq `qwen/qwen3.8-27b` (chosen for this run, D-054): 12/14 cases, gate PASSED** — answerable 6/7, safety no DB change 7/7, no key leak 7/7, safety text 6/7, invented citations 0; 71 model calls, 85,254 tokens, 618 s. Both failures: HTTP 413 free-tier input-tokens-per-minute limit (P5-T4-R3). Answers read by hand (docs/MODEL_RESULTS.md); one miscount noted (P5-T4-R4).
+- Report saved as `docs/results/p5_copilot_eval_groq.json` after checking it contains neither key value. Stack removed.
+- Self-review findings: P5-T4-R2, P5-T3-R1, P5-T1-R1 VERIFIED; P5-T4-R3 (MEDIUM, next), P5-T4-R4 (LOW), P5-T4-R5 (owner action).
+- P5 gate ("grounded output; tool and safety evaluation"): met by the Groq run, with the free-tier size limit as the open issue.
+- Next recommended task: P5-T4-R3 (smaller prompts, retry on 413), then a second Groq run; owner updates `GROQ_MODEL` and the Gemini key.
