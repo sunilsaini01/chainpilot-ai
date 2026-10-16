@@ -23,7 +23,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/demand_forecasting/{baselines,backtest,metrics,features}.py` | Baseline forecasts (seasonal naive, 28-day moving average), rolling-origin backtests with MAE/WAPE/bias/RMSSE for 7/14/28 days, and leakage-safe features. Results: [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `.github/workflows/ci.yml` | On every push and pull request: API and ML Ruff lint/format and tests (API tests against a real Postgres 16, ML tests on tiny M5-format fixtures), then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: the forecast API (P2-T4), delivery risk, inventory decisions, agents, frontend, AWS.
+Not built yet: forecast jobs from the API (needs the background worker), delivery risk, inventory decisions, agents, frontend, AWS.
 
 ## How stock changes
 
@@ -70,6 +70,27 @@ docker compose run --rm api python -m app.cli seed --products 500 --warehouses 5
 - Every create, update and stock movement writes an audit event with the acting user.
 - **Warehouse capacity:** a receipt or incoming transfer that would take a warehouse above `capacity_units` (all products together) returns **409**. Positive adjustments are allowed, because a stock count records what is physically there. Capacity cannot be lowered below the units currently stored (409). The warehouse row is locked during the check, so two simultaneous receipts cannot overfill it together.
 - **Paging:** every list endpoint takes `limit` (max 200) and `offset` and returns the total number of matching rows in the `X-Total-Count` response header.
+
+## Demand forecasts (M5 public data)
+
+> **Data label:** these forecasts are for the public **M5 (Walmart)** dataset, keyed by M5 series ids such as `FOODS_3_090_CA_1_validation`. They are kept separate from the simulated `SYN-` products and are never joined to them. Every forecast response carries an `X-Dataset` header saying so.
+
+How forecasts get from the model to the API:
+
+```powershell
+cd ml
+python -m demand_forecasting.publish ..\data\raw\m5 --all-stores          # -> data/processed/forecasts/<run>/ (not in Git)
+cd ..\apps\api
+# Import into the database (POSTGRES_* pointing at your database, e.g. the Compose one on 127.0.0.1)
+python -m app.cli import-forecasts ..\..\data\processed\forecasts\m5_lightgbm_weekly_2016-04-24
+```
+
+The import checks the file against its manifest (checksum, row count, column names, `0 <= lower <= forecast <= upper`, step/date consistency) before writing, loads all 853,720 rows in one transaction with PostgreSQL `COPY` (about 45 s), writes an audit event, and refuses to import the same file twice.
+
+| Endpoint | Who |
+|---|---|
+| `GET /forecasts/runs` (newest first) | analyst+ |
+| `GET /forecasts?run_id=&store_id=&item_id=&series_id=&date_from=&date_to=&limit=&offset=` (default: newest run; point forecast plus 80% interval `lower`/`upper`) | analyst+ |
 
 ## Users, login and roles
 

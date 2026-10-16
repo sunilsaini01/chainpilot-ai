@@ -1,28 +1,35 @@
 # Project Status
 
 Current phase: P2 (Demand ML)
-Current task: P2-T3b, improved model chosen on a validation period, calibrated intervals
+Current task: P2-T4, forecast publishing, import and API (completes P2)
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 7ead45b "Record LightGBM backtest results" (CI #9 green). P2-T3b is uncommitted.
+Last commit: 0c32413 "Record validated model selection and test results" (CI #10 green). P2-T4 and the review fixes are uncommitted.
 
-## P2-T3b acceptance criteria
-- [x] Plan (validation period, candidates, selection rule, calibration, single test) written down before any run
-- [x] Validation period before the test windows; weekly models chosen by the rule (mean WAPE 0.765 vs 0.791)
-- [x] **Beats the 28-day moving average on the untouched test windows** at 7/14/28 days (WAPE 0.718/0.725/0.740 vs 0.736/0.737/0.753), 8 of 10 stores
-- [x] **Calibrated 80% intervals**: test coverage 0.80–0.81 (was 0.87)
-- [x] Leakage tests for both layouts; mutations caught
-- [x] Final weekly models for all 10 stores saved with interval bounds; reloaded
+## P2-T4 acceptance criteria
+- [x] Forecasts for the 28 days after the data (2016-04-25..05-22) for all 30,490 M5 series, with calibrated 80% intervals, written as CSV + manifest (provenance, checksum)
+- [x] Migration 0006 (`forecast_runs`, `forecasts`) with database checks on interval order and steps
+- [x] Validated, all-or-nothing, audited import (`import-forecasts`); duplicates refused; 853,720 rows in ~45 s
+- [x] `GET /forecasts/runs`, `GET /forecasts` (filters, paging, `X-Total-Count`, `X-Dataset` label), analyst+
+- [x] M5 forecasts kept separate from the simulated SYN- products (spec section 3)
+- [x] Final check on untouched actuals: beats the moving average (WAPE 0.717 vs 0.739 at 28 days), intervals calibrated (~80%)
+- [ ] `POST /forecasts/jobs` (spec section 5): deferred to the background-worker phase
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Tests executed (2026-10-16, details in docs/CLAUDE_WORK_LOG.md):
-- `ml`: 65 passed; Ruff passes.
-- Real data: model selection 93 min; final training ~14 min for all stores.
+## P2 phase gate (spec: "reproducible time-split metrics; inference API")
+- [x] Time-split metrics with recorded origins, versions and data checksums; baselines reproduced from clean code (identical)
+- [x] Inference served through the API (published forecasts)
+- [x] Clean re-run from `0c32413`: baselines and model selection identical (reports replaced)
+- [ ] CI green, then owner milestone check
 
-Open findings: P2-T2-R2/R3 (LOW, documented), P1-T4-R2 (LOW, P3/P4). See docs/REVIEW_QUEUE.md.
-Next action: Owner reviews, commits and pushes P2-T3b, then confirms CI.
+Tests executed (2026-10-16, details in docs/CLAUDE_WORK_LOG.md):
+- `ml`: 75 passed. API with PostgreSQL: 195 passed. Ruff passes.
+- Real data: publish 5 min; import 45 s; holdout check 17 s; isolated Docker end-to-end OK.
+
+Open findings: P2-T4-R1 (MEDIUM, under-forecast 5–8% on the holdout; handle in P4), P1-T4-R2 (LOW, P3/P4). See docs/REVIEW_QUEUE.md.
+Next action: owner commits and pushes; confirm CI; P2 milestone check.
 Blockers: none.
 
 ## Roadmap progress
@@ -37,8 +44,8 @@ Blockers: none.
 | P2-T1 M5 loader, validation, fixtures, download guide | APPROVED (owner, 2026-10-15; CI #7 green on a5ad708) |
 | P2-T2 Features, baselines, rolling-origin backtests, metrics | APPROVED (owner, 2026-10-15; CI #8 green on f5601f9) |
 | P2-T3 LightGBM model, uncertainty, artifacts | APPROVED as first version (owner, 2026-10-15; CI #9 green on 7ead45b) |
-| P2-T3b Improved model: validation period, weekly models, calibrated intervals | READY_FOR_USER_CHECK |
-| P2-T4 Forecast tables and API | NOT_STARTED |
+| P2-T3b Improved model: validation period, weekly models, calibrated intervals | APPROVED (owner, 2026-10-16; CI #10 green on 0c32413) |
+| P2-T4 Forecast tables, import and API | READY_FOR_USER_CHECK |
 | P3–P9 | NOT_STARTED |
 
 ## History
@@ -55,3 +62,4 @@ Blockers: none.
 - 2026-10-15: P2-T2 built; first real baseline results on all 10 M5 stores (docs/MODEL_RESULTS.md).
 - 2026-10-15: P2-T3 built; LightGBM evaluated honestly (ties/loses to the 28-day moving average); artifacts pipeline works.
 - 2026-10-16: P2-T3b: weekly LightGBM chosen on validation; beats the moving average on the test windows; intervals calibrated.
+- 2026-10-16: P2-T4 built (publish, import, API, holdout check); review fixes for P2-T2-R2/R3.

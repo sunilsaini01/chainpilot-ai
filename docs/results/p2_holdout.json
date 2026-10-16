@@ -1,0 +1,44 @@
+{
+  "forecast_run": "m5_lightgbm_weekly_2016-04-24",
+  "run_key": "7d6a726a51bf475b",
+  "actuals": "sales_train_evaluation.csv, d_1914..d_1941",
+  "rows": 853720,
+  "metrics": [
+    {
+      "horizon_days": 7,
+      "wape_model": 0.7106,
+      "wape_moving_average_28": 0.7471,
+      "bias_model": -0.0614,
+      "bias_moving_average_28": 0.021,
+      "interval_coverage_80": 0.8057,
+      "rmsse_model": 0.6701,
+      "rmsse_weighted_model": 0.758,
+      "rmsse_moving_average_28": 0.6824,
+      "rmsse_weighted_moving_average_28": 0.8155
+    },
+    {
+      "horizon_days": 14,
+      "wape_model": 0.7167,
+      "wape_moving_average_28": 0.7381,
+      "bias_model": -0.0502,
+      "bias_moving_average_28": -0.0158,
+      "interval_coverage_80": 0.8014,
+      "rmsse_model": 0.7165,
+      "rmsse_weighted_model": 0.8048,
+      "rmsse_moving_average_28": 0.7261,
+      "rmsse_weighted_moving_average_28": 0.8392
+    },
+    {
+      "horizon_days": 28,
+      "wape_model": 0.7172,
+      "wape_moving_average_28": 0.7386,
+      "bias_model": -0.0774,
+      "bias_moving_average_28": -0.0391,
+      "interval_coverage_80": 0.7957,
+      "rmsse_model": 0.7548,
+      "rmsse_weighted_model": 0.8338,
+      "rmsse_moving_average_28": 0.7668,
+      "rmsse_weighted_moving_average_28": 0.8681
+    }
+  ]
+}

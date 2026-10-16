@@ -385,3 +385,33 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings and fixes: P2-T3-R1 and R2 VERIFIED; P2-T3b-R1 (conformal crash) VERIFIED; P2-T3b-R2 (wrong test premise) FIXED.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: owner commits and pushes; confirm CI; then P2-T4 (forecast tables and API serving the weekly LightGBM forecasts with intervals; moving average as fallback).
+
+## 2026-10-16 03:10 UTC — P2-T3b CI verification
+- Owner pushed `f224082` (code), `846b419` (tests), `0c32413` (results/docs). GitHub Actions run 38840697962 (CI #10) on `0c32413`: `success`, all three jobs, 0 annotations. P2-T3b approved; owner asked to clear the review queue, then continue with P2-T4.
+
+## 2026-10-16 09:30 UTC — Review-queue fixes (P2-T2-R2/R3) and P2-T4
+- Starting commit / branch: `0c32413` on `main` (CI #10 green).
+- Review queue:
+  - P2-T2-R2 (results from uncommitted code): re-running the baseline backtest and the full model selection from a clean `git worktree` of `0c32413` (`C:\projects\chainpilot-clean`, outputs to the scratchpad so no tracked file changes). Baselines finished: every overall and per-store metric, origins and data checksums identical to the committed report; provenance `0c32413` (clean). Model selection still running at the time of this entry.
+  - P2-T2-R3 (unweighted RMSSE): added a sales-value-weighted RMSSE (metrics, backtest, holdout); 3 tests; weight-leakage mutation caught (a first attempt at the mutation did not apply because Ruff had reformatted the line; redone).
+  - P1-T4-R2: unchanged (needs P3/P4 tables).
+- P2-T4 files:
+  - ML: `m5_data.future_long` (future rows with calendar and prices), `publish.py` (forecast CSV + manifest), `holdout.py` (score published forecasts on `sales_train_evaluation.csv`, plain and weighted RMSSE), fixture generator (calendar/prices extended by one week, sales unchanged), `tests/test_publish.py` (7). ML total 75.
+  - API: migration `0006` (`forecast_runs`, `forecasts`), models, `app/forecast_import.py` (validation + COPY in one transaction), `app/routes/forecasts.py` (`GET /forecasts/runs`, `GET /forecasts` with filters, `X-Total-Count`, `X-Dataset`), `app/cli.py` `import-forecasts` (audit event), `tests/test_forecasts.py` (19). API total 195.
+- Tests run / actual results:
+  - `ml`: 75 passed; API with DB: 195 passed (94.8 s while the background re-run was using the CPU); Ruff passes in both.
+  - Mutations caught: import without interval check (2 failed), without duplicate-run check (2 failed), without checksum check (1 failed).
+  - `publish --all-stores`: 853,720 rows (30,490 series x 28 days, 2016-04-25..2016-05-22) in 5 min 10 s; all intervals ordered, none negative; daily totals 34–46k units with the weekend peak; 87 MB CSV ignored by Git.
+  - Holdout (untouched `sales_train_evaluation.csv`, d_1914..d_1941; all 853,720 rows matched): WAPE 0.711/0.717/0.717 (weekly LightGBM) vs 0.747/0.738/0.739 (moving average); weighted RMSSE 0.758/0.805/0.834 vs 0.816/0.839/0.868; coverage 0.806/0.801/0.796; bias −6.1%/−5.0%/−7.7% (P2-T4-R1). Runs with `python -W error`.
+  - Isolated Docker project `chainpilot-e2e`: migrations to 0006; `import-forecasts` 853,720 rows in 44.5 s; second import refused; analyst `GET /forecasts/runs` and `GET /forecasts?store_id=CA_1&item_id=FOODS_3_090` returned 28 rows (`X-Total-Count: 28`, `X-Dataset` label), FOODS_3_090 CA_1 day 1 = 42.7 [38.13, 47.92]; a 1,000-row page in 0.054 s; 401 without a token; DB count 853,720, audit `forecast_run.imported` with no actor. Removed afterwards.
+  - Development stack upgraded 0005 -> 0006 (`alembic current` = `0006 (head)`), `/ready` 200.
+  - Correction to my chat summary: the forecast test file has 19 tests (195 − 176), not 34 as I first wrote.
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Ending commit (if any): none.
+
+## 2026-10-16 10:00 UTC — P2-T2-R2 closed: clean re-run identical
+- The model selection re-run from the clean worktree of `0c32413` finished (exit 0, 6,860 s; slower than the first run's 5,594 s because P2-T4 work ran at the same time). Compared with the committed report: validation and test metrics (overall and per store), conformal bounds, chosen model all identical; provenance `0c32413` for both phases. Baselines were already identical.
+- `docs/results/p2_baselines.json` and `docs/results/p2_model_selection.json` replaced with the clean re-runs; `docs/MODEL_RESULTS.md` provenance notes updated. Worktree removed afterwards.
+- Ending commit (if any): none. The owner will commit and push.
+- Follow-up: report writers produced Windows (CRLF) line endings on Windows (Git normalised them via `.gitattributes`, but the forecast CSV checksum, and so its `run_key`, depended on the OS). All JSON writers now pass `newline="\n"` and `publish` writes the CSV with `lineterminator="\n"`. Republished (853,720 rows; `run_key` 0352c64a147cdb3d -> 7d6a726a51bf475b); holdout re-run with `-W error`: metrics identical. The two result JSONs copied from the clean re-run were converted to LF.
+- Follow-up (my mistake): while making the fixture generator write LF, a `sed` edit applied but turned `"\n"` into a real line break in 3 places, breaking `make_m5_tiny.py` (syntax error); my grep check had wrongly reported 0 matches because of its own escaping. The tests still passed because they read the CSVs, not the script. Repaired with a checked Python edit; the generator now uses `csv.writer(file, lineterminator="\n")`; fixtures regenerate byte-identically (SHA-256 compared) as LF text. Final: ML 75 passed, API 195 passed with PostgreSQL, Ruff clean in both, `git diff --check` clean, no CRLF warnings, no data/models/secrets staged.

@@ -38,8 +38,8 @@ WAPE at 28 days, by store (seasonal naive / moving average): CA_1 0.877 / 0.748,
 - The three windows are February to April 2016. Results for other seasons (e.g. December) may differ.
 
 **Provenance** (from `docs/results/p2_baselines.json`)
-- Code: `a5ad708-dirty`, i.e. commit a5ad708 plus the uncommitted P2-T2 code, committed right after this run.
-- Python 3.11.9, pandas 3.0.6, numpy 2.4.6. Runtime 133 s on a 16 GB Windows laptop.
+- Code: commit `0c32413` (clean). The first run used `a5ad708-dirty`; a re-run from a clean checkout of `0c32413` on 2026-10-16 gave identical numbers, and this report is that re-run.
+- Python 3.11.9, pandas 3.0.6, numpy 2.4.6. Runtime about 133 s on a 16 GB Windows laptop (first run).
 - Data SHA-256: calendar `d12b5914…60f5`, sales `f368e66e…6724`, prices `9da3ad1f…d2ef` (full values in the JSON).
 
 **Reproduce**
@@ -134,7 +134,7 @@ WAPE at 28 days by store (moving average / weekly LightGBM; ✓ = LightGBM bette
 - The moving average's test numbers are identical to the earlier runs (a consistency check).
 - Same caveats as above: unweighted RMSSE (not comparable with the Kaggle leaderboard); test windows cover February–April only.
 
-**Provenance** (`docs/results/p2_model_selection.json`): code `7ead45b-dirty` (commit 7ead45b plus the uncommitted P2-T3b code, committed with these results), LightGBM 4.7.0, same data checksums as above, runtime 5,594 s (93 min). A first run of the same plan crashed in the calibration step before showing any numbers (see the work log); this is the second run of the unchanged plan.
+**Provenance** (`docs/results/p2_model_selection.json`): commit `0c32413` (clean), LightGBM 4.7.0, same data checksums as above. The results were first produced from `7ead45b-dirty` (93 min); a re-run from a clean checkout of `0c32413` gave identical validation and test metrics, intervals and choice (runtime 114 min, slower because other work ran at the same time), and this report is that re-run. An earlier run of the same plan crashed in the calibration step before showing any numbers (see the work log).
 
 **Reproduce**
 
@@ -143,3 +143,20 @@ cd ml
 python -m demand_forecasting.model_selection ..\data\raw\m5 --all-stores --output ..\docs\results\p2_model_selection.json
 python -m demand_forecasting.train_final ..\data\raw\m5 --all-stores --weekly --selection-report ..\docs\results\p2_model_selection.json
 ```
+
+## Final check on untouched data: the published forecasts (P2-T4)
+
+The published forecast file (`m5_lightgbm_weekly_2016-04-24`, 853,720 rows) covers 2016-04-25 to 2016-05-22, the 28 days after the training data ends. The M5 download also contains `sales_train_evaluation.csv` with the **real sales of exactly those days**. No training, validation, test or model-choice step ever read it, so this is a genuinely unseen check, done once after everything else was fixed. Result saved in `docs/results/p2_holdout.json`.
+
+| Horizon | WAPE weekly LightGBM | WAPE moving average | Bias LightGBM | Bias moving average | RMSSE LightGBM | RMSSE moving average | Weighted RMSSE LightGBM | Weighted RMSSE moving average | 80% interval coverage |
+|---|---|---|---|---|---|---|---|---|---|
+| 7 days | **0.711** | 0.747 | -0.061 | +0.021 | **0.670** | 0.682 | **0.758** | 0.816 | 0.806 |
+| 14 days | **0.717** | 0.738 | -0.050 | -0.016 | **0.717** | 0.726 | **0.805** | 0.839 | 0.801 |
+| 28 days | **0.717** | 0.739 | -0.077 | -0.039 | **0.755** | 0.767 | **0.834** | 0.868 | 0.796 |
+
+- **The improvement holds on unseen data**, slightly larger than in the test windows: WAPE about 3–5% lower than the moving average.
+- **Weighted RMSSE** (each series weighted by its dollar sales in the 28 days before the forecast) shows a bigger gap (0.834 vs 0.868 at 28 days): the model helps most on the high-revenue products, which matter most for inventory.
+- **Intervals stay calibrated:** 79.6–80.6% coverage for a nominal 80%.
+- **Watch-out: bias.** The model under-forecasts by 5–8% here (the moving average by −4% to +2%). For replenishment, under-forecasting means too little stock, so P4 should add a safety-stock buffer (or a bias correction checked on validation data) rather than use the point forecast directly. See review item P2-T4-R1.
+
+Reproduce: `python -m demand_forecasting.holdout ..\data\raw\m5 ..\data\processed\forecasts\m5_lightgbm_weekly_2016-04-24 --output ..\docs\results\p2_holdout.json`

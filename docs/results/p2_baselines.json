@@ -761,15 +761,16 @@
     }
   ],
   "provenance": {
-    "git_commit": "a5ad708-dirty",
+    "git_commit": "0c32413",
     "python": "3.11.9",
     "pandas": "3.0.6",
     "numpy": "2.4.6",
+    "lightgbm": "4.7.0",
     "data_sha256": {
       "calendar": "d12b5914ef03e66649adf5dd9e996e6602251c22b7a6af8f1f7e3aa12f8860f5",
       "sales": "f368e66ed1dbecb48b2cc8fc589bf68b3deddbbb36bf5c88b4d6d0a09b9b6724",
       "prices": "9da3ad1f8b8ccacdbdc70612191dd375ec24a4ac6625c24b75b3bc60b0bed2ef"
     }
   },
-  "runtime_seconds": 133.3
+  "runtime_seconds": 137.9
 }

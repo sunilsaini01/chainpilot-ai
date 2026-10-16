@@ -260,14 +260,16 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `docs/results/p2_baselines.json` records `git_commit: a5ad708-dirty`. The provenance uses `git describe --always --dirty`, so this is reported honestly instead of a misleading clean SHA.
 - Expected behavior: results traceable to exact code.
 - Fix and regression test: the code is committed together with the results. To regenerate from a clean checkout, rerun the command in `docs/MODEL_RESULTS.md`; with unchanged code and data (checksums recorded) the numbers are deterministic.
-- Status: OPEN (accepted; regenerate later if the backtest code changes)
+- Update 2026-10-16: re-ran both the baseline backtest and the full model selection from a clean `git worktree` of `0c32413` (outputs outside the repository, so the tree stayed clean; `git describe --dirty` gave `0c32413`). Every metric (overall and per store, validation and test), the calibrated interval bounds and the chosen model are identical to the earlier reports; only the runtime differs. `docs/results/p2_baselines.json` and `p2_model_selection.json` were replaced with the clean re-runs. `p2_lightgbm.json` (the superseded first LightGBM version) keeps its original `f5601f9-dirty` stamp as a historical record; that code was committed as `35de6cc`.
+- Status: VERIFIED
 
 ## P2-T2-R3 — [LOW] RMSSE is unweighted, not the M5 competition WRMSSE
 - Source: Claude self-review
 - File and reproduction: `metrics.mean_rmsse` averages RMSSE over series equally; the competition weighted by dollar sales across 12 aggregation levels.
 - Expected behavior: users must not compare these numbers with the Kaggle leaderboard.
 - Fix and regression test: documented clearly in `metrics.py` and `docs/MODEL_RESULTS.md` ("not comparable"). A weighted variant could be added if aggregate-level evaluation is needed (P2-T3).
-- Status: OPEN (documented limitation)
+- Update 2026-10-16: added a sales-value-weighted RMSSE (M5's bottom-level weighting: dollar sales in the 28 days before the origin, computed only from data up to the origin). `metrics.sales_value_weights`, `metrics.weighted_rmsse`, `backtest.weights_for`; `score()` reports `rmsse_weighted`. Tests: weights ignore older days and the test window (mutation "weights from the full series" caught), weighted mean by hand. Real numbers on the untouched holdout: weighted RMSSE 0.758/0.805/0.834 (weekly LightGBM) vs 0.816/0.839/0.868 (moving average). The full 12-level WRMSSE is still not computed and the docs say so; the backtest tables gain the weighted column at their next regeneration.
+- Status: FIXED
 
 ## P2-T3-R1 — [MEDIUM] LightGBM does not beat the 28-day moving average
 - Source: real backtest (docs/results/p2_lightgbm.json)
@@ -304,4 +306,29 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: a new test claimed the single model's forecast cannot react to last week's sales. It does, legitimately: last week's sales are training targets (dated before the origin). Not leakage.
 - Expected behavior: the test checks the real difference between layouts.
 - Fix and regression test: replaced by `test_next_weeks_inputs_include_last_week_only_with_a_7_day_lag`, which checks the *input features* for days 1–7 (they change with a 7-day lag and not with a 28-day lag).
+- Status: FIXED
+
+## P2-T4-R1 — [MEDIUM] Published forecasts under-forecast by 5–8%
+- Source: final check on untouched data (docs/results/p2_holdout.json)
+- File and reproduction: bias of the weekly LightGBM on 2016-04-25..05-22 is −6.1% / −5.0% / −7.7% at 7/14/28 days (moving average +2.1% / −1.6% / −3.9%); on the test windows it was −1.0% / −2.3% / −3.8%.
+- Expected behavior: replenishment based on these forecasts must not systematically order too little.
+- Fix and regression test: not a forecasting-code bug. In P4, use the 80% upper bound or an explicit safety stock in reorder points, and/or a bias correction estimated on validation data only; test that the simulator's service level meets its target.
+- Status: OPEN (P4)
+
+## P2-T4-R2 — [LOW] My holdout test needed files I forgot to provide
+- Source: Claude (test failure while adding weighted RMSSE to the holdout)
+- File and reproduction: the holdout now reads `calendar.csv` and `sell_prices.csv` for the weights; the test's temporary raw folder only had the evaluation file (FileNotFoundError).
+- Fix and regression test: the test copies the fixture calendar and prices; a new test checks that the vectorised `history_scales` equals `metrics.rmsse_scales` exactly (including series that never sold).
+- Status: FIXED
+
+## P2-T4-R3 — [LOW] Short histories broke the holdout moving average
+- Source: Claude self-review (test failure)
+- File and reproduction: with fewer than 28 known days the moving-average window reached `d_-6..d_0`. Real M5 data has 1,913 days, so it never happened there.
+- Fix and regression test: the window is clamped at day 1 (same rule as `baselines.moving_average_28`); covered by the fixture-based holdout test.
+- Status: FIXED
+
+## P2-T4-R4 — [LOW] pandas PerformanceWarning in the holdout on real data
+- Source: real run (the narrow fixture did not trigger it)
+- File and reproduction: adding a column to the 1,947-column evaluation table fragmented it.
+- Fix and regression test: the series id is used as the index instead of a new column; the real run passes with `python -W error`.
 - Status: FIXED

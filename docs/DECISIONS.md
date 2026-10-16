@@ -140,3 +140,8 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - Chosen by the pre-registered rule on a validation period, then confirmed once on the untouched test windows (`docs/MODEL_RESULTS.md`). Four models per store (days 1–7, 8–14, 15–21, 22–28) with minimum feature lags 7/14/21/28, so each forecast uses the freshest sales it is allowed to without leakage.
 - Intervals from split-conformal calibration (validation errors, 10 bins by forecast size) instead of quantile boosters: calibrated by construction, cheaper (no extra models), and model-agnostic (the moving average gets intervals the same way). Bounds are stored in each model's metadata.
 - The 28-day moving average remains the documented fallback and benchmark.
+
+## D-039 — 2026-10-16 — Forecasts reach the API as validated files, not by running models in the API
+- The ML package writes `forecasts.csv` + `manifest.json`; the API imports them with a CLI command. The API image needs no pandas or LightGBM, the import is all-or-nothing (one transaction, PostgreSQL `COPY`), and each file can be imported once (`run_key` from its checksum). `POST /forecasts/jobs` (spec section 5) needs the background worker, so it is deferred to the phase that adds workers.
+- Forecast rows are keyed by M5 series ids and labelled with their dataset, and never joined to `SYN-` products (spec section 3). Connecting model outputs to the simulated demo scenario is a P4 decision.
+- `sales_train_evaluation.csv` is used exactly once, as a final untouched check of the published forecasts.

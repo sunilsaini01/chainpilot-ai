@@ -1166,7 +1166,7 @@
       }
     ],
     "provenance": {
-      "git_commit": "7ead45b-dirty",
+      "git_commit": "0c32413",
       "python": "3.11.9",
       "pandas": "3.0.6",
       "numpy": "2.4.6",
@@ -2228,7 +2228,7 @@
       }
     ],
     "provenance": {
-      "git_commit": "7ead45b-dirty",
+      "git_commit": "0c32413",
       "python": "3.11.9",
       "pandas": "3.0.6",
       "numpy": "2.4.6",
@@ -2240,5 +2240,5 @@
       }
     }
   },
-  "runtime_seconds": 5593.5
+  "runtime_seconds": 6860.3
 }
