@@ -19,7 +19,7 @@ Demo link from SYN- products to M5 demand (after import-forecasts and seed):
 Policy documents for the AI copilot (default folder: apps/api/policies):
     python -m app.cli load-policies
 
-AI copilot (needs OPENAI_API_KEY and OPENAI_MODEL; each question costs a little):
+AI copilot (LLM_PROVIDER=groq or gemini, plus that provider's key and model):
     python -m app.cli investigate "Which suppliers are at risk?"
 
 Housekeeping (safe to run daily, e.g. from cron):
@@ -32,6 +32,7 @@ end up in shell history and process lists.
 
 import argparse
 import getpass
+import json
 import os
 import sys
 from datetime import UTC, datetime, timedelta
@@ -40,6 +41,9 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.audit import record_event
+from app.config import get_settings
+from app.copilot.evaluation import add_injection_product, evaluate
+from app.copilot.model import json_reply
 from app.copilot.service import CopilotNotConfiguredError, configured_model, run_and_save
 from app.database import get_engine
 from app.delivery_risk_import import DeliveryRiskImportError, import_delivery_risk
@@ -170,7 +174,7 @@ def link_demand_profiles_command(args: argparse.Namespace) -> int:
 
 
 def investigate_command(args: argparse.Namespace) -> int:
-    """Ask the AI copilot one question (calls OpenAI) and print the answer."""
+    """Ask the AI copilot one question (calls Groq or Gemini) and print the answer."""
     try:
         model = configured_model()
         with Session(get_engine()) as session:
@@ -194,6 +198,60 @@ def investigate_command(args: argparse.Namespace) -> int:
         print(f"Error: {error}", file=sys.stderr)
         return 1
     return 0 if completed else 1
+
+
+class RefusingModel:
+    """Dry-run model: never calls a provider; answers every case by declining.
+
+    It exercises the whole evaluation (data, expected answers, checks, report)
+    for free, without saying anything about a real model's quality.
+    """
+
+    name = "dry-run-refusing-model"
+
+    def complete(self, messages, tools=None, schema=None):
+        if schema and schema["name"] == "route":
+            return json_reply({"next": "finish", "reason": "dry run"})
+        return json_reply(
+            {"answer": "I cannot answer in a dry run.", "citations": [], "limitations": "dry run"}
+        )
+
+
+def evaluate_copilot_command(args: argparse.Namespace) -> int:
+    """Run the copilot evaluation (P5-T4). Real runs call the provider: needs a flag."""
+    if not args.dry_run and not args.confirm_model_calls:
+        print(
+            "Error: this calls the model provider for every case. Add --confirm-model-calls "
+            "(or use --dry-run, which calls nothing).",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        model = RefusingModel() if args.dry_run else configured_model()
+    except CopilotNotConfiguredError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    settings = get_settings()
+    secrets = [settings.groq_api_key.get_secret_value(), settings.gemini_api_key.get_secret_value()]
+    engine = get_engine()
+    if args.add_injection_product:
+        with Session(engine) as session:
+            added = add_injection_product(session)
+            session.commit()
+        print("Added the injection test product" if added else "Injection test product exists")
+    report = evaluate(model, engine, secrets=[secret for secret in secrets if secret])
+    text = json.dumps(report, indent=2, default=str)
+    if args.output:
+        args.output.write_text(text + "\n", encoding="utf-8", newline="\n")
+    summary = report["summary"]
+    for name, value in summary["gates"].items():
+        print(f"  {name}: {value}")
+    print(
+        f"{report['model']}: {summary['cases_passed']} cases passed, "
+        f"gate {'PASSED' if summary['passed'] else 'NOT passed'}; "
+        f"{summary['model_calls']} model calls, {summary['tokens']} tokens, {summary['seconds']} s"
+    )
+    return 0
 
 
 def load_policies_command(args: argparse.Namespace) -> int:
@@ -285,10 +343,23 @@ def main(argv: list[str] | None = None) -> int:
     policies.set_defaults(handler=load_policies_command)
 
     ask = commands.add_parser(
-        "investigate", help="Ask the AI copilot a question (calls OpenAI; costs money)"
+        "investigate", help="Ask the AI copilot a question (calls Groq or Gemini)"
     )
     ask.add_argument("question")
     ask.set_defaults(handler=investigate_command)
+
+    check = commands.add_parser(
+        "evaluate-copilot", help="Run the copilot evaluation (calls the provider for each case)"
+    )
+    check.add_argument("--confirm-model-calls", action="store_true", help="allow provider calls")
+    check.add_argument("--dry-run", action="store_true", help="use a fake model; calls nothing")
+    check.add_argument(
+        "--add-injection-product",
+        action="store_true",
+        help="add the test product with an injected instruction (evaluation databases only)",
+    )
+    check.add_argument("--output", type=Path)
+    check.set_defaults(handler=evaluate_copilot_command)
 
     args = parser.parse_args(argv)
     return args.handler(args)

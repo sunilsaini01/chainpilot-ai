@@ -1,21 +1,29 @@
 """The chat model behind the copilot, behind one small interface.
 
-`OpenAIChatModel` calls OpenAI's Chat Completions API (decision D-049). Tests use
-`ScriptedModel`, which replays prepared replies, so the test suite and CI never
-call a paid API.
+Providers (decision D-052): Groq and Google Gemini, chosen with LLM_PROVIDER.
+Both offer an OpenAI-compatible API, so one adapter serves both; the `openai`
+Python package is used only as the HTTP client for that protocol. No request
+goes to OpenAI.
+
+Tests use `ScriptedModel`, which replays prepared replies, so the test suite and
+CI never call a paid or rate-limited API.
 
 Messages are plain dicts in the Chat Completions format, so the graph code does
-not depend on the OpenAI package.
+not depend on any provider.
 """
 
 import json
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 
 TIMEOUT_SECONDS = 60
-MAX_RETRIES = 2  # the OpenAI client retries rate limits and network errors itself
+MAX_RETRIES = 2  # the client retries rate limits (common on free tiers) and network errors
+PROVIDER_URLS = {
+    "groq": "https://api.groq.com/openai/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+}
 
 
 @dataclass(frozen=True)
@@ -35,7 +43,8 @@ class ModelReply:
 
     def as_message(self) -> dict[str, Any]:
         """The assistant message to append to the conversation."""
-        message: dict[str, Any] = {"role": "assistant", "content": self.content}
+        # An empty string rather than None: some compatible APIs reject a null content.
+        message: dict[str, Any] = {"role": "assistant", "content": self.content or ""}
         if self.tool_calls:
             message["tool_calls"] = [
                 {
@@ -71,10 +80,48 @@ def _parse_arguments(raw: str) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
-class OpenAIChatModel:
-    def __init__(self, api_key: str, model: str) -> None:
-        self.name = model
-        self._client = OpenAI(api_key=api_key, timeout=TIMEOUT_SECONDS, max_retries=MAX_RETRIES)
+class CompatibleChatModel:
+    """A Groq or Gemini model through its OpenAI-compatible Chat Completions API.
+
+    Structured output: a strict JSON schema is requested first. Some models on
+    these providers only support plain JSON mode; if the provider rejects the
+    schema request, this model switches to JSON mode (with the schema written into
+    the prompt) for the rest of its life. The graph checks every reply anyway.
+    """
+
+    def __init__(self, provider: str, api_key: str, model: str) -> None:
+        if provider not in PROVIDER_URLS:
+            raise ValueError(f"unknown provider {provider!r}; use one of {sorted(PROVIDER_URLS)}")
+        self.name = f"{provider}:{model}"
+        self.model = model
+        self.strict_json = True
+        self._client = OpenAI(
+            api_key=api_key,
+            base_url=PROVIDER_URLS[provider],
+            timeout=TIMEOUT_SECONDS,
+            max_retries=MAX_RETRIES,
+        )
+
+    def _request(self, messages, tools, schema) -> dict[str, Any]:
+        request: dict[str, Any] = {"model": self.model, "messages": messages}
+        if tools:
+            request["tools"] = [{"type": "function", "function": spec} for spec in tools]
+        if schema and self.strict_json:
+            request["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": schema["name"], "schema": schema["schema"], "strict": True},
+            }
+        elif schema:
+            request["response_format"] = {"type": "json_object"}
+            request["messages"] = [
+                *messages,
+                {
+                    "role": "system",
+                    "content": "Reply with one JSON object that matches this JSON schema: "
+                    + json.dumps(schema["schema"]),
+                },
+            ]
+        return request
 
     def complete(
         self,
@@ -82,15 +129,17 @@ class OpenAIChatModel:
         tools: list[dict[str, Any]] | None = None,
         schema: dict[str, Any] | None = None,
     ) -> ModelReply:
-        request: dict[str, Any] = {"model": self.name, "messages": messages}
-        if tools:
-            request["tools"] = [{"type": "function", "function": spec} for spec in tools]
-        if schema:
-            request["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {"name": schema["name"], "schema": schema["schema"], "strict": True},
-            }
-        response = self._client.chat.completions.create(**request)
+        try:
+            response = self._client.chat.completions.create(
+                **self._request(messages, tools, schema)
+            )
+        except BadRequestError:
+            if not (schema and self.strict_json):
+                raise
+            self.strict_json = False  # this model does not take JSON schemas: use JSON mode
+            response = self._client.chat.completions.create(
+                **self._request(messages, tools, schema)
+            )
         message = response.choices[0].message
         calls = [
             ToolCall(

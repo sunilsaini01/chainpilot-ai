@@ -8,23 +8,27 @@ from sqlalchemy.orm import Session
 from app.audit import record_event
 from app.config import get_settings
 from app.copilot.graph import InvestigationResult, investigate
-from app.copilot.model import ChatModel, OpenAIChatModel
+from app.copilot.model import ChatModel, CompatibleChatModel
 from app.models import AgentRun, User
 
 
 class CopilotNotConfiguredError(Exception):
-    """No OpenAI key or model name is set (OPENAI_API_KEY, OPENAI_MODEL)."""
+    """The chosen provider's key or model name is missing."""
 
 
 def configured_model() -> ChatModel:
-    """The OpenAI model from the settings. The key is never logged or returned."""
+    """The model of the provider named by LLM_PROVIDER. The key is never logged or returned."""
     settings = get_settings()
-    key = settings.openai_api_key.get_secret_value()
-    if not key or not settings.openai_model:
+    provider = settings.llm_provider
+    key = getattr(settings, f"{provider}_api_key").get_secret_value()
+    model = getattr(settings, f"{provider}_model")
+    if not key or not model:
+        prefix = provider.upper()
         raise CopilotNotConfiguredError(
-            "The AI copilot is not configured: set OPENAI_API_KEY and OPENAI_MODEL"
+            f"The AI copilot is not configured: set {prefix}_API_KEY and {prefix}_MODEL "
+            f"(LLM_PROVIDER={provider})"
         )
-    return OpenAIChatModel(api_key=key, model=settings.openai_model)
+    return CompatibleChatModel(provider=provider, api_key=key, model=model)
 
 
 def runs_in_last_hour(session: Session, user_id: int) -> int:

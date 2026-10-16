@@ -41,9 +41,13 @@ class Settings(BaseSettings):
     # How long a login token stays valid (default 8 hours = one working day; max 7 days).
     access_token_ttl_minutes: int = Field(default=480, ge=5, le=7 * 24 * 60)
 
-    # AI copilot (P5-T3, OpenAI). Without a key the copilot endpoints answer 503.
-    openai_api_key: SecretStr = SecretStr("")
-    openai_model: str = ""
+    # AI copilot (P5-T3): Groq or Google Gemini (decision D-052). Only the chosen
+    # provider's key and model are needed; without them the copilot answers 503.
+    llm_provider: Literal["groq", "gemini"] = "groq"
+    groq_api_key: SecretStr = SecretStr("")
+    groq_model: str = ""
+    gemini_api_key: SecretStr = SecretStr("")
+    gemini_model: str = ""
     # Cost control: investigations each user may start per hour.
     copilot_runs_per_hour: int = Field(default=20, ge=1, le=1000)
 

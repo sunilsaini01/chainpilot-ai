@@ -117,6 +117,8 @@ class InvestigationResult:
     completion_tokens: int
     duration_ms: int
     error: str | None = None
+    # The tool results the answer could use (data included), e.g. for the evaluation.
+    evidence: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -400,4 +402,5 @@ def investigate(model: ChatModel, engine: Engine, question: str) -> Investigatio
         completion_tokens=run.completion_tokens,
         duration_ms=round((time.perf_counter() - started) * 1000),
         error=error,
+        evidence=[result.model_dump() for result in run.evidence],
     )

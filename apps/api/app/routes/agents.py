@@ -2,7 +2,7 @@
 
 The copilot only reads (its tools run in read-only transactions) and cannot
 approve or order anything. Each run is stored with its full trace. Starting a
-run calls OpenAI, so it is limited per user and hour.
+run calls the model provider (Groq or Gemini), so it is limited per user and hour.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -41,7 +41,7 @@ def chat_model() -> ChatModel:
     status_code=status.HTTP_201_CREATED,
     responses={
         429: {"description": "Hourly limit of investigations reached"},
-        503: {"description": "Copilot not configured (no OpenAI key or model)"},
+        503: {"description": "Copilot not configured (no provider key or model)"},
     },
 )
 def start_investigation(
