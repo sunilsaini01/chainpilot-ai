@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import cli
+from app import cli, forecast_import
 from app.forecast_import import CSV_COLUMNS, ForecastImportError, import_forecasts
 from app.models import AuditEvent, Forecast, ForecastRun, Role, User
 from tests.conftest import login
@@ -129,6 +129,12 @@ def _bad_rows(change: Callable[[list], None]) -> list[list]:
         (_bad_rows(lambda r: r[0].__setitem__(7, "abc")), {}, "unreadable"),
         (_bad_rows(lambda r: None), {"rows": 99}, "manifest says 99 rows"),
         (_bad_rows(lambda r: None), {"csv_sha256": "0" * 64}, "checksum"),
+        (_bad_rows(lambda r: r.append(list(r[0]))), {}, "appears twice"),  # same series and day
+        (_bad_rows(lambda r: r[0].__setitem__(4, "X" * 17)), {}, "store_id must be text"),
+        (_bad_rows(lambda r: r[0].__setitem__(0, "")), {}, "series_id must be text"),
+        (_bad_rows(lambda r: None), {"horizon_days": 35}, "horizon_days must be 1 to 28"),
+        (_bad_rows(lambda r: None), {"forecast_start": "soon"}, "unreadable value"),
+        (_bad_rows(lambda r: None), {"model": "m" * 51}, "model must be text"),
     ],
 )
 def test_invalid_files_are_rejected_before_anything_is_written(
@@ -151,6 +157,9 @@ def test_missing_manifest_and_wrong_header_are_rejected(
     empty.mkdir()
     with pytest.raises(ForecastImportError, match="no manifest"):
         import_forecasts(db_session, empty)
+    (empty / "manifest.json").write_text("{not json", encoding="utf-8")
+    with pytest.raises(ForecastImportError, match="not valid JSON"):
+        import_forecasts(db_session, empty)
 
     folder = write_forecast_folder(tmp_path / "header")
     text = (folder / "forecasts.csv").read_text(encoding="utf-8").replace("upper", "high", 1)
@@ -163,12 +172,18 @@ def test_missing_manifest_and_wrong_header_are_rejected(
 
 
 def test_a_database_error_mid_import_leaves_nothing_behind(
-    db_session: Session, tmp_path: Path
+    db_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The same series and date twice passes the row checks but breaks the unique
-    # constraint during COPY: the whole import must roll back, including the run row.
-    rows = _bad_rows(lambda r: r.append(list(r[0])))
-    folder = write_forecast_folder(tmp_path / "dup", csv_rows=rows)
+    # The row checks now catch duplicates, so skip them to make COPY itself fail on
+    # the unique constraint: the whole import must roll back, including the run row.
+    folder = write_forecast_folder(tmp_path / "dup", rows=len(SERIES) * HORIZON + 1)
+    original_read_rows = forecast_import._read_rows
+
+    def read_rows_with_a_duplicate(*args) -> list[tuple]:
+        rows = original_read_rows(*args)
+        return [*rows, rows[0]]
+
+    monkeypatch.setattr(forecast_import, "_read_rows", read_rows_with_a_duplicate)
 
     with pytest.raises(Exception, match="uq_forecasts_run_series_date"):
         import_forecasts(db_session, folder)

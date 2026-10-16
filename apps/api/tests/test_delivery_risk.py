@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import cli
+from app import cli, delivery_risk_import
 from app.delivery_risk_import import CSV_COLUMNS, DeliveryRiskImportError, import_delivery_risk
 from app.models import AuditEvent, DeliveryRiskRun, DeliveryRiskScore, Role, User
 from tests.conftest import login
@@ -119,6 +119,15 @@ def _changed(index: int, column: int, value) -> list[list]:
         (_changed(0, 8, "not json"), {}, "unreadable"),
         (DEFAULT_ROWS, {"rows": 99}, "manifest says 99 rows"),
         (DEFAULT_ROWS, {"csv_sha256": "0" * 64}, "checksum"),
+        (_changed(0, 8, "[1, 2]"), {}, "reasons must be a list of"),  # would break the API
+        (_changed(0, 8, '[{"feature": "x"}]'), {}, "reasons must be a list of"),
+        (_changed(0, 0, "o" * 33), {}, "order_id must be text"),
+        (_changed(0, 0, ""), {}, "order_id must be text"),
+        (_changed(1, 0, "a1"), {}, "order a1 appears twice"),
+        (DEFAULT_ROWS, {"period_start": "soon"}, "unreadable value"),
+        (DEFAULT_ROWS, {"period_start": "2018-05-04"}, "after period_end"),
+        (DEFAULT_ROWS, {"dataset": "d" * 201}, "dataset must be text"),
+        (DEFAULT_ROWS, {"run_key": 12345}, "run_key must be text"),
     ],
 )
 def test_invalid_files_are_rejected_before_anything_is_written(
@@ -128,6 +137,39 @@ def test_invalid_files_are_rejected_before_anything_is_written(
 
     with pytest.raises(DeliveryRiskImportError, match=message):
         import_delivery_risk(db_session, folder)
+    db_session.rollback()
+
+    assert count(db_session, DeliveryRiskRun) == 0
+    assert count(db_session, DeliveryRiskScore) == 0
+
+
+def test_broken_manifest_is_a_clear_error(db_session: Session, tmp_path: Path) -> None:
+    folder = tmp_path / "broken"
+    folder.mkdir()
+    with pytest.raises(DeliveryRiskImportError, match="no manifest"):
+        import_delivery_risk(db_session, folder)
+    (folder / "manifest.json").write_text("[1, 2]", encoding="utf-8")
+    with pytest.raises(DeliveryRiskImportError, match="must be a JSON object"):
+        import_delivery_risk(db_session, folder)
+    (folder / "manifest.json").write_text("{not json", encoding="utf-8")
+    with pytest.raises(DeliveryRiskImportError, match="not valid JSON"):
+        import_delivery_risk(db_session, folder)
+
+
+def test_a_database_error_mid_import_leaves_nothing_behind(
+    db_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Skip the row checks so that COPY itself fails on the unique constraint.
+    original_read_rows = delivery_risk_import._read_rows
+
+    def read_rows_with_a_duplicate(*args) -> list[tuple]:
+        rows = original_read_rows(*args)
+        return [*rows, rows[0]]
+
+    monkeypatch.setattr(delivery_risk_import, "_read_rows", read_rows_with_a_duplicate)
+
+    with pytest.raises(Exception, match="uq_delivery_risk_scores_run_order"):
+        import_delivery_risk(db_session, write_folder(tmp_path / "dup", rows=len(DEFAULT_ROWS) + 1))
     db_session.rollback()
 
     assert count(db_session, DeliveryRiskRun) == 0

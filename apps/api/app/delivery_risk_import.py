@@ -16,8 +16,8 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.files import sha256_of
-from app.models import DeliveryRiskRun
+from app.files import ImportFileError, check_text, read_manifest, sha256_of, text_limits
+from app.models import DeliveryRiskRun, DeliveryRiskScore
 
 CSV_COLUMNS = [
     "order_id",
@@ -40,13 +40,24 @@ MANIFEST_FIELDS = [
     "csv_sha256",
 ]
 TIERS = {"high", "medium", "low"}
+REASON_KEYS = {"feature", "value", "effect"}
+RUN_TEXT = text_limits(DeliveryRiskRun.__table__, ["run_key", "name", "dataset", "model"])
+ROW_TEXT = text_limits(DeliveryRiskScore.__table__, ["order_id"])
 
 
-class DeliveryRiskImportError(Exception):
+class DeliveryRiskImportError(ImportFileError):
     """The scoring folder is missing, inconsistent, or already imported."""
 
 
+def _valid_reasons(reasons) -> bool:
+    """A list of {feature, value, effect} objects, which is what the API returns."""
+    return isinstance(reasons, list) and all(
+        isinstance(reason, dict) and REASON_KEYS <= reason.keys() for reason in reasons
+    )
+
+
 def _parse_row(row: dict, line: int, start: date, end: date) -> tuple:
+    check_text(row, ROW_TEXT, f"line {line}", DeliveryRiskImportError)
     try:
         purchased = datetime.fromisoformat(row["purchased_at"])
         dispatched = datetime.fromisoformat(row["dispatched_at"])
@@ -67,8 +78,10 @@ def _parse_row(row: dict, line: int, start: date, end: date) -> tuple:
         raise DeliveryRiskImportError(f"line {line}: alert must be true exactly for the high tier")
     if dispatched.date() != day or not start <= day <= end or dispatched < purchased:
         raise DeliveryRiskImportError(f"line {line}: dates are inconsistent")
-    if not isinstance(reasons, list):
-        raise DeliveryRiskImportError(f"line {line}: reasons must be a list")
+    if not _valid_reasons(reasons):
+        raise DeliveryRiskImportError(
+            f"line {line}: reasons must be a list of {{feature, value, effect}} objects"
+        )
     return (
         row["order_id"],
         purchased,
@@ -82,15 +95,36 @@ def _parse_row(row: dict, line: int, start: date, end: date) -> tuple:
     )
 
 
+def _read_rows(csv_path: Path, start: date, end: date) -> list[tuple]:
+    rows, seen = [], set()
+    with open(csv_path, newline="", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        if reader.fieldnames != CSV_COLUMNS:
+            raise DeliveryRiskImportError(f"unexpected CSV header {reader.fieldnames}")
+        for line, row in enumerate(reader, start=2):
+            values = _parse_row(row, line, start, end)
+            # One score per order: caught here with a line number, not by the database.
+            if values[0] in seen:
+                raise DeliveryRiskImportError(f"line {line}: order {values[0]} appears twice")
+            seen.add(values[0])
+            rows.append(values)
+    return rows
+
+
 def import_delivery_risk(session: Session, folder: Path) -> DeliveryRiskRun:
     """Validate and load one scoring folder. Does not commit; the caller does."""
+    manifest = read_manifest(folder, MANIFEST_FIELDS, DeliveryRiskImportError)
+    check_text(
+        {**manifest, "name": folder.name}, RUN_TEXT, "manifest.json", DeliveryRiskImportError
+    )
     try:
-        manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
-    except FileNotFoundError as error:
-        raise DeliveryRiskImportError(f"{folder} has no manifest.json") from error
-    missing = [field for field in MANIFEST_FIELDS if field not in manifest]
-    if missing:
-        raise DeliveryRiskImportError(f"manifest.json is missing {missing}")
+        start = date.fromisoformat(manifest["period_start"])
+        end = date.fromisoformat(manifest["period_end"])
+        expected_rows = int(manifest["rows"])
+    except (ValueError, TypeError) as error:
+        raise DeliveryRiskImportError(f"manifest.json: unreadable value ({error})") from error
+    if start > end:
+        raise DeliveryRiskImportError("manifest.json: period_start is after period_end")
     csv_path = folder / "scores.csv"
     if not csv_path.is_file():
         raise DeliveryRiskImportError(f"{folder} has no scores.csv")
@@ -104,14 +138,8 @@ def import_delivery_risk(session: Session, folder: Path) -> DeliveryRiskRun:
             f"run {manifest['run_key']} is already imported (id {existing})"
         )
 
-    start = date.fromisoformat(manifest["period_start"])
-    end = date.fromisoformat(manifest["period_end"])
-    with open(csv_path, newline="", encoding="utf-8") as file:
-        reader = csv.DictReader(file)
-        if reader.fieldnames != CSV_COLUMNS:
-            raise DeliveryRiskImportError(f"unexpected CSV header {reader.fieldnames}")
-        rows = [_parse_row(row, line, start, end) for line, row in enumerate(reader, start=2)]
-    if len(rows) != int(manifest["rows"]):
+    rows = _read_rows(csv_path, start, end)
+    if len(rows) != expected_rows:
         raise DeliveryRiskImportError(
             f"manifest says {manifest['rows']} rows, file has {len(rows)}"
         )
