@@ -8,6 +8,8 @@ import os
 from collections.abc import Callable
 from types import SimpleNamespace
 
+import httpx2
+import openai
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select
@@ -17,8 +19,9 @@ from app import cli
 from app.config import Settings
 from app.copilot import graph, service, tools
 from app.copilot.model import (
+    PROVIDER_URLS,
+    CompatibleChatModel,
     ModelReply,
-    OpenAIChatModel,
     ScriptedModel,
     ToolCall,
     json_reply,
@@ -60,24 +63,36 @@ def test_questions_must_be_short_and_not_empty() -> None:
             graph.investigate(ScriptedModel([]), None, question)
 
 
-def test_openai_adapter_builds_the_request_and_reads_the_reply(monkeypatch) -> None:
-    sent = {}
+def fake_client(monkeypatch, model: CompatibleChatModel, replies: list) -> list[dict]:
+    """Replace the HTTP client: each call takes the next reply (or raises it)."""
+    sent: list[dict] = []
 
     def create(**request):
-        sent.update(request)
-        call = SimpleNamespace(
-            id="c1", function=SimpleNamespace(name="find_products", arguments='{"query": "rug"')
-        )  # broken JSON on purpose
-        message = SimpleNamespace(content=None, tool_calls=[call])
-        usage = SimpleNamespace(prompt_tokens=11, completion_tokens=7)
-        return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=usage)
+        sent.append(request)
+        reply = replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
 
-    model = OpenAIChatModel(api_key="sk-test-not-used", model="test-model")
+    completions = SimpleNamespace(create=create)
     monkeypatch.setattr(
-        model,
-        "_client",
-        SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))),
+        model, "_client", SimpleNamespace(chat=SimpleNamespace(completions=completions))
     )
+    return sent
+
+
+def response(content=None, tool_calls=None):
+    message = SimpleNamespace(content=content, tool_calls=tool_calls)
+    usage = SimpleNamespace(prompt_tokens=11, completion_tokens=7)
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=usage)
+
+
+def test_adapter_builds_the_request_and_reads_the_reply(monkeypatch) -> None:
+    model = CompatibleChatModel("groq", api_key="gsk-test-not-used", model="test-model")
+    broken = SimpleNamespace(
+        id="c1", function=SimpleNamespace(name="find_products", arguments='{"query": "rug"')
+    )
+    sent = fake_client(monkeypatch, model, [response(tool_calls=[broken])])
 
     reply = model.complete(
         [{"role": "user", "content": "hi"}],
@@ -85,16 +100,84 @@ def test_openai_adapter_builds_the_request_and_reads_the_reply(monkeypatch) -> N
         schema=graph.ROUTE_SCHEMA,
     )
 
-    assert sent["model"] == "test-model"
-    assert sent["tools"] == [
+    assert (model.name, sent[0]["model"]) == ("groq:test-model", "test-model")
+    assert sent[0]["tools"] == [
         {
             "type": "function",
             "function": {"name": "find_products", "description": "d", "parameters": {}},
         }
     ]
-    assert sent["response_format"]["json_schema"]["strict"] is True
+    assert sent[0]["response_format"]["json_schema"]["strict"] is True
     assert reply.tool_calls[0].arguments is None  # unreadable arguments are flagged, not guessed
     assert (reply.prompt_tokens, reply.completion_tokens) == (11, 7)
+
+
+def test_providers_use_their_own_addresses() -> None:
+    groq = CompatibleChatModel("groq", api_key="k", model="m")
+    gemini = CompatibleChatModel("gemini", api_key="k", model="m")
+    assert str(groq._client.base_url).startswith("https://api.groq.com/openai/v1")
+    assert str(gemini._client.base_url).startswith(
+        "https://generativelanguage.googleapis.com/v1beta/openai"
+    )
+    assert sorted(PROVIDER_URLS) == ["gemini", "groq"]  # OpenAI itself is not a provider
+    with pytest.raises(ValueError, match="unknown provider"):
+        CompatibleChatModel("openai", api_key="k", model="m")
+
+
+def test_models_without_json_schemas_fall_back_to_json_mode(monkeypatch) -> None:
+    model = CompatibleChatModel("groq", api_key="k", model="small-model")
+    request = httpx2.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+    rejected = openai.BadRequestError(
+        "response_format json_schema is not supported",
+        response=httpx2.Response(400, request=request),
+        body=None,
+    )
+    sent = fake_client(
+        monkeypatch,
+        model,
+        [rejected, response(content='{"next": "finish", "reason": "ok"}'), response(content="{}")],
+    )
+    messages = [{"role": "user", "content": "route"}]
+
+    first = model.complete(messages, schema=graph.ROUTE_SCHEMA)
+    model.complete(messages, schema=graph.ROUTE_SCHEMA)  # stays in JSON mode, no new rejection
+
+    assert first.content == '{"next": "finish", "reason": "ok"}'
+    assert sent[0]["response_format"]["type"] == "json_schema"
+    assert [r["response_format"]["type"] for r in sent[1:]] == ["json_object", "json_object"]
+    assert '"enum"' in sent[1]["messages"][-1]["content"]  # the schema is written into the prompt
+    assert messages == [{"role": "user", "content": "route"}]  # the caller's list is not changed
+
+
+def test_other_bad_requests_are_not_hidden(monkeypatch) -> None:
+    model = CompatibleChatModel("gemini", api_key="k", model="m")
+    request = httpx2.Request("POST", "https://example.invalid")
+    rejected = openai.BadRequestError(
+        "bad tools", response=httpx2.Response(400, request=request), body=None
+    )
+    fake_client(monkeypatch, model, [rejected])
+
+    with pytest.raises(openai.BadRequestError):
+        model.complete([{"role": "user", "content": "x"}], tools=[{"name": "t", "parameters": {}}])
+
+
+@pytest.mark.parametrize(
+    ("provider", "variables"),
+    [("groq", "GROQ_API_KEY and GROQ_MODEL"), ("gemini", "GEMINI_API_KEY and GEMINI_MODEL")],
+)
+def test_the_chosen_provider_needs_its_own_key_and_model(monkeypatch, provider, variables) -> None:
+    # A key for the other provider does not count.
+    other = "gemini" if provider == "groq" else "groq"
+    settings = Settings(llm_provider=provider, **{f"{other}_api_key": "k", f"{other}_model": "m"})
+    monkeypatch.setattr(service, "get_settings", lambda: settings)
+    with pytest.raises(service.CopilotNotConfiguredError, match=variables):
+        service.configured_model()
+
+    complete = Settings(
+        llm_provider=provider, **{f"{provider}_api_key": "k", f"{provider}_model": "m1"}
+    )
+    monkeypatch.setattr(service, "get_settings", lambda: complete)
+    assert service.configured_model().name == f"{provider}:m1"
 
 
 # --- Investigations with a database ------------------------------------------------------
@@ -386,11 +469,13 @@ def test_hourly_limit_and_missing_configuration(
 
     app.dependency_overrides.pop(agents.chat_model)  # use the real dependency, with no key set
     monkeypatch.setattr(
-        service, "get_settings", lambda: Settings(openai_api_key="", openai_model="")
+        service,
+        "get_settings",
+        lambda: Settings(llm_provider="groq", groq_api_key="", groq_model=""),
     )
     response = api_client.post("/agents/investigate", json=question, headers=analyst_headers)
     assert response.status_code == 503
-    assert "OPENAI_API_KEY" in response.json()["detail"]
+    assert "GROQ_API_KEY" in response.json()["detail"]
 
 
 @needs_db
@@ -424,7 +509,9 @@ def test_investigate_command(
 
     monkeypatch.setattr(cli, "configured_model", service.configured_model)
     monkeypatch.setattr(
-        service, "get_settings", lambda: Settings(openai_api_key="", openai_model="")
+        service,
+        "get_settings",
+        lambda: Settings(llm_provider="groq", groq_api_key="", groq_model=""),
     )
     assert cli.main(["investigate", "x"]) == 1
     assert "not configured" in capsys.readouterr().err
