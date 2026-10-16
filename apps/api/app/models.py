@@ -309,3 +309,52 @@ class Forecast(Base):
     forecast: Mapped[float]
     lower: Mapped[float]
     upper: Mapped[float]
+
+
+class DeliveryRiskRun(Base):
+    """One imported delivery-risk scoring file (ml/delivery_risk/scoring.py).
+
+    DATA LABEL: Olist public marketplace orders, not ChainPilot's simulated suppliers.
+    """
+
+    __tablename__ = "delivery_risk_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_key: Mapped[str] = mapped_column(String(32), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    dataset: Mapped[str] = mapped_column(String(200))
+    model: Mapped[str] = mapped_column(String(100))
+    period_start: Mapped[date]
+    period_end: Mapped[date]
+    row_count: Mapped[int]
+    manifest: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DeliveryRiskScore(Base):
+    """Late-delivery risk of one dispatched order, as known at dispatch."""
+
+    __tablename__ = "delivery_risk_scores"
+    __table_args__ = (
+        UniqueConstraint("run_id", "order_id", name="uq_delivery_risk_scores_run_order"),
+        CheckConstraint("probability >= 0 AND probability <= 1", name="probability_range"),
+        CheckConstraint("day_percentile > 0 AND day_percentile <= 1", name="percentile_range"),
+        CheckConstraint("tier IN ('high', 'medium', 'low')", name="tier_allowed"),
+        CheckConstraint("alert = (tier = 'high')", name="alert_means_high"),
+        # The common query: one run, one dispatch day, maybe one tier.
+        Index("ix_delivery_risk_scores_run_day_tier", "run_id", "dispatch_date", "tier"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("delivery_risk_runs.id", ondelete="CASCADE"))
+    order_id: Mapped[str] = mapped_column(String(32))  # Olist order id
+    purchased_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))
+    dispatched_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))
+    dispatch_date: Mapped[date]
+    probability: Mapped[float]  # approximate (see docs/MODEL_RESULTS.md)
+    day_percentile: Mapped[float]  # rank among the same day's dispatches
+    tier: Mapped[str] = mapped_column(String(10))
+    alert: Mapped[bool]
+    # Top 3 reasons from the model, e.g.
+    # [{"feature": "distance_km", "value": 2808.4, "effect": 1.27}]
+    reasons: Mapped[list] = mapped_column(JSONB)

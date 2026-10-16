@@ -9,7 +9,6 @@ DATA LABEL: M5 public-dataset forecasts, kept apart from the simulated SYN- prod
 """
 
 import csv
-import hashlib
 import json
 import math
 from datetime import date, timedelta
@@ -18,6 +17,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.files import sha256_of
 from app.models import ForecastRun
 
 CSV_COLUMNS = [
@@ -48,14 +48,6 @@ MANIFEST_FIELDS = [
 
 class ForecastImportError(Exception):
     """The forecast folder is missing, inconsistent, or already imported."""
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as file:
-        for block in iter(lambda: file.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def read_manifest(folder: Path) -> dict:
@@ -103,7 +95,7 @@ def import_forecasts(session: Session, folder: Path) -> ForecastRun:
     csv_path = folder / "forecasts.csv"
     if not csv_path.is_file():
         raise ForecastImportError(f"{folder} has no forecasts.csv")
-    if _sha256(csv_path) != manifest["csv_sha256"]:
+    if sha256_of(csv_path) != manifest["csv_sha256"]:
         raise ForecastImportError("forecasts.csv does not match the checksum in manifest.json")
     existing = session.execute(
         select(ForecastRun.id).where(ForecastRun.run_key == manifest["run_key"])

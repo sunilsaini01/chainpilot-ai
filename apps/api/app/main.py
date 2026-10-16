@@ -4,7 +4,17 @@ from fastapi import FastAPI
 
 from app.config import get_settings
 from app.logging_config import configure_logging
-from app.routes import audit, auth, forecasts, health, inventory, products, users, warehouses
+from app.routes import (
+    audit,
+    auth,
+    delivery_risk,
+    forecasts,
+    health,
+    inventory,
+    products,
+    users,
+    warehouses,
+)
 
 
 def create_app() -> FastAPI:
@@ -19,6 +29,7 @@ def create_app() -> FastAPI:
     app.include_router(warehouses.router)
     app.include_router(inventory.router)
     app.include_router(forecasts.router)
+    app.include_router(delivery_risk.router)
     app.include_router(audit.router)
     return app
 

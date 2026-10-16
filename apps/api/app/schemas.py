@@ -230,3 +230,35 @@ class ForecastOut(BaseModel):
     forecast: float
     lower: float  # 80% interval
     upper: float
+
+
+# --- Delivery risk (Olist public data) -----------------------------------------
+
+
+class DeliveryRiskRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    run_key: str
+    name: str
+    dataset: str
+    model: str
+    period_start: date
+    period_end: date
+    row_count: int
+    created_at: datetime
+
+
+class DeliveryRiskScoreOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: int
+    order_id: str
+    purchased_at: datetime
+    dispatched_at: datetime
+    dispatch_date: date
+    probability: float  # approximate; tier and day_percentile are the reliable signal
+    day_percentile: float
+    tier: Literal["high", "medium", "low"]
+    alert: bool
+    reasons: list[dict[str, Any]]

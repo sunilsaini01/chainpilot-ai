@@ -10,6 +10,9 @@ Synthetic demo data (refuses to run twice):
 Demand forecasts from the ML pipeline (M5 public data):
     python -m app.cli import-forecasts ../../data/processed/forecasts/m5_lightgbm_weekly_2016-04-24
 
+Delivery-risk scores from the ML pipeline (Olist public data):
+    python -m app.cli import-delivery-risk ../../data/processed/delivery_risk/<run folder>
+
 Housekeeping (safe to run daily, e.g. from cron):
     docker compose run --rm api python -m app.cli cleanup --days 30
 
@@ -29,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.audit import record_event
 from app.database import get_engine
+from app.delivery_risk_import import DeliveryRiskImportError, import_delivery_risk
 from app.forecast_import import ForecastImportError, import_forecasts
 from app.login_throttle import delete_old_attempts
 from app.models import Role
@@ -118,6 +122,30 @@ def import_forecasts_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def import_delivery_risk_command(args: argparse.Namespace) -> int:
+    """Load a delivery-risk scoring folder (scores.csv + manifest.json) into the database."""
+    try:
+        with Session(get_engine()) as session:
+            run = import_delivery_risk(session, args.folder)
+            record_event(
+                session,
+                "delivery_risk_run.imported",
+                "delivery_risk_run",
+                run.id,
+                actor=None,  # a command-line import has no logged-in user
+                details={"run_key": run.run_key, "rows": run.row_count, "name": run.name},
+            )
+            session.commit()
+            print(
+                f"Imported delivery-risk run id={run.id} ({run.row_count} orders, "
+                f"{run.period_start} to {run.period_end})"
+            )
+    except DeliveryRiskImportError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli", description="ChainPilot admin tools")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -145,6 +173,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     forecasts.add_argument("folder", type=Path)
     forecasts.set_defaults(handler=import_forecasts_command)
+
+    risk = commands.add_parser(
+        "import-delivery-risk", help="Import a scoring folder from ml/delivery_risk/scoring.py"
+    )
+    risk.add_argument("folder", type=Path)
+    risk.set_defaults(handler=import_delivery_risk_command)
 
     args = parser.parse_args(argv)
     return args.handler(args)
