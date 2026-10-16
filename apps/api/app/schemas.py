@@ -95,6 +95,9 @@ class ProductOut(BaseModel):
     unit_cost: Decimal
     unit_price: Decimal
     is_active: bool
+    supplier_id: int | None
+    min_order_qty: int
+    pack_size: int
     created_at: datetime
     updated_at: datetime
 
@@ -146,6 +149,43 @@ class WarehouseUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     city: str | None = Field(default=None, min_length=1, max_length=100)
     capacity_units: int | None = Field(default=None, gt=0, le=100_000_000)
+
+
+# --- Suppliers and purchase orders ------------------------------------------
+
+
+class SupplierOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    name: str
+    country: str
+    lead_time_days: int
+    lead_time_std_days: Decimal
+
+
+class PurchaseOrderLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    product_id: int
+    quantity: int
+    unit_cost: Decimal
+
+
+class PurchaseOrderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    po_number: str
+    supplier_id: int
+    warehouse_id: int
+    status: Literal["open", "received", "cancelled"]
+    ordered_date: date
+    expected_date: date
+    received_date: date | None
+    received_by_user_id: int | None
+    lines: list[PurchaseOrderLineOut]
 
 
 # --- Inventory ---------------------------------------------------------------

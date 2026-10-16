@@ -25,7 +25,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # Predictable constraint names, so migrations can refer to them by name.
 NAMING_CONVENTION = {
@@ -67,6 +67,100 @@ def _allowed_reasons_sql() -> str:
     return ", ".join(f"'{reason.value}'" for reason in MovementReason)
 
 
+class Supplier(Base):
+    """A (simulated) supplier and its delivery lead time.
+
+    Lead time = days from placing an order to the goods arriving. The average and
+    its standard deviation feed the safety-stock formula (app/inventory_policy.py).
+    """
+
+    __tablename__ = "suppliers"
+    __table_args__ = (
+        CheckConstraint("code = upper(code)", name="code_uppercase"),
+        CheckConstraint("lead_time_days >= 1", name="lead_time_positive"),
+        CheckConstraint("lead_time_std_days >= 0", name="lead_time_std_non_negative"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(16), unique=True)
+    name: Mapped[str] = mapped_column(String(200))
+    country: Mapped[str] = mapped_column(String(100))
+    lead_time_days: Mapped[int]  # promised / typical lead time
+    lead_time_std_days: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = updated_at_column()
+
+
+class PurchaseOrderStatus(StrEnum):
+    OPEN = "open"  # ordered, not yet received: counts as "on order"
+    RECEIVED = "received"  # goods booked into stock through the ledger
+    CANCELLED = "cancelled"
+
+
+class PurchaseOrder(Base):
+    """An order to one supplier for delivery to one warehouse. Received in full, once."""
+
+    __tablename__ = "purchase_orders"
+    __table_args__ = (
+        CheckConstraint("po_number = upper(po_number)", name="po_number_uppercase"),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{s.value}'" for s in PurchaseOrderStatus) + ")",
+            name="status_allowed",
+        ),
+        CheckConstraint("expected_date >= ordered_date", name="expected_after_ordered"),
+        # received_date is set exactly when the order is received, never before ordering.
+        CheckConstraint(
+            "(status = 'received') = (received_date IS NOT NULL)", name="received_date_set"
+        ),
+        CheckConstraint("received_date >= ordered_date", name="received_after_ordered"),
+        Index("ix_purchase_orders_status_warehouse", "status", "warehouse_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    po_number: Mapped[str] = mapped_column(String(32), unique=True)
+    supplier_id: Mapped[int] = mapped_column(
+        ForeignKey("suppliers.id", ondelete="RESTRICT"), index=True
+    )
+    warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"))
+    status: Mapped[str] = mapped_column(String(20))
+    ordered_date: Mapped[date]
+    expected_date: Mapped[date]  # ordered_date + the supplier's lead time
+    received_date: Mapped[date | None]
+    # NULL for system processes (seed); the manager who received it otherwise.
+    received_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = updated_at_column()
+
+    lines: Mapped[list["PurchaseOrderLine"]] = relationship(
+        back_populates="purchase_order", order_by="PurchaseOrderLine.id"
+    )
+
+
+class PurchaseOrderLine(Base):
+    __tablename__ = "purchase_order_lines"
+    __table_args__ = (
+        UniqueConstraint(
+            "purchase_order_id", "product_id", name="uq_purchase_order_lines_po_product"
+        ),
+        CheckConstraint("quantity > 0", name="quantity_positive"),
+        CheckConstraint("unit_cost >= 0", name="unit_cost_non_negative"),
+        # "How much of this product is on order?" scans lines by product.
+        Index("ix_purchase_order_lines_product", "product_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    purchase_order_id: Mapped[int] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="CASCADE")
+    )
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"))
+    quantity: Mapped[int]
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+
+    purchase_order: Mapped[PurchaseOrder] = relationship(back_populates="lines")
+
+
 class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
@@ -74,6 +168,8 @@ class Product(Base):
         CheckConstraint("unit_price >= 0", name="unit_price_non_negative"),
         # SKUs are stored upper-case so "sku-1" and "SKU-1" cannot both exist.
         CheckConstraint("sku = upper(sku)", name="sku_uppercase"),
+        CheckConstraint("min_order_qty >= 1", name="min_order_qty_positive"),
+        CheckConstraint("pack_size >= 1", name="pack_size_positive"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -84,6 +180,13 @@ class Product(Base):
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     is_active: Mapped[bool] = mapped_column(default=True, server_default="true")
+    # Purchasing rules (P4): who supplies it and in what quantities it can be ordered.
+    # A product without a supplier cannot be reordered automatically.
+    supplier_id: Mapped[int | None] = mapped_column(
+        ForeignKey("suppliers.id", ondelete="RESTRICT"), index=True
+    )
+    min_order_qty: Mapped[int] = mapped_column(default=1, server_default="1")
+    pack_size: Mapped[int] = mapped_column(default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = updated_at_column()
 
