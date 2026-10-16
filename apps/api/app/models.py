@@ -6,7 +6,7 @@ appends a row to `inventory_movements`, so the stock level can always be
 explained (and re-computed) from the movement history.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -254,3 +254,58 @@ class AuditEvent(Base):
     # Extra facts, e.g. {"changes": {"role": ["analyst", "manager"]}}. Never secrets.
     details: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ForecastRun(Base):
+    """One imported forecast file (see ml/demand_forecasting/publish.py).
+
+    DATA LABEL: forecasts are for the public M5 (Walmart) dataset, identified by
+    M5 series ids. They are never joined to the simulated SYN- products.
+    """
+
+    __tablename__ = "forecast_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # From the file's manifest; importing the same file twice is refused.
+    run_key: Mapped[str] = mapped_column(String(32), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    dataset: Mapped[str] = mapped_column(String(200))
+    model: Mapped[str] = mapped_column(String(50))
+    trained_through: Mapped[date]
+    forecast_start: Mapped[date]
+    forecast_end: Mapped[date]
+    horizon_days: Mapped[int]
+    series_count: Mapped[int]
+    row_count: Mapped[int]
+    manifest: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Forecast(Base):
+    """Forecast for one M5 series on one future day, with an 80% interval."""
+
+    __tablename__ = "forecasts"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "series_id", "forecast_date", name="uq_forecasts_run_series_date"
+        ),
+        CheckConstraint(
+            "lower >= 0 AND lower <= forecast AND forecast <= upper", name="interval_ordered"
+        ),
+        CheckConstraint("step BETWEEN 1 AND 28", name="step_range"),
+        # The common query: one run, one store (and maybe one item).
+        Index("ix_forecasts_run_store_item", "run_id", "store_id", "item_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("forecast_runs.id", ondelete="CASCADE"))
+    series_id: Mapped[str] = mapped_column(String(64))  # e.g. FOODS_3_090_CA_1_validation
+    store_id: Mapped[str] = mapped_column(String(16))
+    item_id: Mapped[str] = mapped_column(String(32))
+    dept_id: Mapped[str] = mapped_column(String(32))
+    cat_id: Mapped[str] = mapped_column(String(32))
+    forecast_date: Mapped[date]
+    step: Mapped[int]  # days after the last known day (1 = next day)
+    forecast: Mapped[float]
+    lower: Mapped[float]
+    upper: Mapped[float]

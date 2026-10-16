@@ -11,7 +11,11 @@ dividing by an actual of 0 is undefined. These metrics stay well-defined:
         scale = mean squared day-to-day change in that series' own history,
         counted from its first sale (as in the M5 competition). RMSSE < 1 means
         better than the in-sample "same as yesterday" forecast. We report the
-        plain average over series; the competition weighted it by dollar sales.
+        plain average over series, and a sales-value-weighted average
+        (weights = each series' dollar sales in the 28 days before the origin),
+        which counts high-revenue products more. The competition's WRMSSE also
+        averaged 11 higher aggregation levels; we do not, so neither number is
+        comparable with the Kaggle leaderboard.
 """
 
 import numpy as np
@@ -51,13 +55,40 @@ def rmsse_scales(history: pd.DataFrame) -> pd.Series:
     return scales.where(scales > 0)
 
 
+def rmsse_per_series(results: pd.DataFrame, scales: pd.Series) -> pd.Series:
+    """RMSSE of each series (index = id). Series without a valid scale are dropped."""
+    squared_error = (results["forecast"] - results["actual"]) ** 2
+    mse = squared_error.groupby(results["id"], observed=True).mean()
+    return np.sqrt(mse / scales.reindex(mse.index)).dropna()
+
+
 def mean_rmsse(results: pd.DataFrame, scales: pd.Series) -> tuple[float, int]:
     """Average RMSSE over series. `results` has columns id, actual, forecast.
 
     Returns (mean RMSSE, number of series used). Series without a valid scale are skipped.
     """
-    squared_error = (results["forecast"] - results["actual"]) ** 2
-    mse = squared_error.groupby(results["id"], observed=True).mean()
-    per_series = np.sqrt(mse / scales.reindex(mse.index))
-    per_series = per_series.dropna()
+    per_series = rmsse_per_series(results, scales)
     return float(per_series.mean()), int(per_series.size)
+
+
+def sales_value_weights(history: pd.DataFrame, days: int = 28) -> pd.Series:
+    """Weight per series for weighted RMSSE: dollar sales in the last `days` of `history`.
+
+    `history` has columns id, date, sales, sell_price and ends at the forecast origin,
+    so no future data is used. Products that sold nothing get weight 0. This is the
+    weighting the M5 competition used for its bottom level (product x store); the
+    competition then also averaged 11 higher aggregation levels, which we do not.
+    """
+    start = history["date"].max() - pd.Timedelta(days=days)
+    recent = history[history["date"] > start]
+    value = recent["sales"] * recent["sell_price"].fillna(0)
+    return value.groupby(recent["id"].astype(str), observed=True).sum()
+
+
+def weighted_rmsse(per_series: pd.Series, weights: pd.Series) -> float:
+    """Average of per-series RMSSE weighted by sales value. NaN if all weights are 0."""
+    aligned = weights.reindex(per_series.index).fillna(0)
+    total = float(aligned.sum())
+    if total == 0:
+        return float("nan")
+    return float((per_series * aligned).sum() / total)

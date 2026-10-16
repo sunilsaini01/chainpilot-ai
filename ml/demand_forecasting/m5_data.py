@@ -227,6 +227,57 @@ def compact_long(long: pd.DataFrame) -> pd.DataFrame:
     return long.astype(LONG_NUMBER_TYPES)
 
 
+def future_long(
+    long: pd.DataFrame, calendar: pd.DataFrame, prices: pd.DataFrame, days: int
+) -> pd.DataFrame:
+    """`long` plus `days` future rows per series (sales unknown, so NaN).
+
+    Calendar and prices for future days come from the M5 files: the retailer knows
+    its calendar and planned prices in advance. Features can then be built for the
+    future rows exactly as for past ones.
+    """
+    last_day = long["date"].max()
+    future_dates = calendar[
+        (calendar["date"] > last_day) & (calendar["date"] <= last_day + pd.Timedelta(days=days))
+    ]
+    if len(future_dates) != days:
+        raise ValueError(f"the calendar does not cover {days} days after {last_day.date()}")
+    series = long[SALES_ID_COLUMNS].drop_duplicates("id")
+    future = series.merge(
+        future_dates[
+            [
+                "d",
+                "date",
+                "wm_yr_wk",
+                "wday",
+                "event_name_1",
+                "event_type_1",
+                "snap_CA",
+                "snap_TX",
+                "snap_WI",
+            ]
+        ],
+        how="cross",
+    )
+    # Match prices on plain-text keys (the ids are categories with different category sets).
+    keys = {"store_id": "price_store", "item_id": "price_item"}
+    priced = prices.astype({"store_id": str, "item_id": str}).rename(columns=keys)
+    future = future.assign(
+        price_store=future["store_id"].astype(str), price_item=future["item_id"].astype(str)
+    ).merge(priced, on=[*keys.values(), "wm_yr_wk"], how="left", validate="many_to_one")
+    future["snap"] = 0
+    for state, column in {"CA": "snap_CA", "TX": "snap_TX", "WI": "snap_WI"}.items():
+        in_state = future["state_id"].astype(str) == state
+        future.loc[in_state, "snap"] = future.loc[in_state, column]
+    future["sales"] = float("nan")
+    combined = pd.concat(
+        [long.astype({"sales": "float32"}), future[long.columns]], ignore_index=True
+    )
+    for column in LONG_CATEGORY_COLUMNS:
+        combined[column] = combined[column].astype("category")
+    return combined.sort_values(["id", "date"]).reset_index(drop=True)
+
+
 def summarize(long: pd.DataFrame) -> dict[str, object]:
     """A few facts for a quick look at a loaded subset."""
     return {

@@ -92,7 +92,7 @@ def run(
             "validation_scores": scores,
             "chosen": winner,
         }
-        checkpoint.write_text(json.dumps(partial, indent=2) + "\n", encoding="utf-8")
+        checkpoint.write_text(json.dumps(partial, indent=2) + "\n", encoding="utf-8", newline="\n")
     # 3. Calibrated intervals from validation errors.
     intervals = {
         name: ConformalIntervals.fit(validation_results[name]) for name in [REFERENCE, winner]
@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     print(format_table(result["test"]))
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"Report written to {args.output}")
     return 0
 

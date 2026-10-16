@@ -168,7 +168,9 @@ def save_models(
         entries.append({"name": name, **bucket.__dict__})
     meta_path = folder / "metadata.json"
     meta = {**metadata, "models": entries}
-    meta_path.write_text(json.dumps(meta, indent=2, default=str) + "\n", encoding="utf-8")
+    meta_path.write_text(
+        json.dumps(meta, indent=2, default=str) + "\n", encoding="utf-8", newline="\n"
+    )
     written.append(meta_path)
     return written
 

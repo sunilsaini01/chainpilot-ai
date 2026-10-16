@@ -5,7 +5,7 @@ accident; for example, `password_hash` is not in UserOut.
 """
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
@@ -194,3 +194,39 @@ def sent_updates(body: BaseModel) -> dict[str, Any]:
     if nulls:
         raise ValueError(f"These fields cannot be null: {', '.join(nulls)}")
     return sent
+
+
+# --- Forecasts (M5 public data) ------------------------------------------------
+
+
+class ForecastRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    run_key: str
+    name: str
+    dataset: str
+    model: str
+    trained_through: date
+    forecast_start: date
+    forecast_end: date
+    horizon_days: int
+    series_count: int
+    row_count: int
+    created_at: datetime
+
+
+class ForecastOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: int
+    series_id: str
+    store_id: str
+    item_id: str
+    dept_id: str
+    cat_id: str
+    forecast_date: date
+    step: int
+    forecast: float
+    lower: float  # 80% interval
+    upper: float

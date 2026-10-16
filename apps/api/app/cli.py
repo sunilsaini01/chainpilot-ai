@@ -7,6 +7,9 @@ Example (inside Docker, prompts for the password without echoing it):
 Synthetic demo data (refuses to run twice):
     docker compose run --rm api python -m app.cli seed --products 200 --warehouses 4 --seed 42
 
+Demand forecasts from the ML pipeline (M5 public data):
+    python -m app.cli import-forecasts ../../data/processed/forecasts/m5_lightgbm_weekly_2016-04-24
+
 Housekeeping (safe to run daily, e.g. from cron):
     docker compose run --rm api python -m app.cli cleanup --days 30
 
@@ -20,10 +23,13 @@ import getpass
 import os
 import sys
 from datetime import timedelta
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.audit import record_event
 from app.database import get_engine
+from app.forecast_import import ForecastImportError, import_forecasts
 from app.login_throttle import delete_old_attempts
 from app.models import Role
 from app.seed import AlreadySeededError, build_plan, load_plan
@@ -88,6 +94,30 @@ def seed_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def import_forecasts_command(args: argparse.Namespace) -> int:
+    """Load a forecast folder (forecasts.csv + manifest.json) into the database."""
+    try:
+        with Session(get_engine()) as session:
+            run = import_forecasts(session, args.folder)
+            record_event(
+                session,
+                "forecast_run.imported",
+                "forecast_run",
+                run.id,
+                actor=None,  # a command-line import has no logged-in user
+                details={"run_key": run.run_key, "rows": run.row_count, "name": run.name},
+            )
+            session.commit()
+            print(
+                f"Imported forecast run id={run.id} ({run.row_count} rows, "
+                f"{run.forecast_start} to {run.forecast_end})"
+            )
+    except ForecastImportError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli", description="ChainPilot admin tools")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -109,6 +139,12 @@ def main(argv: list[str] | None = None) -> int:
     seed.add_argument("--warehouses", type=int, default=4, help="3 to 5")
     seed.add_argument("--seed", type=int, default=42, help="same seed, same data")
     seed.set_defaults(handler=seed_command)
+
+    forecasts = commands.add_parser(
+        "import-forecasts", help="Import a forecast folder from ml/demand_forecasting/publish.py"
+    )
+    forecasts.add_argument("folder", type=Path)
+    forecasts.set_defaults(handler=import_forecasts_command)
 
     args = parser.parse_args(argv)
     return args.handler(args)

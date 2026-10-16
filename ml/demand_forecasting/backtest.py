@@ -33,7 +33,14 @@ from demand_forecasting import m5_data
 from demand_forecasting.baselines import BASELINES
 from demand_forecasting.conformal import ConformalIntervals
 from demand_forecasting.lgbm_model import ModelSettings, make_forecaster
-from demand_forecasting.metrics import bias, mae, mean_rmsse, rmsse_scales, wape
+from demand_forecasting.metrics import (
+    bias,
+    mae,
+    rmsse_per_series,
+    rmsse_scales,
+    sales_value_weights,
+    wape,
+)
 
 Forecaster = Callable[[pd.DataFrame, int], pd.DataFrame]
 
@@ -89,11 +96,16 @@ def run_backtest(
     return pd.concat(results, ignore_index=True)
 
 
-def score(results: pd.DataFrame, scales_by_origin: dict[pd.Timestamp, pd.Series]) -> list[dict]:
+def score(
+    results: pd.DataFrame,
+    scales_by_origin: dict[pd.Timestamp, pd.Series],
+    weights_by_origin: dict[pd.Timestamp, pd.Series] | None = None,
+) -> list[dict]:
     """Metrics for each horizon window (first 7, 14, 28 days), pooled over all origins.
 
     WAPE and bias are computed from summed errors; RMSSE is averaged over every
-    (origin, series) pair, each scaled by its own history up to that origin.
+    (origin, series) pair, each scaled by its own history up to that origin. With
+    `weights_by_origin` (sales value before each origin) a weighted RMSSE is added.
     """
     rows = []
     for window in HORIZON_WINDOWS:
@@ -103,10 +115,20 @@ def score(results: pd.DataFrame, scales_by_origin: dict[pd.Timestamp, pd.Series]
         actual = part["actual"].to_numpy(dtype=float)
         forecast = part["forecast"].to_numpy(dtype=float)
         rmsse_values, rmsse_counts = [], []
+        weighted_sum, weight_total = 0.0, 0.0
         for origin, by_origin in part.groupby("origin"):
-            value, count = mean_rmsse(by_origin, scales_by_origin[origin])
-            rmsse_values.append(value * count)
-            rmsse_counts.append(count)
+            per_series = rmsse_per_series(by_origin, scales_by_origin[origin])
+            rmsse_values.append(float(per_series.sum()))
+            rmsse_counts.append(int(per_series.size))
+            if weights_by_origin is not None:
+                weights = weights_by_origin[origin].reindex(per_series.index).fillna(0)
+                weighted_sum += float((per_series * weights).sum())
+                weight_total += float(weights.sum())
+        weighted = (
+            {"rmsse_weighted": round(weighted_sum / weight_total, 4)}
+            if weights_by_origin is not None and weight_total > 0
+            else {}
+        )
         rows.append(
             {
                 "horizon_days": window,
@@ -115,6 +137,7 @@ def score(results: pd.DataFrame, scales_by_origin: dict[pd.Timestamp, pd.Series]
                 "bias": round(bias(actual, forecast), 4),
                 "rmsse": round(sum(rmsse_values) / sum(rmsse_counts), 4),
                 "rmsse_series": int(sum(rmsse_counts)),
+                **weighted,
                 "actual_units": int(actual.sum()),
                 **interval_metrics(part),
             }
@@ -143,6 +166,14 @@ def pinball(actual: np.ndarray, quantile_forecast: np.ndarray, q: float) -> floa
     """Quantile (pinball) loss: under-forecasts cost q per unit, over-forecasts 1 - q."""
     error = actual - quantile_forecast
     return float(np.mean(np.maximum(q * error, (q - 1) * error)))
+
+
+def weights_for(long: pd.DataFrame, origins: list[pd.Timestamp]) -> dict[pd.Timestamp, pd.Series]:
+    """Weighted-RMSSE weights per origin: dollar sales in the 28 days up to that origin."""
+    columns = ["id", "date", "sales", "sell_price"]
+    return {
+        origin: sales_value_weights(long.loc[long["date"] <= origin, columns]) for origin in origins
+    }
 
 
 def scales_for(series: pd.DataFrame, origins: list[pd.Timestamp]) -> dict[pd.Timestamp, pd.Series]:
@@ -204,6 +235,7 @@ def backtest_stores(
     calendar = m5_data.load_calendar(paths["calendar"])
     all_results: dict[str, list[pd.DataFrame]] = {name: [] for name in factories}
     all_scales: dict[str, dict] = {}
+    all_weights: dict[str, dict] = {}
     origins: list[pd.Timestamp] = []
     store_rows = []
 
@@ -214,6 +246,8 @@ def backtest_stores(
         series = long[["id", "date", "sales"]]
         origins = make_origins(end_date or series["date"].max(), horizon, n_origins)
         scales = scales_for(series, origins)
+        weights = weights_for(long, origins)
+        all_weights[store] = weights
         for origin, scale in scales.items():
             all_scales.setdefault(store, {})[origin] = scale
         for name, factory in factories.items():
@@ -223,16 +257,21 @@ def backtest_stores(
                 results = intervals[name].apply(results)
             results["store"] = store
             all_results[name].append(results)
-            store_rows.append({"store": store, "model": name, "metrics": score(results, scales)})
+            store_rows.append(
+                {"store": store, "model": name, "metrics": score(results, scales, weights)}
+            )
         del long, series, sales, prices
 
     # Pool all stores: ids are unique across stores, so scales can simply be combined.
     pooled_scales = {
         origin: pd.concat([all_scales[store][origin] for store in stores]) for origin in origins
     }
+    pooled_weights = {
+        origin: pd.concat([all_weights[store][origin] for store in stores]) for origin in origins
+    }
     pooled = {name: pd.concat(parts, ignore_index=True) for name, parts in all_results.items()}
     overall = [
-        {"model": name, "metrics": score(results, pooled_scales)}
+        {"model": name, "metrics": score(results, pooled_scales, pooled_weights)}
         for name, results in pooled.items()
     ]
     report = {
@@ -309,7 +348,7 @@ def main(argv: list[str] | None = None) -> int:
     print(format_table(report))
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"Report written to {args.output}")
     return 0
 
