@@ -157,3 +157,8 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 ## D-041 — 2026-10-16 — Delivery-risk metrics and the first experiment's result
 - PR-AUC is the main ranking metric (late orders are rare); Brier, log loss and ECE judge the probabilities; precision/recall/F1 at a threshold describe an alerting policy. Accuracy is not reported (always saying "on time" is ~90% accurate).
 - The first pre-registered experiment is reported as run, including its failure: calibrating on one unusual quarter (Jan–Mar 2018) over-predicts later risk. No model is deployed from it. The owner decides whether to run a rolling-window evaluation (P3-T2-R1) before P3-T3.
+
+## D-042 — 2026-10-16 — Delivery risk: rolling monthly evaluation; serve rank first
+- Model chosen by a pre-registered rolling monthly simulation (outcomes visible only after delivery): logistic regression with Platt calibration on the last 56 days of known outcomes. It beat LightGBM on 9 development months (mean PR-AUC 0.295 vs 0.260) and improved test calibration a lot (ECE 0.137 -> 0.059).
+- Because the monthly late rate swings strongly (1.2%–19%), P3-T3 will present risk mainly as a relative tier/percentile and alert on a fixed share of each day's dispatches; probabilities are shown as approximate.
+- Logistic regression is also easier to explain (coefficients per feature) and to store safely as plain numbers instead of a pickle.

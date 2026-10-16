@@ -212,3 +212,40 @@ Reliability of the calibrated test scores:
 **Provenance** (`docs/results/p3_delivery_risk.json`): code `0b891fb-dirty` (commit 0b891fb plus the uncommitted P3-T2 code), scikit-learn 1.9.1, LightGBM 4.7.0, data checksums in the JSON, runtime 5.8 s.
 
 Reproduce: `python -m delivery_risk.experiment ..\data\raw\olist --output ..\docs\results\p3_delivery_risk.json`
+
+## Delivery-delay risk: rolling monthly evaluation (P3-T2b)
+
+Why: the first experiment (above) chose its model, calibration and threshold on one unusual quarter. This run, planned in the work log **before** it was executed (2026-10-16 14:10 UTC), simulates deployment month by month: at the start of each month the model may learn only from orders whose outcome was already known (delivered before that day), and it scores the orders purchased that month. The test months (Apr–Aug 2018) were not used until the end.
+
+**Development** (9 months, 2017-07 … 2018-03; means over the months):
+
+| Model | Calibration | Mean PR-AUC | Mean Brier | Mean ECE |
+|---|---|---|---|---|
+| Logistic regression | no calibration | 0.295 | 0.0711 | 0.058 |
+| Logistic regression | recent Platt (last 56 days) | 0.272 | 0.0707 | 0.051 |
+| LightGBM | no calibration | 0.260 | 0.0724 | 0.067 |
+| LightGBM | recent Platt (last 56 days) | 0.250 | 0.0694 | 0.041 |
+
+Chosen by the rule: **Logistic regression** (highest mean PR-AUC), with **recent Platt (last 56 days)** (lowest mean ECE). Alert rule fixed in advance: flag the riskiest 10% of orders, with the cut-off taken from the scores of the orders purchased in the previous 56 days.
+
+**Test** (Apr–Aug 2018, retrained at each month start, run once): pooled PR-AUC **0.268**, ROC-AUC **0.817**, Brier 0.0431, ECE **0.059**, mean predicted 10.3% vs 4.5% late. Alert rule: flagged 13.8% of orders, precision **17.3%**, recall **53.2%**.
+
+| Month | Orders | Late rate | Mean predicted | ECE | PR-AUC | ROC-AUC | Flagged | Precision | Recall |
+|---|---|---|---|---|---|---|---|---|---|
+| 2018-04 | 6,791 | 0.045 | 0.103 | 0.059 | 0.312 | 0.830 | 0.081 | 0.251 | 0.454 |
+| 2018-05 | 6,719 | 0.066 | 0.161 | 0.095 | 0.294 | 0.800 | 0.120 | 0.248 | 0.454 |
+| 2018-06 | 6,050 | 0.012 | 0.057 | 0.046 | 0.141 | 0.789 | 0.038 | 0.108 | 0.357 |
+| 2018-07 | 6,114 | 0.034 | 0.102 | 0.068 | 0.344 | 0.812 | 0.238 | 0.096 | 0.671 |
+| 2018-08 | 6,016 | 0.065 | 0.089 | 0.024 | 0.265 | 0.809 | 0.219 | 0.191 | 0.639 |
+
+**Compared with the first experiment** (same test orders): ECE 0.137 -> 0.059; mean predicted 18.2% -> 10.3% (actual 4.5%); alert precision 10.0% (flagging 34%) -> 17.3% (flagging 13.8%); ROC-AUC 0.806 -> 0.817; PR-AUC 0.281 -> 0.268 (slightly lower).
+
+**Honest reading**
+- **Ranking is reliable:** ROC-AUC 0.79–0.83 in every single test month. Orders the model ranks as risky really are late far more often.
+- **Absolute probabilities are not reliable from month to month:** the monthly late rate swings between 1.2% and 19% (2017-07 2.8%, 2017-08 2.9%, 2017-09 4.4%, 2017-10 4.2%, 2017-11 12.4%, 2017-12 7.5%, 2018-01 5.7%, 2018-02 14.1%, 2018-03 19.0%; test months above), driven by events such as Black Friday (Nov 2017) and early-2018 logistics problems. Any calibration learned from the past lags such jumps: still about 2x too high on average in the test months, and worst in May after the bad Feb–Mar.
+- **The fixed-cut-off alert flags between 3.8% and 23.8% of orders per month** for the same reason (the score level shifts).
+- **Recommendation for serving (P3-T3):** show each order's **risk rank** (percentile or tier: high / medium / low) as the main signal, show the probability as approximate, and define alerts on **the same day's dispatched orders** ("review the riskiest 10% of today's shipments"), which keeps the review workload fixed without using any future data. These are product choices, not tuned on the test results.
+
+**Provenance** (`docs/results/p3_delivery_risk_rolling.json`): code `66a6915-dirty` (commit 66a6915 plus the uncommitted P3-T2b code), scikit-learn 1.9.1, LightGBM 4.7.0, runtime 29.9 s.
+
+Reproduce: `python -m delivery_risk.rolling ..\data\raw\olist --output ..\docs\results\p3_delivery_risk_rolling.json`

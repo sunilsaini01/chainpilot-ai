@@ -346,7 +346,7 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: risk scores whose probabilities match recent reality.
 - Fix and regression test: P3-T2: report calibration on validation and test, compare models trained on 2017 with an expanding window, and consider recalibration on validation data only. Never tune on the test period.
 - Update 2026-10-16: P3-T2 ran the pre-registered recalibration on validation. It made things worse: the test period's late rate (4.5%) is close to 2017's (5.6%), and Jan–Mar 2018 (12.9%) was the unusual quarter. Calibrated test ECE 0.137 vs 0.003 uncalibrated. Superseded by P3-T2-R1.
-- Status: OPEN (see P3-T2-R1)
+- Status: VERIFIED (handled by P3-T2b; residual issue in P3-T2b-R1)
 
 ## P3-T1-R3 — [LOW] I left a nonsense expression in the code while writing it
 - Source: Claude self-review (reading back the new module before running it)
@@ -359,7 +359,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `ml/delivery_risk/experiment.py`. Validation (Jan–Mar 2018) had a 12.9% late rate, unlike 2017 (5.6%) and the test period (4.5%). Results: logistic regression chosen on validation (PR-AUC 0.361 vs 0.292) but LightGBM ranks better on test (0.366 vs 0.281); Platt calibration fitted on validation over-predicts on test (mean 18.2% vs 4.5% actual, ECE 0.137); the F1 threshold flags 34% of test orders at 10% precision.
 - Expected behavior: choices that hold up when conditions change.
 - Fix and regression test (proposed, needs the owner's go-ahead, and a new plan written before running): rolling-origin evaluation with several monthly windows inside Jan 2017 – Mar 2018 (no test data) to choose the model; calibrate on a **recent rolling window** (e.g. the 8 weeks of delivered orders before each scoring date) and check that rule across the windows; choose the threshold from a business rule (e.g. a fixed share of orders to review) rather than F1 on one quarter. Then evaluate once more on the unchanged test period.
-- Status: OPEN (owner decision)
+- Update 2026-10-16: owner chose "Improve it properly". Pre-registered rolling monthly evaluation (P3-T2b) executed: logistic regression with recent-Platt calibration chosen on 9 development months; on the unchanged test months ECE fell from 0.137 to 0.059, alert precision rose from 10.0% to 17.3% (recall 53.2%), ROC-AUC 0.817. Probabilities are still about 2x too high on average because the monthly late rate swings 1.2%–19%; the ranking is stable (ROC-AUC 0.79–0.83 every month). Remaining work moves to P3-T3 as a serving design (rank-based tiers, same-day alert share): P3-T2b-R1.
+- Status: VERIFIED (improved and measured; residual issue tracked in P3-T2b-R1)
 
 ## P3-T2-R2 — [LOW] Over-engineered first version of the logistic pipeline
 - Source: Claude self-review (reading back before running)
@@ -372,3 +373,17 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `column.where(False, "D")` raised ValueError inside a test that sets unseen categories.
 - Fix and regression test: sets the categories explicitly; both models now pass the unseen-category test.
 - Status: FIXED
+
+## P3-T2b-R1 — [MEDIUM] Late probabilities drift with the monthly late rate
+- Source: rolling evaluation (docs/results/p3_delivery_risk_rolling.json)
+- File and reproduction: monthly late rate 1.2%–19%; calibrated mean prediction 5.7%–16.1% in the test months vs 1.2%–6.6% actual; the fixed alert cut-off flags 3.8%–23.8% of orders per month.
+- Expected behavior: users get a stable, understandable risk signal and a predictable review workload.
+- Fix and regression test: in P3-T3, serve a risk **tier/percentile** (relative to recent dispatches) as the main signal, label probabilities as approximate, and make the alert "top N% of the same day's dispatches". Test that the daily flagged share equals N% and that tiers are computed only from same-day or earlier orders.
+- Status: OPEN (P3-T3)
+
+## P3-T2b-R2 — [LOW] Rolling simulation only sees orders that were eventually delivered
+- Source: Claude self-review
+- File and reproduction: the order table (P3-T1) keeps delivered orders only, so the "recent purchases" used for the alert cut-off exclude orders that were later cancelled or never delivered. In a live system those would be scored too.
+- Expected behavior: documented; small effect (about 3% of orders are not delivered).
+- Fix and regression test: none needed for the experiment; a live scorer (P3-T3) scores every dispatched order.
+- Status: OPEN (documented limitation)

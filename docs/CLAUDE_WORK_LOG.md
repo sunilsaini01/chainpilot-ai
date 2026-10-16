@@ -460,3 +460,22 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P3-T2-R1 (MEDIUM, owner decision). Nothing was re-chosen after seeing the test results.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: owner decides on P3-T2-R1 (rolling-window evaluation, as for demand in P2-T3b) before deploying any delivery-risk model (P3-T3).
+
+## 2026-10-16 14:10 UTC — P3-T2 pushed; P3-T2b plan (written before any new run)
+- Owner pushed `4284d66`, `f58695a`, `66a6915`; CI #13 on `66a6915`: `success`. Owner decision on P3-T2-R1: "Improve it properly".
+- **Pre-registered P3-T2b plan** (no test data is used until step 5):
+  1. **Rolling monthly simulation.** For a scoring month M starting at T, the model may learn only from orders whose outcome was known before T (delivered to the customer before T). It scores the orders purchased in month M. Features and the late label are unchanged from P3-T1.
+  2. **Development windows:** M = 2017-07 … 2018-03 (9 months, all inside the old train + validation period). Test months M = 2018-04 … 2018-08 are not touched until step 5.
+  3. **Candidates** (same fixed settings as P3-T2): logistic regression and LightGBM; each with two calibration variants: (a) none, trained on all outcomes known before T; (b) recent Platt: trained on outcomes known before T − 56 days, Platt-calibrated on outcomes that became known in [T − 56 days, T).
+  4. **Selection:** model = highest mean PR-AUC over the 9 development months (uncalibrated variant; ties within 0.005 broken by lower mean Brier). Calibration = the variant with the lower mean ECE over the 9 months for that model. Alert rule fixed in advance, not tuned: flag the riskiest 10% of orders, using the 90th percentile of the scores of the orders purchased in the 8 weeks before T as the cut-off.
+  5. **Test:** run the chosen procedure month by month on 2018-04 … 2018-08 (retraining at each month start), once. Report pooled PR-AUC, ROC-AUC, Brier, ECE, mean predicted vs late rate, and precision/recall/flagged share of the 10% rule; per-month numbers too.
+
+## 2026-10-16 14:40 UTC — P3-T2b results
+- Files changed and why: `ml/delivery_risk/olist_data.py` (non-feature `outcome_known_at`, added to the forbidden set), `ml/delivery_risk/rolling.py` (new: monthly simulation, selection, report with checkpoint), `ml/tests/test_delivery_rolling.py` (new, 7 tests). ML total 111.
+- Tests run / actual results:
+  - `ml`: 111 passed; Ruff passes. Mutations caught: training seeing 7 days into the month (2 failed), alert cut-off from the scored month (1 failed), calibration on all known outcomes (1 failed).
+  - Real run with `-W error`: 31.9 s. Development means: logistic none PR-AUC 0.2952 / ECE 0.0582, recent Platt 0.2720 / 0.0505; LightGBM none 0.2603 / 0.0668, recent Platt 0.2504 / 0.0408. Chosen: logistic regression + recent Platt. Test pooled: PR-AUC 0.2683, ROC-AUC 0.8165, Brier 0.0431, ECE 0.0587, mean predicted 0.1035 vs 0.0448; alert flagged 0.1377, precision 0.173, recall 0.5321. Per-month ROC-AUC 0.789–0.830; monthly late rate 0.012–0.066 in test.
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings: P3-T2-R1 VERIFIED (improved), P3-T2b-R1 (MEDIUM, serving design in P3-T3), P3-T2b-R2 (LOW, documented).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P3-T3 (delivery-risk scores in the API with rank-based tiers and a same-day alert share; clearly labelled Olist data, separate from the simulated suppliers).
