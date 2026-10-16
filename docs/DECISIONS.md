@@ -202,7 +202,7 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - The policies live in `apps/api/policies/` and are copied into the API image, so `load-policies` works the same locally, in Docker and later on AWS. They are labelled as simulated policies written for the demo, and say plainly where a rule is not enforced by the system yet, so the copilot cannot claim more than the system does.
 - Loading syncs the folder (add, replace, delete) so the copilot never cites a removed policy.
 
-## D-049 — 2026-10-17 — The AI copilot will use OpenAI (owner's choice)
+## D-049 — 2026-10-17 — The AI copilot will use OpenAI (owner's choice) — SUPERSEDED by D-052
 - Owner's answer to the P5-T3 question: "open AI". The LangGraph supervisor (P5-T3) will call an OpenAI chat model through the official `openai` Python package, behind one small adapter, so tests can swap in a scripted fake model and CI never calls the paid API.
 - The API key goes only in the owner's local `.env` (never in Git, never read or printed by Claude) as `OPENAI_API_KEY`; the model name is a setting (`OPENAI_MODEL`), so the owner picks the model and its price.
 - Still to confirm by the owner before any real call: the key exists, and the usage cost is accepted. Until then, everything is built and tested with the fake model only.
@@ -224,3 +224,17 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - Every run (including failures) is stored in `agent_runs` with its trace and token counts, and audited. A model error does not crash the request: it is stored as a `failed` run and returned with HTTP 201, because the run itself was created; the client reads `status`.
 - Runs execute inside the request (typically several seconds). A background worker can come later (spec `POST /forecasts/jobs`, `GET /jobs/{id}`); the per-user hourly limit caps cost meanwhile.
 - `LANGSMITH_TRACING=false` in Compose: LangGraph includes LangSmith, which would otherwise be able to send traces to a third party.
+
+## D-052 — 2026-10-17 — Copilot providers: Groq and Google Gemini instead of OpenAI (owner's choice)
+- The OpenAI account had no API credits (P5-T3-R1). The owner's ChatGPT and Claude subscriptions do not include API access. The owner asked to "remove the openai api and keep the groq and gemini", which both have free tiers.
+- `LLM_PROVIDER=groq|gemini` with `GROQ_API_KEY`/`GROQ_MODEL` and `GEMINI_API_KEY`/`GEMINI_MODEL`. Only the chosen provider's settings are needed; OpenAI is no longer a provider (an `openai` provider name is refused).
+- Both offer an OpenAI-compatible Chat Completions API (Groq: `https://api.groq.com/openai/v1`, Gemini: `https://generativelanguage.googleapis.com/v1beta/openai/`), so one adapter (`CompatibleChatModel`) serves both. The `openai` package stays only as the HTTP client for that protocol; no request goes to OpenAI. This is simpler than two vendor SDKs.
+- Some models on these providers support only plain JSON mode. The adapter tries a strict JSON schema first; if the provider rejects it (HTTP 400), it switches that model to JSON mode with the schema in the prompt. The graph still checks every reply.
+- Free tiers limit requests per minute and tokens per day. The client's 2 retries cover short rate limits; the per-user hourly limit stays.
+- The owner's `.env`: the OpenAI lines were removed at the owner's request without being read. The old key still exists in the OpenAI account; the owner can revoke it there.
+
+## D-053 — 2026-10-17 — How the copilot is evaluated (P5-T4)
+- Fourteen cases fixed before any run, with pass thresholds (work log, P5-T4 plan). Expected citations come from the tools when the case runs, so the evaluation follows the data rather than numbers typed by hand.
+- Database safety is checked exactly (row counts of every table before and after each safety case). Text checks are keyword rules: they can be wrong both ways, so every answer is saved for a person to read, and the report says so.
+- Numbers in an answer are compared with every number the tools returned in that run (also as rounded values and percentages); unmatched ones are reported, not failed, except for the key figure a case requires.
+- Real runs call the provider for every case, so `evaluate-copilot` refuses without `--confirm-model-calls`. The owner asked that no key be used without permission. A `--dry-run` with a fake model checks the whole evaluation on real data for free.

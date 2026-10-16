@@ -1,25 +1,26 @@
 # Project Status
 
 Current phase: P5 (AI copilot)
-Current task: P5-T3, LangGraph supervisor with OpenAI
+Current task: P5-T4, copilot evaluation (built; real run waits for permission)
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
-Status: READY_FOR_USER_CHECK (code); real-model check BLOCKED on OpenAI credits
+Status: READY_FOR_USER_CHECK (code); real-model runs BLOCKED until the owner allows provider calls
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 69d4f77 (CI #21 green). P5-T3 is uncommitted.
+Last commit: 099f3ab (CI #22 green). The provider switch (D-052) and P5-T4 are uncommitted.
 
-## P5-T3 acceptance criteria
-- [x] LangGraph supervisor with demand, inventory, supplier and decision specialists; each sees only its own read-only tools
-- [x] Structured outputs (routing, final answer); citations verified by code; invented ones removed and reported
-- [x] Limits: question length, model calls, tool calls, tool rounds, one run per specialist, timeout, retries, hourly limit per user
-- [x] Runs stored with full trace and tokens (migration 0011), audited; API and CLI
-- [x] Tests with a scripted model (no network): API 360; 12/12 mutations caught
-- [ ] Real answers from `gpt-5.4-mini`. BLOCKED: the OpenAI account has no credits (429 insufficient_quota; nothing charged)
+## P5-T4 acceptance criteria
+- [x] 14 pre-registered cases (7 answerable, 7 safety) and pass thresholds, fixed before any run
+- [x] Checks: grounding, expected citations, unsupported numbers, refusal, injection, key leak, exact database-change check
+- [x] The checks themselves tested with scripted good and bad models; 13/13 mutations caught
+- [x] Dry run on the real demo data with a fake model: expected answers computed correctly; no provider called
+- [ ] Real run with Groq (and optionally Gemini). BLOCKED: owner permission to use the keys
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Open findings: P5-T3-R1 (BLOCKED, owner adds credits), P5-T1-R1 (MEDIUM, P5-T4), P4-T4-R3 (LOW, documented), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
-Next action: Owner pushes P5-T3 and adds OpenAI credits; then the real-model check and P5-T4.
-Blockers: OpenAI credits (for real answers only).
+P5 gate ("grounded output; tool and safety evaluation"): built and tested; the real-model evaluation is what remains.
+
+Open findings: P5-T4-R2 (BLOCKED, permission), P5-T3-R1 (BLOCKED, same run), P5-T1-R1 (MEDIUM, measured by the same run), P4-T4-R3 (LOW, documented), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
+Next action: Owner pushes, then decides whether to allow the real evaluation run (Groq, about 14 questions).
+Blockers: permission to call the provider.
 
 ## Roadmap progress
 | Phase / task | Status |
@@ -45,8 +46,8 @@ Blockers: OpenAI credits (for real answers only).
 | P4-T4 Stock-out risks and recommendations API | APPROVED (CI #19 green on 2f28e04; P4 complete) |
 | P5-T1 Policy documents and retrieval | APPROVED (CI #20 green on 988d83e) |
 | P5-T2 Typed read-only tools with citations | APPROVED (CI #21 green on 69d4f77) |
-| P5-T3 LangGraph supervisor with OpenAI | READY_FOR_USER_CHECK (real-model check blocked on credits) |
-| P5-T4 Grounding, tool and safety evaluation | NOT_STARTED |
+| P5-T3 LangGraph supervisor (Groq or Gemini) | READY_FOR_USER_CHECK (real-model check waits for a key) |
+| P5-T4 Grounding, tool and safety evaluation | READY_FOR_USER_CHECK (real run waits for permission) |
 | P6–P9 | NOT_STARTED |
 
 ## History
@@ -76,3 +77,5 @@ Blockers: OpenAI credits (for real answers only).
 - 2026-10-17: P4 complete (CI #19). P5 started; P5-T1 policy documents and search.
 - 2026-10-17: OpenAI chosen for the copilot (gpt-5.4-mini). P5-T2: seven read-only tools with citations; supplier ratings; seed delivery history fixed.
 - 2026-10-17: P5-T3: LangGraph copilot built and tested with a scripted model; first real OpenAI calls refused for lack of credits (nothing charged).
+- 2026-10-17: copilot provider switched from OpenAI to Groq and Gemini (D-052).
+- 2026-10-17: P5-T4 evaluation built and dry-run on real data; no provider call made.

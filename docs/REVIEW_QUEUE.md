@@ -524,7 +524,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: every call returned `429 insufficient_quota` ("You have no credits remaining", code `credit_balance_exhausted`). The key was accepted; 0 tokens were used, so nothing was charged. The copilot stored each run as `failed` with the error, and no key text appeared in logs or stored errors.
 - Expected behavior: real answers from `gpt-5.4-mini`, checked for grounding.
 - Fix and regression test: the owner adds credits (OpenAI billing settings). Then re-run the same five questions (`copilot_smoke` questions in the work log) and record the results. Until then the real-model behavior is NOT VERIFIED; everything else is tested with a scripted model.
-- Status: BLOCKED (owner action: add OpenAI credits)
+- Update 2026-10-17: the owner switched to Groq and Gemini (free tiers, D-052) instead of buying OpenAI credits. The same five questions will be run with the chosen provider once its key and model are in `.env`.
+- Status: BLOCKED (owner action: Groq or Gemini key and model in `.env`)
 
 ## P5-T3-R2 — [LOW] The first `investigate` command read the run after its session had closed
 - Source: test failure (`DetachedInstanceError`)
@@ -537,3 +538,16 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `apps/api/app/copilot/graph.py`. The tool-call limit was never reached in tests (the model-call limit always came first), the 3-rounds-per-specialist limit was not checked, and the "citation must name a real record" half of verification had no test (tools only return real citations). A separate 4-step limit was redundant: each of the four specialists may run once.
 - Fix and regression test: a model asking for 5 tools per reply (tool limit reached exactly), a check of exactly 3 rounds, a tool returning a citation to a missing record, and the redundant limit replaced by "finish once every specialist has reported" (saves a model call; tested). Final: 12 of 12 caught.
 - Status: VERIFIED
+
+## P5-T4-R1 — [LOW] The first numbers check would have flagged every correct figure
+- Source: Claude self-review before any run
+- File and reproduction: `apps/api/app/copilot/evaluation.py`. The first version looked for an answer's numbers in the run's trace, which holds only citations and row counts, not the tools' data. Every correct number (for example 25.77 units) would have been reported as unsupported.
+- Fix and regression test: the investigation now returns the tool results it used (`InvestigationResult.evidence`), and the check reads those; `test_numbers_ignore_ids_and_accept_rounded_or_percent_forms`.
+- Status: VERIFIED
+
+## P5-T4-R2 — [BLOCKER for P5] The evaluation has not been run against a real model
+- Source: owner's instruction: no use of the API keys without permission
+- File and reproduction: the evaluation is built and tested offline (scripted models; 13 of 13 mutations caught) and dry-run on the real demo data with a fake model (6 of 14, as expected for a model that declines everything; expected citations computed correctly). No Groq or Gemini call was made.
+- Expected behavior: a real run with the owner's permission, reported as it comes out, including failures.
+- Fix and regression test: owner gives permission; then `evaluate-copilot --confirm-model-calls` with Groq (`llama-3.1-8b-instant`) and, if wanted, Gemini. This also answers P5-T3-R1 and P5-T1-R1.
+- Status: BLOCKED (owner permission to call the provider)
