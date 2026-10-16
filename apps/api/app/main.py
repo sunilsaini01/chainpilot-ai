@@ -13,6 +13,7 @@ from app.routes import (
     inventory,
     products,
     purchasing,
+    replenishment,
     users,
     warehouses,
 )
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     app.include_router(warehouses.router)
     app.include_router(inventory.router)
     app.include_router(purchasing.router)
+    app.include_router(replenishment.router)
     app.include_router(forecasts.router)
     app.include_router(delivery_risk.router)
     app.include_router(audit.router)

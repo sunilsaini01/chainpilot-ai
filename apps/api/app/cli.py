@@ -13,6 +13,9 @@ Demand forecasts from the ML pipeline (M5 public data):
 Delivery-risk scores from the ML pipeline (Olist public data):
     python -m app.cli import-delivery-risk ../../data/processed/delivery_risk/<run folder>
 
+Demo link from SYN- products to M5 demand (after import-forecasts and seed):
+    python -m app.cli link-demand-profiles
+
 Housekeeping (safe to run daily, e.g. from cron):
     docker compose run --rm api python -m app.cli cleanup --days 30
 
@@ -36,6 +39,7 @@ from app.delivery_risk_import import DeliveryRiskImportError, import_delivery_ri
 from app.forecast_import import ForecastImportError, import_forecasts
 from app.login_throttle import delete_old_attempts
 from app.models import Role
+from app.replenishment_service import NoForecastRunError, link_demand_profiles
 from app.seed import AlreadySeededError, build_plan, load_plan
 from app.users_service import UserAlreadyExistsError, create_user, delete_stale_tokens
 
@@ -132,6 +136,30 @@ def import_forecasts_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def link_demand_profiles_command(args: argparse.Namespace) -> int:
+    """Link SYN- products and warehouses to M5 forecast profiles (demo link, D-044)."""
+    try:
+        with Session(get_engine()) as session:
+            summary = link_demand_profiles(session)
+            record_event(
+                session,
+                "demand_profiles.linked",
+                "demand_profile",
+                None,
+                actor=None,
+                details=summary,
+            )
+            session.commit()
+    except NoForecastRunError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    print(
+        f"Linked {summary['products']} SYN- products and {summary['warehouses']} SYN- warehouses "
+        f"to forecast run {summary['forecast_run_id']} (borrowed M5 demand profiles)"
+    )
+    return 0
+
+
 def import_delivery_risk_command(args: argparse.Namespace) -> int:
     """Load a delivery-risk scoring folder (scores.csv + manifest.json) into the database."""
     try:
@@ -189,6 +217,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     risk.add_argument("folder", type=Path)
     risk.set_defaults(handler=import_delivery_risk_command)
+
+    link = commands.add_parser(
+        "link-demand-profiles",
+        help="Give SYN- products and warehouses borrowed M5 demand (after import-forecasts)",
+    )
+    link.set_defaults(handler=link_demand_profiles_command)
 
     args = parser.parse_args(argv)
     return args.handler(args)

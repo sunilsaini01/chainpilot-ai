@@ -161,6 +161,69 @@ class PurchaseOrderLine(Base):
     purchase_order: Mapped[PurchaseOrder] = relationship(back_populates="lines")
 
 
+class RecommendationKind(StrEnum):
+    REORDER = "reorder"  # buy from the product's supplier
+    TRANSFER = "transfer"  # move stock from another warehouse
+
+
+class RecommendationStatus(StrEnum):
+    PENDING = "pending"  # waiting for a manager (approval workflow: P7)
+    SUPERSEDED = "superseded"  # replaced by a newer recommendation run
+
+
+class Recommendation(Base):
+    """A proposed reorder or transfer, with the numbers it was based on.
+
+    Only a proposal: nothing changes stock or creates an order until it is
+    approved and executed (P7). `details` keeps the inputs (stock, forecast,
+    lead time, target level) so every recommendation can be explained.
+    """
+
+    __tablename__ = "recommendations"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN (" + ", ".join(f"'{k.value}'" for k in RecommendationKind) + ")",
+            name="kind_allowed",
+        ),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{s.value}'" for s in RecommendationStatus) + ")",
+            name="status_allowed",
+        ),
+        CheckConstraint("quantity > 0", name="quantity_positive"),
+        # A reorder names a supplier and no source site; a transfer the opposite.
+        CheckConstraint(
+            "(kind = 'reorder' AND supplier_id IS NOT NULL AND source_warehouse_id IS NULL) OR "
+            "(kind = 'transfer' AND supplier_id IS NULL AND source_warehouse_id IS NOT NULL "
+            "AND source_warehouse_id <> warehouse_id)",
+            name="kind_fields",
+        ),
+        Index("ix_recommendations_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), default=RecommendationStatus.PENDING)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"))
+    warehouse_id: Mapped[int] = mapped_column(  # where the stock is needed
+        ForeignKey("warehouses.id", ondelete="RESTRICT")
+    )
+    source_warehouse_id: Mapped[int | None] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="RESTRICT")
+    )
+    supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id", ondelete="RESTRICT"))
+    quantity: Mapped[int]
+    reason: Mapped[str] = mapped_column(String(30))  # e.g. "ordered", "raised_to_moq"
+    forecast_run_id: Mapped[int] = mapped_column(
+        ForeignKey("forecast_runs.id", ondelete="RESTRICT")
+    )
+    service_level: Mapped[Decimal] = mapped_column(Numeric(4, 3))
+    details: Mapped[dict] = mapped_column(JSONB)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
@@ -187,6 +250,9 @@ class Product(Base):
     )
     min_order_qty: Mapped[int] = mapped_column(default=1, server_default="1")
     pack_size: Mapped[int] = mapped_column(default=1, server_default="1")
+    # DEMO LINK (D-044): the M5 item whose forecast stands in for this simulated
+    # product's demand. Not the same product or company; always shown as borrowed.
+    demand_profile_item_id: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = updated_at_column()
 
@@ -204,6 +270,8 @@ class Warehouse(Base):
     city: Mapped[str] = mapped_column(String(100))
     # Total units the site can hold; used later for capacity-aware reorder decisions.
     capacity_units: Mapped[int]
+    # DEMO LINK (D-044): the M5 store whose forecasts stand in for this site's demand.
+    demand_profile_store_id: Mapped[str | None] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = updated_at_column()
 

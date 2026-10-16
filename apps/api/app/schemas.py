@@ -188,6 +188,58 @@ class PurchaseOrderOut(BaseModel):
     lines: list[PurchaseOrderLineOut]
 
 
+# --- Stock-out risks and recommendations (P4-T4) ----------------------------
+
+
+class RiskOut(BaseModel):
+    """One product at one warehouse; see app/replenishment_service.py for the rules."""
+
+    product_id: int
+    sku: str
+    warehouse_id: int
+    warehouse_code: str
+    status: Literal["out_of_stock", "at_risk", "ok", "excess"]
+    on_hand: int
+    on_order: int
+    position: int  # on hand + on order
+    daily_mean: float  # forecast demand per day (borrowed profile)
+    daily_std: float
+    lead_time_days: int
+    lead_time_std: float
+    reorder_point: float
+    safety_stock: float
+    target_level: int  # order-up-to level
+    shortfall: int
+    days_of_cover: float | None  # None = no demand expected
+    supplier_id: int | None
+    min_order_qty: int
+    pack_size: int
+    demand_profile: str  # M5 item and store whose forecast is borrowed
+
+
+class RecommendationRequest(BaseModel):
+    service_level: float = Field(default=0.95, ge=0.5, lt=1)
+
+
+class RecommendationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: Literal["reorder", "transfer"]
+    status: Literal["pending", "superseded"]
+    product_id: int
+    warehouse_id: int
+    source_warehouse_id: int | None
+    supplier_id: int | None
+    quantity: int
+    reason: str
+    forecast_run_id: int
+    service_level: Decimal
+    details: dict[str, Any]
+    created_by_user_id: int | None
+    created_at: datetime
+
+
 # --- Inventory ---------------------------------------------------------------
 
 
