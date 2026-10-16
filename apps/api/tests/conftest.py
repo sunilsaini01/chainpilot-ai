@@ -8,6 +8,7 @@ data: each test run creates its own throwaway database (named
 import os
 import uuid
 from collections.abc import Callable, Iterator
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -24,7 +25,16 @@ from app import security
 from app.config import Settings
 from app.dependencies import get_db_session
 from app.main import app
-from app.models import Base, Product, Role, User, Warehouse
+from app.models import (
+    Base,
+    Product,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    Role,
+    Supplier,
+    User,
+    Warehouse,
+)
 from app.users_service import create_user
 
 API_DIR = Path(__file__).resolve().parent.parent
@@ -169,3 +179,121 @@ def login(client: TestClient, email: str, password: str = TEST_PASSWORD) -> dict
     response = client.post("/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+# --- Suppliers and purchase orders (copilot tests) ---------------------------------
+
+# The "today" of the hand-made order history below.
+TODAY = date(2026, 10, 17)
+
+
+def add_order(
+    session: Session,
+    number: str,
+    supplier: Supplier,
+    site: Warehouse,
+    product: Product,
+    ordered: date,
+    expected: date,
+    received: date | None,
+) -> None:
+    session.add(
+        PurchaseOrder(
+            po_number=number,
+            supplier_id=supplier.id,
+            warehouse_id=site.id,
+            status="received" if received else "open",
+            ordered_date=ordered,
+            expected_date=expected,
+            received_date=received,
+            lines=[PurchaseOrderLine(product_id=product.id, quantity=10, unit_cost=Decimal(5))],
+        )
+    )
+
+
+@pytest.fixture
+def world(db_session: Session) -> dict:
+    """Four suppliers with hand-made histories, one site, one product; dates near TODAY."""
+    suppliers = {
+        code: Supplier(
+            code=code,
+            name=f"Supplier {code[-1]}",
+            country="X",
+            lead_time_days=7,
+            lead_time_std_days=Decimal("1.00"),
+        )
+        for code in ["SYN-SUP01", "SYN-SUP02", "SYN-SUP03", "SYN-SUP04"]
+    }
+    site = Warehouse(code="SYN-WH1", name="Site", city="C", capacity_units=10_000)
+    db_session.add_all([*suppliers.values(), site])
+    db_session.flush()
+    rug = Product(
+        sku="SYN-0001",
+        name="Classic Rug",
+        category="kitchen",
+        unit_cost=Decimal(5),
+        unit_price=Decimal(9),
+        supplier_id=suppliers["SYN-SUP01"].id,
+    )
+    db_session.add(rug)
+    db_session.flush()
+
+    number = 0
+
+    def history(code: str, on_time: int, late: int, days_late: int = 3) -> None:
+        nonlocal number
+        for index in range(on_time + late):
+            number += 1
+            ordered = TODAY - timedelta(days=60 - index)
+            expected = ordered + timedelta(days=7)
+            arrived = expected + timedelta(days=days_late if index >= on_time else 0)
+            if code == "SYN-SUP01" and index == 0:
+                arrived = expected - timedelta(days=2)  # early: on time, 0 days late (not -2)
+            add_order(
+                db_session,
+                f"SYN-PO-{number:06d}",
+                suppliers[code],
+                site,
+                rug,
+                ordered,
+                expected,
+                arrived,
+            )
+
+    history("SYN-SUP01", on_time=9, late=1)  # 90% -> good, 0.3 days late on average
+    history("SYN-SUP02", on_time=4, late=0)  # 4 orders -> not rated
+    history("SYN-SUP03", on_time=6, late=2)  # 75% -> watch
+    history("SYN-SUP04", on_time=3, late=2, days_late=10)  # 60% -> at risk
+    old = TODAY - timedelta(days=120)  # outside the 90-day window: ignored
+    add_order(
+        db_session,
+        "SYN-PO-000900",
+        suppliers["SYN-SUP01"],
+        site,
+        rug,
+        old,
+        old + timedelta(7),
+        old + timedelta(10),  # received 110 days ago
+    )
+    add_order(
+        db_session,
+        "SYN-PO-000901",
+        suppliers["SYN-SUP04"],
+        site,
+        rug,
+        TODAY - timedelta(10),
+        TODAY - timedelta(3),
+        None,
+    )  # overdue
+    add_order(
+        db_session,
+        "SYN-PO-000902",
+        suppliers["SYN-SUP04"],
+        site,
+        rug,
+        TODAY - timedelta(2),
+        TODAY + timedelta(5),
+        None,
+    )  # not yet due
+    db_session.commit()
+    return {"suppliers": suppliers, "site": site, "rug": rug}
