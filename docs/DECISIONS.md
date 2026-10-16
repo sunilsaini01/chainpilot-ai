@@ -187,3 +187,10 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - Seeded order history is a set of documents, not stock changes: delivered orders are already part of the opening stock. Only receiving an open order changes stock.
 - The seed takes an "as of" date (the command passes today); tests use a fixed date so the plan stays the same.
 - Not done in P4-T3, deliberately: linking `SYN-` products to M5 demand profiles. That needs the imported forecasts, so it belongs with the recommendations (P4-T4), still following the D-044 proposal unless the owner decides otherwise.
+
+## D-047 — 2026-10-16 — Stock-out risks and recommendations (P4-T4)
+- Demand for the simulated products comes from the D-044 demo link. The owner did not choose otherwise, so it is the default. It is stored on the product (M5 item) and warehouse (M5 store), set by `link-demand-profiles`, never overwritten, and labelled in every response.
+- Risks are computed live from current stock, open orders and the newest forecast run; there is no stored `risk_alerts` table yet. A stored history of alerts can come with the dashboard (P6) or the agents (P5) if they need it.
+- Recommendations follow the replay-tested order-up-to rule (D-045): any item below its target gets an order, not only items below the reorder point. Transfers come first, because moving spare stock is cheaper and faster than buying. Transfer travel time is not modelled.
+- Recommendations are stored as `pending` proposals with their inputs; a new run marks the old pending ones `superseded`. Approval, rejection and execution (creating the purchase order or the transfer movements) belong to the approval workflow (P7), as the spec's section 4.G describes.
+- A lead time longer than 21 days (lead + 7-day review > 28 forecast days) makes an item unassessable rather than guessed.

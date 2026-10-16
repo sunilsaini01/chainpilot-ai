@@ -13,6 +13,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api` | FastAPI backend. `GET /health` (process is alive) and `GET /ready` (PostgreSQL answers `SELECT 1`; returns 503 if not). OpenAPI docs at `/docs`. Logs are one JSON object per line. |
 | `apps/api/app/models.py` | Tables: `products` (with supplier, minimum order and pack size), `warehouses`, `inventory` (stock per product × warehouse), `inventory_movements` (stock ledger), `suppliers`, `purchase_orders` and `purchase_order_lines`, plus users, audit, forecasts and delivery-risk tables. |
 | `apps/api/app/purchasing_service.py` | Units on order (open purchase orders) and receiving an order into stock through the ledger. |
+| `apps/api/app/replenishment_service.py` | Stock-out risks and reorder/transfer recommendations for the simulated stock, using the replay-tested policy math and borrowed M5 demand. |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
@@ -28,7 +29,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/inventory_sim/` | Replay simulator (P4): real M5 sales are replayed day by day through the inventory policy (weekly review, random 5–9 day lead times, lost sales) and compared with a simple reorder rule. With LightGBM forecasts the policy needed 17–34% less stock for the same fill rate. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `.github/workflows/ci.yml` | On every push and pull request: API and ML Ruff lint/format and tests (API tests against a real Postgres 16, ML tests on tiny M5-format fixtures), then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: forecast and scoring jobs from the API (needs the background worker), inventory decisions, agents, frontend, AWS.
+Not built yet: forecast and scoring jobs from the API (needs the background worker), approving and executing recommendations (P7), agents, frontend, AWS.
 
 ## How stock changes
 
@@ -139,6 +140,41 @@ The import checks the file against its manifest (checksum, row count, column nam
 | `POST /purchase-orders/{id}/receive`: books every line into stock (`receipt` movements, reference = PO number) | manager+ |
 
 Receiving is all or nothing: if the warehouse has no room for the whole delivery, nothing is booked (409) and the order stays open. An order can be received only once; two managers receiving at the same moment book it once (the order row is locked). Open orders count as "on order" in the inventory position (`purchasing_service.on_order_quantities`). New orders will come from approved recommendations (P4-T4).
+
+## Stock-out risks and recommendations (API)
+
+> **Data label:** stock, suppliers and orders are **simulated** (`SYN-`). Their demand is **borrowed** from the forecast of a linked M5 item and store: a demo link, not the same product or company. Every response carries an `X-Dataset` header saying so.
+
+```powershell
+# After seed and import-forecasts:
+python -m app.cli link-demand-profiles      # gives SYN- products an M5 item and SYN- warehouses an M5 store
+```
+
+The link is deterministic (a product's M5 item is picked by a hash of its SKU from the mapped category: kitchen, home and garden use HOUSEHOLD items; office, toys and sports use HOBBIES; pets and health use FOODS). Existing links are never changed.
+
+For each product at each warehouse, the forecast for the next (lead time + 7) days gives the daily demand and its uncertainty. Stock on hand plus open orders is compared with the reorder point and the order-up-to level from `app/inventory_policy.py`, at a 95% service level by default. That is the setting the replay simulator tested (docs/MODEL_RESULTS.md).
+
+| Status | Meaning |
+|---|---|
+| `out_of_stock` | nothing on hand, demand expected |
+| `at_risk` | on hand + on order is below the reorder point: it may run out before a new order arrives |
+| `excess` | more than 60 days of demand above the target level |
+| `ok` | everything else |
+
+Recommendations are **proposals** (`pending`). Nothing is ordered or moved until they are approved and executed (P7).
+- **Transfers come first:** stock another site holds above its own target.
+- **Supplier orders follow** for what is still missing, in whole packs and at least the supplier's minimum order.
+- **Space:** each warehouse's free space (capacity minus stock minus open orders) is shared, most urgent first.
+- **Replacement:** a new run replaces the pending set.
+- **Explainable:** each recommendation stores the numbers it was based on.
+
+| Endpoint | Who |
+|---|---|
+| `GET /inventory/risks?warehouse_id=&status=&service_level=&limit=&offset=` (most urgent first; `X-Unassessed-Count` = pairs without demand data) | analyst+ |
+| `POST /inventory/recommendations` `{"service_level": 0.95}` | manager+ |
+| `GET /inventory/recommendations?status=pending&kind=&warehouse_id=` | analyst+ |
+
+With seed 42 and the real forecasts, 800 pairs are assessed: 146 out of stock, 23 at risk, 89 ok and 242 excess (the seed overstocks). The recommendations are 148 transfers (4,607 units) and 23 supplier orders (1,293 units).
 
 ## Users, login and roles
 

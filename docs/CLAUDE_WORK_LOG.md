@@ -566,3 +566,25 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P1-T4-R2 VERIFIED; P4-T3-R1, P4-T3-R2 (fixed); P4-T3-R3 (LOW, P4-T4).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P4-T4 (stock-out risks and reorder recommendations, with the SYN- demand profile link).
+
+## 2026-10-16 22:10 UTC — P4-T3 pushed; P4-T4 design (written before coding)
+- Owner pushed `9bcf777`, `56200ce`, `7c52c18`; CI #18 on `7c52c18`: `success`, all three jobs, 0 annotations. P4-T3 approved. No answer on the SYN- demand question, so the D-044 default is used (labelled, easy to change).
+- **P4-T4 design:**
+  1. Demand profiles: `products.demand_profile_item_id` (an M5 item) and `warehouses.demand_profile_store_id` (an M5 store), set by a `link-demand-profiles` command from the newest imported forecast run. Category map (a demo choice): kitchen, home, garden -> HOUSEHOLD; office, toys, sports -> HOBBIES; pets, health -> FOODS. Item picked by a SHA-256 of the SKU among that category's items (deterministic); SYN-WH1..5 -> the run's stores in sorted order. Always shown with a label: simulated stock, demand borrowed from an M5 forecast.
+  2. Assessment per (product, warehouse): forecast steps 1..(lead time + 7) of the linked series give daily mean and std (same rule as the replay, D-045); supplier lead time and its std; 95% default service level. Position = on hand + on order. Status: `out_of_stock` (nothing on hand, demand expected), `at_risk` (position below the reorder point), `excess` (on hand more than 60 days of demand above the order-up-to level), else `ok`.
+  3. Recommendations (pending proposals only; approval and execution are P7): first transfers from sites that hold more than their own target and are not at risk (no more than they can spare), then supplier orders for the remaining shortfall with minimum order and pack size, capped by each warehouse's free space (space shared in priority order: out of stock, then lowest days of cover). Each stores its inputs. A new run supersedes older pending ones.
+  4. API: `GET /inventory/risks` (analyst+), `POST /inventory/recommendations` (manager+, audited), `GET /inventory/recommendations` (analyst+).
+
+## 2026-10-16 23:20 UTC — P4-T4 results
+- Files changed and why: `apps/api/app/models.py` + migration `0009` (demand-profile columns, `recommendations`), `app/replenishment_service.py` (new: demand from linked forecasts, assessment, transfer/reorder planning, link command logic, recommendation runs), `app/routes/replenishment.py` (new: `/inventory/risks`, `/inventory/recommendations`), `app/schemas.py`, `app/main.py`, `app/cli.py` (`link-demand-profiles`), `tests/test_replenishment.py` (new, 27 tests).
+- Tests run / actual results:
+  - `apps/api` with `RUN_DB_TESTS=1`: 298 passed (271 + 27). `ml`: 131 passed. Ruff check and format pass.
+  - Hand-worked checks: the P4-T1 example gives position 100, reorder point 105.39, target 178, shortfall 78, at risk; the database scenario gives exactly 1 transfer (28) and 2 reorders (18 in packs of 6; 12 raised to the minimum).
+  - Mutations: 17 run; 6 real gaps found and fixed with tests, 1 equivalent mutation removed as dead code (P4-T4-R1). Final: 16 of 16 caught.
+  - Isolated Docker project `chainpilot-e2e` with the real data: migration 0008 -> 0009; seed 42; `GET /inventory/risks` before importing forecasts 409 with a clear message; `import-forecasts` 853,720 rows; `link-demand-profiles` linked 200 products and 4 warehouses, a second run linked 0; risks: `X-Total-Count: 800`, `X-Unassessed-Count: 0`, `X-Dataset` label; 146 out of stock, 23 at risk, 89 ok, 242 excess; daily demand median 0.98 (max 19.0); analyst generate 403; manager generate 201 in 0.25 s: 148 transfers (4,607 units), 23 reorders (1,293 units; 21 ordered, 2 raised to the minimum); 0 reorders outside whole packs or below the minimum; pending units per site 893–1,783 against free space 11,547–23,236; still 21 open purchase orders and 654 stock movements (nothing executed); audit events for linking and generating. Removed afterwards (0 volumes left).
+  - Dev database upgraded to 0009.
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings: P4-T2-R3 VERIFIED; P4-T4-R1 (MEDIUM, fixed), P4-T4-R2 (LOW, fixed), P4-T4-R3 (LOW, documented); P4-T3-R3 moved to P7.
+- P4 gate ("stockout detection, reorder/transfer recommendations, simulator; deterministic tests and baseline comparison"): met locally; waits for CI.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P5-T1 (policy documents for retrieval, the start of the AI copilot), after the owner's check.

@@ -449,7 +449,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: LightGBM rarely forecasts exactly 0, so slow items get frequent small orders (67.5k orders vs 61–64k for the baseline). The replay has no ordering cost, minimum order or pack size.
 - Expected behavior: recommendations should not create many tiny orders.
 - Fix and regression test: in P4-T4, apply the supplier's minimum order and pack size (already in `order_quantity`) and test that tiny shortfalls are raised or skipped as the rules say.
-- Status: OPEN (P4-T4)
+- Update 2026-10-16 (P4-T4): recommendations use the supplier's minimum order and pack size; `test_tiny_shortfall_is_raised_to_the_minimum_order` (a shortfall of 3 becomes the minimum of 24). On the real data no reorder is below its minimum or outside whole packs. Whether fewer, larger orders would be cheaper overall is not modelled (no ordering cost).
+- Status: VERIFIED
 
 ## P4-T3-R1 — [LOW] A comment claimed a separate random generator protected the old seed data
 - Source: mutation check
@@ -468,4 +469,25 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: there is no endpoint to create, cancel or partly receive an order, and a product's supplier, minimum order and pack size cannot be changed through the API.
 - Expected behavior: new orders come from approved recommendations (P4-T4, approval in the spec's section 4.F/P7); admins can edit purchasing rules.
 - Fix and regression test: P4-T4 (orders from approved recommendations) and a later catalogue update for the purchasing fields.
-- Status: OPEN (P4-T4)
+- Update 2026-10-16 (P4-T4): recommendations exist as pending proposals; turning an approved one into a purchase order or transfer is the approval workflow (spec section 4.G), so this moves to P7.
+- Status: OPEN (P7)
+
+## P4-T4-R1 — [MEDIUM] Six planning rules were not covered by any test at first
+- Source: mutation check (17 mutations; 6 survived the first test version)
+- File and reproduction: `apps/api/app/replenishment_service.py`. Survivors: (1) transfers ignored the free space at the receiving site; (2) status was not used for priority; (3) existing warehouse links could be overwritten; (4) non-SYN products could be linked; (5) superseding hit all rows, not only pending ones; (6) free space ignored open orders. One more survivor was an equivalent mutation: "a short site gives nothing" can never trigger, because a short site's stock on hand is always below its own target.
+- Expected behavior: every rule has a test that fails without it; no dead code.
+- Fix and regression test: new or stronger tests for each (space-limited transfer, status before days of cover with scarce space, both kinds of link kept, a non-SYN product in a mapped category, a third run, `free_space` with an open order); the redundant branch was removed with a comment explaining why. 16 of 16 caught.
+- Status: VERIFIED
+
+## P4-T4-R2 — [LOW] Lead time over 21 days would have shortened the review period
+- Source: Claude self-review before testing
+- File and reproduction: the first version capped the protection period at the 28 forecast days, which for a lead time of 22–28 days silently shortened the review period, and for more than 28 days made it negative (a crash in the policy math).
+- Fix and regression test: such items are unassessed instead (counted in `X-Unassessed-Count`); `test_protection_days_must_fit_in_the_forecast`.
+- Status: VERIFIED
+
+## P4-T4-R3 — [LOW] Known simplifications in the recommendations
+- Source: Claude self-review
+- File and reproduction: transfers are treated as arriving at once (no travel time); there is no ordering or transfer cost, so the plan does not trade a transfer against an order; risks are not stored as alerts (D-047); the seed overstocks most items (242 of 800 pairs are excess with the real forecasts), which makes transfers dominate.
+- Expected behavior: documented, so the demo is read correctly.
+- Fix and regression test: none now; revisit with the dashboard (P6) and approvals (P7).
+- Status: OPEN (documented limitation)
