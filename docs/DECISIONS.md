@@ -168,3 +168,9 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - Reasons come straight from the logistic regression: coefficient × (value − training average), top 3 positive. This needs no extra explanation library and is exact for this model.
 - Scores reach the API like forecasts (D-039): a CSV + manifest written by `ml/`, checked and loaded in one transaction by `import-delivery-risk`. The file holds no outcomes; outcomes are joined only in the separate `tier_check` report.
 - `app/files.py::sha256_of` is shared by both imports instead of a copy in each.
+
+## D-044 — 2026-10-16 — P4 split into four tasks; policy math shared from the API package
+- P4-T1 policy math (pure functions); P4-T2 replay simulator on real M5 demand, compared with a simple reorder baseline (resolves P2-T4-R1 by measuring the service level); P4-T3 suppliers, purchase orders and lead times in the database and seed (P1-T4-R2); P4-T4 stock-out risks and reorder/transfer recommendations in the API, waiting for approval.
+- The math lives in `apps/api/app/inventory_policy.py`, standard library only. The API image contains only `apps/api`, so the API must own it; the ML simulator will import the same file (P4-T2) instead of keeping a second copy that could drift.
+- Periodic review with an order-up-to level (weekly review fits the weekly forecasts), cycle service level, lost sales (no backorders), demand and lead time treated as independent and roughly normal. The textbook variance formula is checked by a seeded simulation test; whether it holds for lumpy real demand is the simulator's job, not assumed.
+- Open for P4-T3 (owner's choice): how simulated `SYN-` products get demand. Proposal: each `SYN-` product is given the forecast of one M5 series of the same category as a clearly labelled "demand profile", never presented as the same product or company.

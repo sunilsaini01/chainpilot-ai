@@ -410,3 +410,21 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: a predictable review workload. At least one review per day is a reasonable rule, and it adds only a handful of alerts.
 - Fix and regression test: none; documented in MODEL_RESULTS and here. Revisit if real daily volumes are small (for example ranking against the last 7 days of dispatches).
 - Status: OPEN (documented limitation)
+
+## P3-T3-R4 — [MEDIUM] Some bad import files gave a raw database error or a broken API
+- Source: Claude self-review after P3-T3 was pushed (re-reading both import modules)
+- File and reproduction: `apps/api/app/delivery_risk_import.py`, `apps/api/app/forecast_import.py`.
+  - `reasons = [1, 2]` passed the delivery-risk import, then `GET /delivery-risk/scores` would fail with 500 (the response expects a list of objects).
+  - An id longer than its column (e.g. a 33-character `order_id`, a 17-character `store_id`) or a manifest `dataset` over 200 characters failed inside `COPY`/flush with a raw database error.
+  - A duplicate order (or series and day) was only stopped by the unique constraint during `COPY`.
+  - An unreadable manifest (invalid JSON, a list, a bad date) raised a raw `ValueError`; a forecast `horizon_days` above 28 would hit the table's step check.
+- Expected behavior: every bad file stops before writing, with a clear message naming the problem (and the line).
+- Fix and regression test: shared helpers in `app/files.py` (`read_manifest`, `check_text` with lengths read from the table definitions, a common `ImportFileError` base); reasons must be `{feature, value, effect}` objects; duplicates are found while reading; manifest values are parsed with a clear error; horizon 1–28. 17 new test cases (11 delivery risk, 6 forecasts). The rollback tests now force a database error by skipping the row checks, because duplicates no longer reach the database. Mutations: 12 of 12 caught. Both real files still pass; checking the 853,720 forecast rows takes 4.5 s instead of 3.4 s.
+- Status: VERIFIED
+
+## P4-T1-R1 — [LOW] Worked example could not tell "round up" from "round to nearest"
+- Source: mutation check
+- File and reproduction: `apps/api/tests/test_inventory_policy.py`. The worked example's level is 177.72, which is 178 either way, so replacing `math.ceil` with `round` left every test passing. I had also added a float-noise tolerance to the rounding that no realistic input needs; removed to keep the code plain.
+- Expected behavior: the target is always rounded up (rounding down would order less than the safety stock asks for).
+- Fix and regression test: `test_level_is_rounded_up_never_down` (140.48 -> 141). 11 of 11 policy mutations caught.
+- Status: VERIFIED

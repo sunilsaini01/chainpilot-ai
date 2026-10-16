@@ -1,26 +1,26 @@
 # Project Status
 
-Current phase: P3 (Delivery ML)
-Current task: P3-T3, delivery-risk scores in the API
+Current phase: P4 (Inventory decisions)
+Current task: P4-T1, inventory policy math (plus the P3-T3-R4 import hardening)
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 3f32f42 (CI #14 green). P3-T3 is uncommitted.
+Last commit: ba3a841 (CI #15 green; P3 complete). P3-T3-R4 and P4-T1 are uncommitted.
 
-## P3-T3 acceptance criteria
-- [x] Serving design written before scoring; each month scored only with outcomes known before it
-- [x] Daily tiers (high = top 10% = alert, medium, low), approximate probability, top-3 reasons; no outcomes in the published file
-- [x] Validated all-or-nothing import (migration 0007), audit event, duplicate refused
-- [x] Analyst API `/delivery-risk/runs`, `/scores`, `/alerts`, labelled as Olist data with `X-Dataset`
-- [x] Tier check on real outcomes: high 19.9% late, medium 6.8%, low 2.0% (second look at test, rule fixed beforehand)
-- [x] Tests: API 216, ML 119; import-check mutations 7/7 caught; isolated Docker import of the real 32,422 scores
+## P4-T1 acceptance criteria
+- [x] Inventory position, safety stock (demand + lead-time variability), reorder point, order-up-to level, MOQ, pack size, space/budget cap
+- [x] Units and assumptions written down (`apps/api/app/inventory_policy.py`)
+- [x] Deterministic tests with hand-worked numbers; formula checked by a seeded simulation; 11/11 mutations caught
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-P3 gate ("no leakage; evaluated and calibrated scores"): met locally (leakage tests, rolling evaluation, calibration measured, tiers checked); waits for CI.
+## P3-T3-R4 acceptance criteria
+- [x] Every bad import file stops before writing with a clear message (both imports); 12/12 mutations caught
+- [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Open findings: P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented), P2-T4-R1 (MEDIUM, P4), P1-T4-R2 (LOW, P4). See docs/REVIEW_QUEUE.md.
-Next action: Owner checks and pushes P3-T3; then P4.
+Open findings: P2-T4-R1 (MEDIUM, P4-T2), P1-T4-R2 (LOW, P4-T3), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
+Owner question for P4-T3: how simulated SYN- products get demand (proposal in DECISIONS D-044).
+Next action: Owner checks and pushes; then P4-T2.
 Blockers: none.
 
 ## Roadmap progress
@@ -40,8 +40,12 @@ Blockers: none.
 | P3-T1 Olist loader, label, dispatch features, split | APPROVED (pushed 0b891fb; CI #12) |
 | P3-T2 Delivery-risk models (logistic baseline, tree), calibration | APPROVED as first experiment (CI #13 green on 66a6915) |
 | P3-T2b Rolling monthly evaluation, recent calibration | APPROVED (CI #14 green on 3f32f42) |
-| P3-T3 Delivery-risk scores in the API | READY_FOR_USER_CHECK |
-| P4–P9 | NOT_STARTED |
+| P3-T3 Delivery-risk scores in the API | APPROVED (CI #15 green on ba3a841; P3 complete) |
+| P4-T1 Inventory policy math | READY_FOR_USER_CHECK |
+| P4-T2 Replay simulator vs simple reorder baseline | NOT_STARTED |
+| P4-T3 Suppliers, purchase orders, lead times (DB + seed) | NOT_STARTED |
+| P4-T4 Stock-out risks and recommendations API | NOT_STARTED |
+| P5–P9 | NOT_STARTED |
 
 ## History
 - 2026-10-08 to 2026-10-15: first attempt under the two-agent Claude↔Codex workflow. On 2026-10-15 the owner deleted it entirely, including Git history. See DECISIONS D-001.
@@ -62,3 +66,5 @@ Blockers: none.
 - 2026-10-16: P3-T2 first experiment: ranking good, calibration and model choice unstable across periods.
 - 2026-10-16: P3-T2b: rolling monthly evaluation; logistic regression + recent Platt chosen; calibration much improved; rank-first serving recommended.
 - 2026-10-16: P3-T3: delivery-risk scores published (daily tiers with reasons), imported and served under /delivery-risk; tiers checked on real outcomes.
+- 2026-10-16: P3 complete (CI #15). Import hardening for both imports (P3-T3-R4).
+- 2026-10-16: P4 started (D-044); P4-T1 policy math built.

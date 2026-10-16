@@ -16,6 +16,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
 | `apps/api/migrations` | Alembic database migrations. |
+| `apps/api/app/inventory_policy.py` | Inventory policy math (P4): inventory position, safety stock with demand and lead-time variability, reorder point, order-up-to level, and order size with minimum order, pack size and a space/budget cap. Units and assumptions are written at the top of the file. Not connected to an endpoint yet. |
 | `docker-compose.yml` | Runs PostgreSQL 16, a one-shot `migrate` job, then the API. Ports are published on `127.0.0.1` only. |
 | `apps/api/tests` | Unit tests (no database needed) and PostgreSQL integration tests (migrations, stock rules, a concurrency race). |
 | `ml/demand_forecasting/m5_data.py` | Loads and validates the Kaggle M5 dataset and turns it into one row per product, store and day. The data itself must be downloaded: see [docs/DATASETS.md](docs/DATASETS.md). |

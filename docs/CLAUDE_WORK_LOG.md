@@ -501,3 +501,29 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P3-T2b-R1 VERIFIED; P3-T3-R1 (reasons, fixed), P3-T3-R2 (weak test, fixed), P3-T3-R3 (small days, documented); P3-T2b-R2 still a documented limitation.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: owner check of P3-T3 and push; then P4 (inventory decisions), starting with P2-T4-R1 (forecast bias) and P1-T4-R2 (seed suppliers/purchase orders).
+
+## 2026-10-16 17:30 UTC — P3-T3 CI verification; P3-T3-R4 import hardening
+- Owner pushed `5207e08`, `752691a`, `ba3a841`. CI #15 on `ba3a841`: `success`, all three jobs, 0 annotations. P3-T3 approved ("ci is green"); P3 complete.
+- Owner asked to check for issues first. Open review items: P3-T2b-R2 and P3-T3-R3 (documented limitations), P2-T4-R1 and P1-T4-R2 (planned for P4). Re-reading the import code found P3-T3-R4 (MEDIUM), fixed now.
+- Files changed and why: `apps/api/app/files.py` (shared `ImportFileError`, `read_manifest`, `text_limits`, `check_text`), `apps/api/app/delivery_risk_import.py` and `apps/api/app/forecast_import.py` (text lengths, duplicates, reason objects, manifest parsing, horizon), `apps/api/tests/test_delivery_risk.py`, `apps/api/tests/test_forecasts.py`.
+- Tests run / actual results:
+  - `apps/api` with `RUN_DB_TESTS=1`: 233 passed (216 + 17). Ruff check and format pass.
+  - Mutations: 12 of 12 caught (reason shape and keys, row text check in both imports, both duplicate checks, period order, horizon, invalid-JSON handling, manifest type, length limit, text type).
+  - Real files: forecasts 853,720 rows and delivery risk 32,422 rows pass the new checks; forecast row checking 4.5 s (3.4 s before).
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings: P3-T3-R4 VERIFIED.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P4-T1 (inventory policy math).
+
+## 2026-10-16 18:10 UTC — P4-T1 inventory policy math
+- Plan (D-044): P4 in four tasks; P4-T1 is pure, deterministic policy math with units and assumptions written down, shared later by the simulator and the API.
+- Files changed and why: `apps/api/app/inventory_policy.py` (new: `inventory_position`, `z_for_service_level`, `std_from_interval`, `demand_over`, `reorder_point`, `order_up_to_level`, `order_quantity`, `days_of_cover`), `apps/api/tests/test_inventory_policy.py` (new, 20 tests), README row.
+- Tests run / actual results:
+  - `apps/api` with `RUN_DB_TESTS=1`: 253 passed (233 + 20). `ml`: 119 passed. Ruff check and format pass.
+  - Hand-worked example (10/day, std 3; lead 7 days, std 2; weekly review; 95%): expected demand 140, safety stock 37.72, level 178; reorder point 105.39.
+  - Seeded simulation (20,000 draws): the level covers the protection period's demand 95% of the time (within 0.006).
+  - Mutations: 11 of 11 caught after adding a rounding test (P4-T1-R1; `round` instead of `ceil` first survived).
+  - NOT VERIFIED: CI on GitHub (not pushed yet). Not connected to any endpoint or real data yet (P4-T2/P4-T4).
+- Self-review findings: P4-T1-R1 (fixed). Open owner question for P4-T3: the `SYN-` demand profile (D-044).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P4-T2 (replay simulator on M5 demand vs a simple reorder baseline; plan to be written before running).
