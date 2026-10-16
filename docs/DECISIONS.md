@@ -201,3 +201,17 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - Known gap, measured: no synonyms (paraphrased questions 0/3). Closing it is a P5-T3 decision, together with the model provider.
 - The policies live in `apps/api/policies/` and are copied into the API image, so `load-policies` works the same locally, in Docker and later on AWS. They are labelled as simulated policies written for the demo, and say plainly where a rule is not enforced by the system yet, so the copilot cannot claim more than the system does.
 - Loading syncs the folder (add, replace, delete) so the copilot never cites a removed policy.
+
+## D-049 — 2026-10-17 — The AI copilot will use OpenAI (owner's choice)
+- Owner's answer to the P5-T3 question: "open AI". The LangGraph supervisor (P5-T3) will call an OpenAI chat model through the official `openai` Python package, behind one small adapter, so tests can swap in a scripted fake model and CI never calls the paid API.
+- The API key goes only in the owner's local `.env` (never in Git, never read or printed by Claude) as `OPENAI_API_KEY`; the model name is a setting (`OPENAI_MODEL`), so the owner picks the model and its price.
+- Still to confirm by the owner before any real call: the key exists, and the usage cost is accepted. Until then, everything is built and tested with the fake model only.
+- Update 2026-10-17: the owner chose the model `gpt-5.4-mini` and put the key in `.env` themselves (format checked without reading the value: one line, starts with `sk-`, no quotes or spaces).
+
+## D-050 — 2026-10-17 — Copilot tools: in the API package, read-only by the database (P5-T2)
+- The tools live in `apps/api/app/copilot/` and call the existing services (risks, recommendations, purchasing, forecasts, policies), so the numbers the copilot reports are the system's tested numbers, not the model's.
+- Read-only is enforced by PostgreSQL (`SET TRANSACTION READ ONLY` as the first statement, plus `statement_timeout`), not just by careful code: a tool that tries to write fails, which a test proves.
+- Inputs are Pydantic models with `extra="forbid"` and capped limits; problems come back as messages, so the model can correct itself instead of crashing the run.
+- `stock_risks` uses the default 95% service level (D-045); changing it is a planner decision through the recommendations API, not something the copilot chooses.
+- `demand_forecast` adds up only point forecasts. Summing daily 80% bounds would not give an 80% range for the total, so ranges are given per day.
+- `supplier_performance` implements the supplier policy (90%/75% thresholds, 90 days, at least 5 orders) and also serves `GET /suppliers/risks`.

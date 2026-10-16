@@ -15,6 +15,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/app/purchasing_service.py` | Units on order (open purchase orders) and receiving an order into stock through the ledger. |
 | `apps/api/app/replenishment_service.py` | Stock-out risks and reorder/transfer recommendations for the simulated stock, using the replay-tested policy math and borrowed M5 demand. |
 | `apps/api/policies/`, `apps/api/app/policies_service.py` | Six policy documents for the simulated company (written for the demo, labelled as such) and their search, the grounding for the AI copilot (P5). |
+| `apps/api/app/copilot/tools.py` | The AI copilot's seven read-only tools (P5-T2): typed inputs, results with citations to real records, run in a database transaction that PostgreSQL keeps read-only. |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
@@ -56,7 +57,7 @@ docker compose run --rm api python -m app.cli seed --products 500 --warehouses 5
 - Sizes follow the spec: 100–500 products, 3–5 warehouses.
 - Opening stock is recorded as `receipt` movements (reference `SEED-OPENING`, no user), so the ledger adds up and capacity rules apply. Each warehouse is filled to at most 70% of capacity. About 80% of product/warehouse pairs are stocked, and about 10% of those start low (1–20 units), so there is something for stock-out detection to find.
 - It refuses to run when `SYN-` products already exist; it never deletes or overwrites data. It creates no user accounts (use `create-user`).
-- **Suppliers and purchase orders:** 6 simulated suppliers with promised lead times (4–21 days) and their variation; two are deliberately unreliable. Each product gets a supplier for its category, a pack size and a minimum order (whole packs). About 120 days of order history per supplier and warehouse: delivered orders are history (their goods are part of the opening stock, so they make no stock movements); orders not yet delivered are open, and some are overdue. With seed 42: 208 orders, 21 open.
+- **Suppliers and purchase orders:** 6 simulated suppliers with promised lead times (4–21 days) and their variation. Each supplier delivers on time (0–2 days early) with its own probability, otherwise 1 to a few days late: SUP01 and SUP05 are reliable, SUP03 needs watching, SUP04 and SUP06 are deliberately unreliable. Each product gets a supplier for its category, a pack size and a minimum order (whole packs). About 120 days of order history per supplier and warehouse: delivered orders are history (their goods are part of the opening stock, so they make no stock movements); orders not yet delivered are open, and some are overdue. With seed 42: 210 orders, 20 open.
 
 ## Products, warehouses and stock (API)
 
@@ -139,6 +140,7 @@ The import checks the file against its manifest (checksum, row count, column nam
 | `GET /purchase-orders?status=&warehouse_id=&supplier_id=&product_id=&limit=&offset=` (newest first, with lines) | analyst+ |
 | `GET /purchase-orders/{id}` | analyst+ |
 | `POST /purchase-orders/{id}/receive`: books every line into stock (`receipt` movements, reference = PO number) | manager+ |
+| `GET /suppliers/risks`: on-time rate over the last 90 days and rating (good ≥ 90%, watch ≥ 75%, at risk below, not rated under 5 orders), with overdue orders, worst first | analyst+ |
 
 Receiving is all or nothing: if the warehouse has no room for the whole delivery, nothing is booked (409) and the order stays open. An order can be received only once; two managers receiving at the same moment book it once (the order row is locked). Open orders count as "on order" in the inventory position (`purchasing_service.on_order_quantities`). New orders will come from approved recommendations (P4-T4).
 
@@ -175,7 +177,7 @@ Recommendations are **proposals** (`pending`). Nothing is ordered or moved until
 | `POST /inventory/recommendations` `{"service_level": 0.95}` | manager+ |
 | `GET /inventory/recommendations?status=pending&kind=&warehouse_id=` | analyst+ |
 
-With seed 42 and the real forecasts, 800 pairs are assessed: 146 out of stock, 23 at risk, 89 ok and 242 excess (the seed overstocks). The recommendations are 148 transfers (4,607 units) and 23 supplier orders (1,293 units).
+With seed 42 and the real forecasts, 800 pairs are assessed: 146 out of stock, 24 at risk, 88 ok and 242 excess (the seed overstocks). The recommendations are 150 transfers (4,355 units) and 24 supplier orders (1,202 units).
 
 ## Policy documents (grounding for the AI copilot)
 
@@ -193,6 +195,22 @@ Search uses PostgreSQL full-text search with English stemming. Any word of the q
 |---|---|
 | `GET /policies` (documents, chunk counts, checksums) | analyst+ |
 | `GET /policies/search?q=&limit=` (best sections first, with citation and highlighted snippet) | analyst+ |
+
+## AI copilot tools (read-only)
+
+The copilot (P5-T3, OpenAI) will answer questions only through these tools; it never does inventory math itself. Each tool takes typed arguments (unknown ones are refused) and returns data, **citations** such as `supplier:SYN-SUP04` or `purchase_order:SYN-PO-000172`, and the data label.
+
+| Tool | What it returns |
+|---|---|
+| `find_products` | products by part of the SKU or name |
+| `stock_risks` | status, reorder point, target level and days of cover, most urgent first |
+| `recommendations` | pending reorder and transfer proposals and the numbers behind them |
+| `purchase_orders` | orders with dates, status and whether they are overdue |
+| `supplier_performance` | on-time rate and rating per supplier, overdue orders |
+| `demand_forecast` | the borrowed 28-day forecast for one product at one warehouse (totals of the point forecast; ranges per day only) |
+| `search_policies` | policy sections with citations |
+
+Each call runs in its own transaction that PostgreSQL itself keeps **read-only**, with a 5-second statement timeout, and is always rolled back. `resolve_citation` checks that a citation names a real record. On the real demo data, all 52 citations the seven tools returned resolved.
 
 ## Users, login and roles
 

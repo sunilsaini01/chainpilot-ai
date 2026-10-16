@@ -505,3 +505,16 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: policies the copilot cites must match what the system does.
 - Fix and regression test: wording corrected; `test_shipped_policies_are_labelled_and_parse`. A test cannot check meaning; P5-T4 will check the copilot's answers against the records.
 - Status: VERIFIED
+
+## P5-T2-R1 — [MEDIUM] Seeded delivery history made every supplier look bad
+- Source: Claude self-review (real-data check of `GET /suppliers/risks`)
+- File and reproduction: `apps/api/app/seed.py::_order_history`. Delivery times were drawn symmetrically around the promised lead time, so even the "reliable" suppliers were late 16–31% of the time; with the policy's thresholds all six suppliers came out at risk or on watch (SUP05, meant to be reliable, at 72%). The copilot would have had no real signal.
+- Expected behavior: reliable simulated suppliers rate good, unreliable ones at risk.
+- Fix and regression test: each supplier now has an on-time share (on time = 0–2 days early, late = 1 to N days); `test_history_gives_the_supplier_ratings_a_clear_signal` for seeds 42 and 7 (SUP01 and SUP05 good, SUP04 at risk). Products and stock of old seeds are unchanged; order counts changed (seed 42: 210 orders, 20 open instead of 208/21), and the README numbers were re-measured.
+- Status: VERIFIED
+
+## P5-T2-R2 — [LOW] My own test expectations were wrong three times, and two rules were untested
+- Source: test failures; mutation check
+- File and reproduction: `apps/api/tests/test_copilot_tools.py`. (1) I again forgot that lead-time spread adds safety stock (expected a target of 28; the code's 32 is right, as in P4-T2-R2); (2) I forgot the two open orders already on order (expected 32 to order; 12 is right); (3) my "old" order was received exactly 90 days back, which the window includes. Mutations then showed no test for early deliveries (counted as negative lateness) and that bad policy-section citations failed only because no policies were loaded.
+- Fix and regression test: corrected expectations with the arithmetic in comments; an early delivery and loaded policies in the tests. Final: 17 of 17 mutations caught in two repeated runs (one earlier run reported 16 of 17; I did not record which mutation and could not reproduce it).
+- Status: VERIFIED

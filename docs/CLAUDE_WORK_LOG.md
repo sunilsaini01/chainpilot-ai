@@ -624,3 +624,27 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P5-T1-R1 (MEDIUM, P5-T3), P5-T1-R2 (LOW, fixed).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P5-T2 (typed read-only tools with citations). P5-T3 needs the owner's choice of model provider, an API key and approval of the cost.
+
+## 2026-10-17 01:20 UTC — Model provider chosen
+- Owner pushed P5-T1 (`988d83e`); CI #20 started. Owner chose OpenAI for the copilot (DECISIONS D-049). No real API call is made until the owner confirms the key and the cost; `.env` has no OpenAI key yet (only variable names were checked, no values read).
+- CI #20 on `988d83e`: `success`, all three jobs, 0 annotations. P5-T1 approved. Owner added the key to `.env` and chose `OPENAI_MODEL=gpt-5.4-mini` (a stray space after `=` removed; the key line only checked for format, never printed). Cost approval for real calls still to be confirmed at P5-T3.
+
+## 2026-10-17 01:40 UTC — P5-T2 plan (written before coding)
+- Tools live in `apps/api/app/copilot/` (shipped in the API image). Each tool: a name, a description for the model, a strict input model (unknown fields rejected, result limits capped at 50), and a result of data + citations + a data label.
+- Tools: `find_products`, `stock_risks`, `recommendations`, `purchase_orders`, `supplier_performance`, `demand_forecast`, `search_policies`. All reuse the existing services (no new inventory math).
+- Safety: `run_tool` executes each tool in its own PostgreSQL transaction started with `SET TRANSACTION READ ONLY` and a 5-second `statement_timeout`, then rolls back. Errors (unknown tool, bad arguments, unknown SKU) come back as messages the model can act on, never as crashes.
+- Citations: `product:<sku>`, `warehouse:<code>`, `inventory:<sku>@<code>`, `supplier:<code>`, `purchase_order:<number>`, `recommendation:<id>`, `forecast_run:<id>`, `policy:<document>#<section>`. `resolve_citation` checks that a citation names a real record (used by P5-T4 to check answers).
+- Supplier performance follows the supplier policy: on-time = received on or before the expected date; received orders of the last 90 days; good >= 90%, watch 75% to under 90%, at risk under 75%, not rated with fewer than 5 orders; plus open and overdue orders. Also served as `GET /suppliers/risks` (spec section 5).
+
+## 2026-10-17 03:00 UTC — P5-T2 results
+- Files changed and why: `apps/api/app/copilot/` (new: `tools.py` with 7 tools, `run_tool`, `tool_specs`, `resolve_citation`), `app/purchasing_service.py` (supplier performance from the supplier policy), `app/routes/purchasing.py` + `app/schemas.py` (`GET /suppliers/risks`), `app/seed.py` (on-time delivery model, P5-T2-R1), `tests/test_copilot_tools.py` (new, 28 tests), `tests/test_seed.py` (reliability test replaced, 2 cases), `.env.example` (OpenAI variable names).
+- Tests run / actual results:
+  - `apps/api` with `RUN_DB_TESTS=1`: 345 passed before the seed fix; after it the seed, purchasing and tool tests: 62 passed; full suite after the fix: 346 passed. `ml`: 131 passed. Ruff check and format pass.
+  - Mutations: 17 of 17 caught (read-only, timeout, strict inputs, overdue filter, code case, forecast totals, policy section, inventory citation, numeric ids, minimum orders, 90% and 75% boundaries, 90-day window, early deliveries, overdue list, worst-first order) after strengthening two tests (P5-T2-R2).
+  - Safety: a tool that writes fails with "read-only transaction"; a 2-second query fails at a 200 ms timeout; nothing is written.
+  - Isolated Docker project `chainpilot-e2e`, real data (seed 42, 853,720 forecast rows, policies): first run found P5-T2-R1 (all suppliers at risk or watch). After the fix: SUP04 at risk (30.8% on time, 2 overdue orders), SUP03 and SUP06 watch, SUP01, SUP02, SUP05 good. All 7 tools ran in the container (4–146 ms each); 52 distinct citations, 0 unresolved; an invented `approve_all` argument was refused. Risks 146 / 24 / 88 / 242; recommendations 150 transfers (4,355 units), 24 reorders (1,202 units). Removed afterwards.
+  - My check script first failed to import `app` inside the container (wrong path, not a code bug); fixed with `PYTHONPATH=/app`.
+  - NOT VERIFIED: CI on GitHub (not pushed yet). No OpenAI call was made.
+- Self-review findings: P5-T2-R1 (MEDIUM, fixed), P5-T2-R2 (LOW, fixed).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P5-T3 (LangGraph supervisor with OpenAI `gpt-5.4-mini`). Before the first real call: owner confirms the usage cost.
