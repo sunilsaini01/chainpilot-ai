@@ -174,3 +174,8 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - The math lives in `apps/api/app/inventory_policy.py`, standard library only. The API image contains only `apps/api`, so the API must own it; the ML simulator will import the same file (P4-T2) instead of keeping a second copy that could drift.
 - Periodic review with an order-up-to level (weekly review fits the weekly forecasts), cycle service level, lost sales (no backorders), demand and lead time treated as independent and roughly normal. The textbook variance formula is checked by a seeded simulation test; whether it holds for lumpy real demand is the simulator's job, not assumed.
 - Open for P4-T3 (owner's choice): how simulated `SYN-` products get demand. Proposal: each `SYN-` product is given the forecast of one M5 series of the same category as a clearly labelled "demand profile", never presented as the same product or company.
+
+## D-045 — 2026-10-16 — Recommendations will use the formula with LightGBM forecasts at a 95% target
+- In the replay (P4-T2) this combination reached a 94% cycle service level and 96% fill rate with 17–34% less stock than a simple reorder rule at the same fill rate. The safety-stock formula fed by calibrated forecast intervals handles the forecast's under-forecast bias (P2-T4-R1), so no separate bias correction is added.
+- 95% is the default service level; it stays a setting, because the right level depends on the product's margin and the cost of a lost sale.
+- The simulator imports the same `app/inventory_policy.py` as the API (`ml/inventory_sim/__init__.py` adds `apps/api` to the path; `ml/pyproject.toml` does the same for tests), so the evaluated math is the deployed math.

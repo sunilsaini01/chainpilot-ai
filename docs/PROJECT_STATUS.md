@@ -1,26 +1,25 @@
 # Project Status
 
 Current phase: P4 (Inventory decisions)
-Current task: P4-T1, inventory policy math (plus the P3-T3-R4 import hardening)
+Current task: P4-T2, replay simulator vs simple reorder baseline
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: ba3a841 (CI #15 green; P3 complete). P3-T3-R4 and P4-T1 are uncommitted.
+Last commit: 154eafb (CI #16 green). P4-T2 is uncommitted.
 
-## P4-T1 acceptance criteria
-- [x] Inventory position, safety stock (demand + lead-time variability), reorder point, order-up-to level, MOQ, pack size, space/budget cap
-- [x] Units and assumptions written down (`apps/api/app/inventory_policy.py`)
-- [x] Deterministic tests with hand-worked numbers; formula checked by a seeded simulation; 11/11 mutations caught
+## P4-T2 acceptance criteria
+- [x] Plan written before any simulation code or run
+- [x] Day-by-day replay of real M5 demand (3 stores, 9,147 items, 77 days), lost sales, random lead times, no future information
+- [x] Uses the same policy module as the API (D-044)
+- [x] Compared with a simple reorder baseline: 17–34% less stock at the same fill rate (LightGBM forecasts)
+- [x] P2-T4-R1: 95% setting reaches 94.0% cycle service level (criterion ≥ 93%)
+- [x] Tests: ML 131, API 253; 13/13 mutations caught; clean run reproduced exactly from cache
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-## P3-T3-R4 acceptance criteria
-- [x] Every bad import file stops before writing with a clear message (both imports); 12/12 mutations caught
-- [ ] CI green on GitHub. NOT VERIFIED: requires a push
-
-Open findings: P2-T4-R1 (MEDIUM, P4-T2), P1-T4-R2 (LOW, P4-T3), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
+Open findings: P4-T2-R3 (LOW, P4-T4), P1-T4-R2 (LOW, P4-T3), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
 Owner question for P4-T3: how simulated SYN- products get demand (proposal in DECISIONS D-044).
-Next action: Owner checks and pushes; then P4-T2.
+Next action: Owner checks and pushes; answers the SYN- demand question; then P4-T3.
 Blockers: none.
 
 ## Roadmap progress
@@ -41,8 +40,8 @@ Blockers: none.
 | P3-T2 Delivery-risk models (logistic baseline, tree), calibration | APPROVED as first experiment (CI #13 green on 66a6915) |
 | P3-T2b Rolling monthly evaluation, recent calibration | APPROVED (CI #14 green on 3f32f42) |
 | P3-T3 Delivery-risk scores in the API | APPROVED (CI #15 green on ba3a841; P3 complete) |
-| P4-T1 Inventory policy math | READY_FOR_USER_CHECK |
-| P4-T2 Replay simulator vs simple reorder baseline | NOT_STARTED |
+| P4-T1 Inventory policy math | APPROVED (CI #16 green on 154eafb) |
+| P4-T2 Replay simulator vs simple reorder baseline | READY_FOR_USER_CHECK |
 | P4-T3 Suppliers, purchase orders, lead times (DB + seed) | NOT_STARTED |
 | P4-T4 Stock-out risks and recommendations API | NOT_STARTED |
 | P5–P9 | NOT_STARTED |
@@ -68,3 +67,4 @@ Blockers: none.
 - 2026-10-16: P3-T3: delivery-risk scores published (daily tiers with reasons), imported and served under /delivery-risk; tiers checked on real outcomes.
 - 2026-10-16: P3 complete (CI #15). Import hardening for both imports (P3-T3-R4).
 - 2026-10-16: P4 started (D-044); P4-T1 policy math built.
+- 2026-10-16: P4-T2: replay on real demand; the forecast-driven policy needs 17–34% less stock than a simple reorder rule at the same fill rate.

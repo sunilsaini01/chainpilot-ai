@@ -1,0 +1,238 @@
+{
+  "plan": "docs/CLAUDE_WORK_LOG.md, 'P4-T2 plan' (2026-10-16 18:40 UTC)",
+  "dataset": "M5 sales as demand (censored by real stock-outs); stores CA_1, TX_1, WI_1",
+  "simulated_days": [
+    "2016-02-01",
+    "2016-04-17"
+  ],
+  "reviews": [
+    "2016-01-31",
+    "2016-02-07",
+    "2016-02-14",
+    "2016-02-21",
+    "2016-02-28",
+    "2016-03-06",
+    "2016-03-13",
+    "2016-03-20",
+    "2016-03-27",
+    "2016-04-03",
+    "2016-04-10"
+  ],
+  "lead_time_days": "uniform 5-9 (mean 7, std 1.41), same draws for every policy",
+  "results": {
+    "baseline_buffer_0d": {
+      "fill_rate": 0.8586,
+      "cycle_service_level": 0.7467,
+      "cycle_service_level_weeks_with_demand": 0.6866,
+      "average_units_on_hand": 74547.7,
+      "average_stock_value": 237588.7,
+      "units_ordered": 718169.0,
+      "orders_placed": 64062,
+      "lost_units": 125925.0
+    },
+    "baseline_buffer_3.5d": {
+      "fill_rate": 0.9266,
+      "cycle_service_level": 0.8555,
+      "cycle_service_level_weeks_with_demand": 0.8212,
+      "average_units_on_hand": 110951.3,
+      "average_stock_value": 353788.8,
+      "units_ordered": 779167.0,
+      "orders_placed": 62877,
+      "lost_units": 65427.0
+    },
+    "baseline_buffer_7d": {
+      "fill_rate": 0.9536,
+      "cycle_service_level": 0.907,
+      "cycle_service_level_weeks_with_demand": 0.8849,
+      "average_units_on_hand": 149418.7,
+      "average_stock_value": 473265.9,
+      "units_ordered": 807677.0,
+      "orders_placed": 61305,
+      "lost_units": 41327.0
+    },
+    "baseline_buffer_14d": {
+      "fill_rate": 0.9724,
+      "cycle_service_level": 0.9465,
+      "cycle_service_level_weeks_with_demand": 0.9338,
+      "average_units_on_hand": 228455.0,
+      "average_stock_value": 716169.3,
+      "units_ordered": 837503.0,
+      "orders_placed": 58025,
+      "lost_units": 24570.0
+    },
+    "formula_moving_average_28_0.80": {
+      "fill_rate": 0.9208,
+      "cycle_service_level": 0.8619,
+      "cycle_service_level_weeks_with_demand": 0.8291,
+      "average_units_on_hand": 104234.9,
+      "average_stock_value": 342831.9,
+      "units_ordered": 772503.0,
+      "orders_placed": 63841,
+      "lost_units": 70548.0
+    },
+    "formula_moving_average_28_0.90": {
+      "fill_rate": 0.9397,
+      "cycle_service_level": 0.8987,
+      "cycle_service_level_weeks_with_demand": 0.8747,
+      "average_units_on_hand": 120705.5,
+      "average_stock_value": 400766.2,
+      "units_ordered": 790055.0,
+      "orders_placed": 63147,
+      "lost_units": 53708.0
+    },
+    "formula_moving_average_28_0.95": {
+      "fill_rate": 0.9502,
+      "cycle_service_level": 0.9186,
+      "cycle_service_level_weeks_with_demand": 0.8993,
+      "average_units_on_hand": 134074.7,
+      "average_stock_value": 446872.1,
+      "units_ordered": 800506.0,
+      "orders_placed": 62667,
+      "lost_units": 44371.0
+    },
+    "formula_moving_average_28_0.98": {
+      "fill_rate": 0.959,
+      "cycle_service_level": 0.9364,
+      "cycle_service_level_weeks_with_demand": 0.9213,
+      "average_units_on_hand": 149896.9,
+      "average_stock_value": 502243.7,
+      "units_ordered": 809995.0,
+      "orders_placed": 62165,
+      "lost_units": 36545.0
+    },
+    "formula_lightgbm_weekly_0.80": {
+      "fill_rate": 0.9332,
+      "cycle_service_level": 0.8824,
+      "cycle_service_level_weeks_with_demand": 0.8545,
+      "average_units_on_hand": 104901.4,
+      "average_stock_value": 343723.3,
+      "units_ordered": 771758.0,
+      "orders_placed": 68081,
+      "lost_units": 59538.0
+    },
+    "formula_lightgbm_weekly_0.90": {
+      "fill_rate": 0.952,
+      "cycle_service_level": 0.9185,
+      "cycle_service_level_weeks_with_demand": 0.8992,
+      "average_units_on_hand": 121365.8,
+      "average_stock_value": 401234.3,
+      "units_ordered": 788391.0,
+      "orders_placed": 67810,
+      "lost_units": 42719.0
+    },
+    "formula_lightgbm_weekly_0.95": {
+      "fill_rate": 0.9631,
+      "cycle_service_level": 0.9398,
+      "cycle_service_level_weeks_with_demand": 0.9255,
+      "average_units_on_hand": 135396.1,
+      "average_stock_value": 450192.9,
+      "units_ordered": 798534.0,
+      "orders_placed": 67539,
+      "lost_units": 32897.0
+    },
+    "formula_lightgbm_weekly_0.98": {
+      "fill_rate": 0.9718,
+      "cycle_service_level": 0.9557,
+      "cycle_service_level_weeks_with_demand": 0.9452,
+      "average_units_on_hand": 151530.8,
+      "average_stock_value": 506359.9,
+      "units_ordered": 807020.0,
+      "orders_placed": 67128,
+      "lost_units": 25085.0
+    }
+  },
+  "fill_rate_by_store": {
+    "CA_1": {
+      "baseline_buffer_0d": 0.8629,
+      "baseline_buffer_3.5d": 0.931,
+      "baseline_buffer_7d": 0.9574,
+      "baseline_buffer_14d": 0.9742,
+      "formula_moving_average_28_0.80": 0.9231,
+      "formula_moving_average_28_0.90": 0.9419,
+      "formula_moving_average_28_0.95": 0.9523,
+      "formula_moving_average_28_0.98": 0.9609,
+      "formula_lightgbm_weekly_0.80": 0.9368,
+      "formula_lightgbm_weekly_0.90": 0.9553,
+      "formula_lightgbm_weekly_0.95": 0.9659,
+      "formula_lightgbm_weekly_0.98": 0.9745
+    },
+    "TX_1": {
+      "baseline_buffer_0d": 0.8445,
+      "baseline_buffer_3.5d": 0.9146,
+      "baseline_buffer_7d": 0.9451,
+      "baseline_buffer_14d": 0.9688,
+      "formula_moving_average_28_0.80": 0.9095,
+      "formula_moving_average_28_0.90": 0.9298,
+      "formula_moving_average_28_0.95": 0.9414,
+      "formula_moving_average_28_0.98": 0.9516,
+      "formula_lightgbm_weekly_0.80": 0.9223,
+      "formula_lightgbm_weekly_0.90": 0.9419,
+      "formula_lightgbm_weekly_0.95": 0.9541,
+      "formula_lightgbm_weekly_0.98": 0.9642
+    },
+    "WI_1": {
+      "baseline_buffer_0d": 0.8658,
+      "baseline_buffer_3.5d": 0.9316,
+      "baseline_buffer_7d": 0.9565,
+      "baseline_buffer_14d": 0.9734,
+      "formula_moving_average_28_0.80": 0.9278,
+      "formula_moving_average_28_0.90": 0.9457,
+      "formula_moving_average_28_0.95": 0.9553,
+      "formula_moving_average_28_0.98": 0.9631,
+      "formula_lightgbm_weekly_0.80": 0.9383,
+      "formula_lightgbm_weekly_0.90": 0.957,
+      "formula_lightgbm_weekly_0.95": 0.9674,
+      "formula_lightgbm_weekly_0.98": 0.9753
+    }
+  },
+  "questions": {
+    "a_lightgbm_95_cycle_service_level": 0.9398,
+    "a_reaches_at_least_0.93": true,
+    "moving_average_28_0.90_at_same_fill_rate": {
+      "fill_rate": 0.9397,
+      "average_units_on_hand": 120705.5,
+      "baseline_average_units_on_hand": 129615.1,
+      "average_units_on_hand_vs_baseline": -0.0687,
+      "average_stock_value": 400766.2,
+      "baseline_average_stock_value": 411757.3,
+      "average_stock_value_vs_baseline": -0.0267
+    },
+    "moving_average_28_0.95_at_same_fill_rate": {
+      "fill_rate": 0.9502,
+      "average_units_on_hand": 134074.7,
+      "baseline_average_units_on_hand": 144574.7,
+      "average_units_on_hand_vs_baseline": -0.0726,
+      "average_stock_value": 446872.1,
+      "baseline_average_stock_value": 458220.6,
+      "average_stock_value_vs_baseline": -0.0248
+    },
+    "lightgbm_weekly_0.90_at_same_fill_rate": {
+      "fill_rate": 0.952,
+      "average_units_on_hand": 121365.8,
+      "baseline_average_units_on_hand": 147139.2,
+      "average_units_on_hand_vs_baseline": -0.1752,
+      "average_stock_value": 401234.3,
+      "baseline_average_stock_value": 466185.8,
+      "average_stock_value_vs_baseline": -0.1393
+    },
+    "lightgbm_weekly_0.95_at_same_fill_rate": {
+      "fill_rate": 0.9631,
+      "average_units_on_hand": 135396.1,
+      "baseline_average_units_on_hand": 189357.3,
+      "average_units_on_hand_vs_baseline": -0.285,
+      "average_stock_value": 450192.9,
+      "baseline_average_stock_value": 596009.6,
+      "average_stock_value_vs_baseline": -0.2447
+    }
+  },
+  "provenance": {
+    "code": "154eafb-dirty",
+    "data_sha256": {
+      "calendar": "d12b5914ef03e66649adf5dd9e996e6602251c22b7a6af8f1f7e3aa12f8860f5",
+      "sales": "f368e66ed1dbecb48b2cc8fc589bf68b3deddbbb36bf5c88b4d6d0a09b9b6724",
+      "prices": "9da3ad1f8b8ccacdbdc70612191dd375ec24a4ac6625c24b75b3bc60b0bed2ef"
+    },
+    "intervals": "docs/results/p2_model_selection.json (validation period)"
+  },
+  "runtime_seconds": 1349.1
+}

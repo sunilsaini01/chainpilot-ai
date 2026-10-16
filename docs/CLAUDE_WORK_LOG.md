@@ -527,3 +527,26 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P4-T1-R1 (fixed). Open owner question for P4-T3: the `SYN-` demand profile (D-044).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P4-T2 (replay simulator on M5 demand vs a simple reorder baseline; plan to be written before running).
+
+## 2026-10-16 18:40 UTC — P4-T1 pushed; P4-T2 plan (written before any simulation code or run)
+- Owner pushed `a9070d6`, `fa5ea62`, `154eafb`; CI #16 on `154eafb`: `success`, all three jobs, 0 annotations. P4-T1 and P3-T3-R4 approved.
+- **Pre-registered P4-T2 plan** (replay simulator; nothing is tuned on its results):
+  1. **Data:** real M5 daily sales of every item in stores CA_1, TX_1 and WI_1 (one per state), used as demand. Simulated days 2016-02-01 to 2016-04-17 (77 days = the P2 test period minus its last week, so every day is covered by a forecast made before it). Limitation stated up front: sales are censored demand (a zero may have been a stock-out in the real store).
+  2. **Mechanics** (per item, daily, lost sales): deliveries arrive in the morning, demand is served from stock, unmet demand is lost. Weekly review at the end of 2016-01-31 and every 7 days up to 2016-04-10 (11 reviews), using only sales up to that day. Lead time per order drawn once with a fixed seed, uniform 5–9 days (mean 7, std 1.41), the same draws for every policy. Each policy starts with its own first target level on hand and nothing on order. No minimum order, packs or capacity (M5 has no supplier data).
+  3. **Policies:**
+     - Baseline "simple reorder": order up to 28-day average × (lead time 7 + review 7 + buffer days), buffer ∈ {0, 3.5, 7, 14}.
+     - ChainPilot formula with the moving-average forecast + its calibrated interval, and with the weekly LightGBM forecast + its calibrated interval (P2-T3b settings and intervals, retrained at each review): `order_up_to_level` from `app/inventory_policy.py` with daily mean = mean forecast over the next 14 days, daily std = root-mean-square of `std_from_interval` over those days, lead-time std 1.41; service levels {0.80, 0.90, 0.95, 0.98}.
+  4. **Metrics** (pooled over all items and days): fill rate (units sold / units demanded), cycle service level (share of item-weeks with no lost sales), average units on hand and average stock value (units × sell price), units ordered, orders placed.
+  5. **Pre-registered questions:** (a) P2-T4-R1: at the 95% target, does the LightGBM policy reach a cycle service level of at least 93%? If not, report the gap. (b) Does the LightGBM policy need less average stock than the baseline for the same fill rate (baseline curve interpolated linearly at the 0.90 and 0.95 settings' fill rates)? (c) Same comparison for the moving-average formula, to separate the value of the forecast from the value of the safety-stock math.
+
+## 2026-10-16 20:10 UTC — P4-T2 results
+- Files changed and why: `ml/inventory_sim/` (new: `replay.py` day-by-day simulation and metrics, `policies.py` target levels, `experiment.py` real run with cached forecast inputs, `__init__.py` makes the API's policy module importable), `ml/pyproject.toml` (test path), `ml/tests/test_inventory_replay.py` (new, 12 tests).
+- Tests run / actual results:
+  - `ml`: 131 passed (119 + 12). `apps/api` with `RUN_DB_TESTS=1`: 253 passed. Ruff check and format pass.
+  - Mutations: 13 of 13 simulator/policy/leakage mutations caught after strengthening one test (P4-T2-R2).
+  - First real run (1,441 s): finished, but a per-store result was impossible (TX_1: more buffer, lower fill), and a cached re-run disagreed. Cause: int16 overflow in the baseline targets (P4-T2-R1). Fixed with a regression test; numbers discarded.
+  - Clean re-run with `-W error` (1,349 s, 33 LightGBM retrains averaging 40 s); a cached re-run reproduced it exactly. Results in docs/MODEL_RESULTS.md: (a) LightGBM 95% setting: cycle service level 0.9398 (criterion ≥ 0.93 met), fill 0.9631; (b) at the same fill rate, LightGBM policy −17.5% / −28.5% units vs the baseline (interpolated), −34% at a direct match (98% setting vs 14-day buffer, fill 0.9718 vs 0.9724); (c) moving-average formula −6.9% / −7.3% units.
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings: P2-T4-R1 VERIFIED; P4-T2-R1 (HIGH, fixed before reporting), P4-T2-R2 (LOW, fixed), P4-T2-R3 (LOW, for P4-T4).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P4-T3 (suppliers, purchase orders and lead times in the database and seed). Needs the owner's choice on the SYN- demand profile (D-044).

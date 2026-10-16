@@ -279,3 +279,44 @@ Reproduce:
 python -m delivery_risk.scoring ..\data\raw\olist
 python -m delivery_risk.tier_check ..\data\raw\olist ..\data\processed\delivery_risk\olist_logistic_2018-04-02_2018-08-31 --output ..\docs\results\p3_delivery_risk_tiers.json
 ```
+
+## Inventory policy: replay on real demand (P4-T2)
+
+Plan fixed before any code or run (work log 2026-10-16 18:40). Real daily M5 sales of every item in CA_1, TX_1 and WI_1 (9,147 items) are replayed as demand from 2016-02-01 to 2016-04-17 (77 days, 11 weekly reviews; each review sees only sales up to that day). Lead times are random whole days 5–9 (mean 7), the same draws for every policy. Unmet demand is lost. Policies:
+- **Baseline (simple reorder):** order up to the 28-day average × (14 days + buffer), buffer 0, 3.5, 7 or 14 days.
+- **Formula:** `order_up_to_level` from `apps/api/app/inventory_policy.py` (safety stock for demand and lead-time variation) fed by a forecast made at each review: the 28-day moving average or the weekly LightGBM (retrained at each review), each with its calibrated 80% interval from the P2 validation period.
+
+| Policy | Fill rate | Cycle service level | Avg units on hand | Avg stock value ($) | Orders |
+|---|---|---|---|---|---|
+| Baseline, buffer 0 | 85.9% | 74.7% | 74,548 | 237,589 | 64,062 |
+| Baseline, buffer 3.5 d | 92.7% | 85.6% | 110,951 | 353,789 | 62,877 |
+| Baseline, buffer 7 d | 95.4% | 90.7% | 149,419 | 473,266 | 61,305 |
+| Baseline, buffer 14 d | 97.2% | 94.7% | 228,455 | 716,169 | 58,025 |
+| Formula + moving average, 80% | 92.1% | 86.2% | 104,235 | 342,832 | 63,841 |
+| Formula + moving average, 90% | 94.0% | 89.9% | 120,706 | 400,766 | 63,147 |
+| Formula + moving average, 95% | 95.0% | 91.9% | 134,075 | 446,872 | 62,667 |
+| Formula + moving average, 98% | 95.9% | 93.6% | 149,897 | 502,244 | 62,165 |
+| Formula + LightGBM, 80% | 93.3% | 88.2% | 104,901 | 343,723 | 68,081 |
+| Formula + LightGBM, 90% | 95.2% | 91.9% | 121,366 | 401,234 | 67,810 |
+| **Formula + LightGBM, 95%** | **96.3%** | **94.0%** | **135,396** | **450,193** | 67,539 |
+| Formula + LightGBM, 98% | 97.2% | 95.6% | 151,531 | 506,360 | 67,128 |
+
+Cycle service level = share of item-weeks with no lost sale (the quantity the service-level setting targets). Fill rate = units sold / units demanded.
+
+**Pre-registered questions**
+- **(a) Forecast bias, P2-T4-R1:** at the 95% setting the LightGBM policy reached a cycle service level of **94.0%** (criterion ≥ 93%: met) and a fill rate of 96.3%. The safety stock absorbs the forecast's 5–8% under-forecast. Realised vs. target: 88.2% at 80%, 91.9% at 90%, 94.0% at 95%, 95.6% at 98%. The formula overshoots low targets and falls short at high ones, as expected when demand has heavier tails than the normal curve assumes.
+- **(b) LightGBM policy vs. baseline at the same fill rate** (baseline curve interpolated linearly): **−17.5% units** (−13.9% value) at the 90% setting, **−28.5% units** (−24.5% value) at the 95% setting. Linear interpolation between the 7-day and 14-day baseline points may overstate the baseline's needs, so here are two direct comparisons without interpolation:
+  - LightGBM 98%: fill 97.2% with 151,531 units. Baseline 14 days: fill 97.2% with 228,455 units. **34% less stock for the same fill rate.**
+  - LightGBM 90%: fill 95.2% with 121,366 units. Baseline 7 days: fill 95.4% with 149,419 units. 19% less stock for almost the same fill rate.
+- **(c) The formula with the moving average** (same forecast as the baseline, only the safety-stock math differs): −6.9% units at 90% and −7.3% at 95% (value −2.7% and −2.5%). Most of the gain therefore comes from the better forecast, not from the formula alone.
+- Per store, the order of the policies is the same in CA_1, TX_1 and WI_1 (`fill_rate_by_store`).
+
+**Honest reading and limits**
+- M5 sales are **censored demand**: a day with no sales may have been a stock-out in the real store, so true demand is somewhat higher than replayed.
+- The LightGBM policy places **5–10% more orders** than the baseline (67.5k vs 61–64k), because it rarely forecasts exactly zero, so slow items get small orders. Ordering cost, minimum orders, pack sizes and capacity are not modelled here (M5 has no supplier data). They belong in the recommendations (P4-T4).
+- This covers one 11-week period in 3 of the 10 stores, and it is a second look at the P2 test period. The forecast model and the policy grid were fixed beforehand; nothing was chosen from these results.
+- A bug in the first run (an integer overflow in the baseline, P4-T2-R1) was found by comparing the run with a cached re-run. The numbers above come from a clean run after the fix, and a cached re-run reproduced them exactly.
+
+**Provenance** (`docs/results/p4_inventory_replay.json`): code `154eafb-dirty` (154eafb plus the uncommitted P4-T2 code), runtime 1,349 s, data checksums included.
+
+Reproduce: `python -m inventory_sim.experiment ..\data\raw\m5 --output ..\docs\results\p4_inventory_replay.json`

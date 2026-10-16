@@ -313,7 +313,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: bias of the weekly LightGBM on 2016-04-25..05-22 is −6.1% / −5.0% / −7.7% at 7/14/28 days (moving average +2.1% / −1.6% / −3.9%); on the test windows it was −1.0% / −2.3% / −3.8%.
 - Expected behavior: replenishment based on these forecasts must not systematically order too little.
 - Fix and regression test: not a forecasting-code bug. In P4, use the 80% upper bound or an explicit safety stock in reorder points, and/or a bias correction estimated on validation data only; test that the simulator's service level meets its target.
-- Status: OPEN (P4)
+- Update 2026-10-16 (P4-T2): replay on real demand (3 stores, 77 days). The safety-stock formula fed by the LightGBM forecast and its calibrated interval reached a 94.0% cycle service level and 96.3% fill rate at the 95% setting (pre-registered criterion ≥ 93%), with 17–34% less stock than a simple reorder rule at the same fill rate. No separate bias correction needed; the 1-point shortfall at high targets is documented.
+- Status: VERIFIED
 
 ## P2-T4-R2 — [LOW] My holdout test needed files I forgot to provide
 - Source: Claude (test failure while adding weighted RMSSE to the holdout)
@@ -428,3 +429,23 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: the target is always rounded up (rounding down would order less than the safety stock asks for).
 - Fix and regression test: `test_level_is_rounded_up_never_down` (140.48 -> 141). 11 of 11 policy mutations caught.
 - Status: VERIFIED
+
+## P4-T2-R1 — [HIGH] Integer overflow gave wrong baseline targets in the first replay run
+- Source: Claude self-review (a per-store result looked impossible: in TX_1 more buffer gave a lower fill rate; a cached re-run then gave different numbers)
+- File and reproduction: `ml/inventory_sim/policies.py::baseline_targets`. M5 sales are int16; `sales_28 * 28` (buffer 14 days) or `* 21` (7 days) wraps around above 32,767 without any warning, so fast sellers (e.g. 1,657 units in 28 days) got wrong targets. The 0-day setting (x 14) and the 3.5-day setting (float) were not affected; nor were the formula policies.
+- Expected behavior: exact targets for every item.
+- Fix and regression test: convert to float first; `test_baseline_targets_do_not_overflow_small_integer_sales` fails without the fix. The first run's numbers were discarded; the experiment was re-run from scratch, and a cached re-run reproduced it exactly. Before the fix the baseline looked worse than it is (buffer 14 d: 95.6% fill instead of 97.2%). Reported numbers use the fixed code.
+- Status: VERIFIED
+
+## P4-T2-R2 — [LOW] Two of my test expectations were wrong or too weak
+- Source: test failure; mutation check
+- File and reproduction: `ml/tests/test_inventory_replay.py`. (1) I expected a target of 14 with no demand uncertainty, forgetting that lead-time variation (std 1.41 days) still adds safety stock (14 + 1.645 x 1.41 = 16.3 -> 17); the code was right. (2) The weekly service-level count survived a mutation ("no lost sales" changed to "at most 2 lost"), because the example's weeks lost 4, 4 and 0 units.
+- Fix and regression test: corrected expectation with the arithmetic in a comment; new test where a week loses exactly 1 unit. 13 of 13 simulator mutations caught.
+- Status: VERIFIED
+
+## P4-T2-R3 — [LOW] Forecast-driven policy places 5–10% more orders
+- Source: replay results (docs/results/p4_inventory_replay.json)
+- File and reproduction: LightGBM rarely forecasts exactly 0, so slow items get frequent small orders (67.5k orders vs 61–64k for the baseline). The replay has no ordering cost, minimum order or pack size.
+- Expected behavior: recommendations should not create many tiny orders.
+- Fix and regression test: in P4-T4, apply the supplier's minimum order and pack size (already in `order_quantity`) and test that tiny shortfalls are raised or skipped as the rules say.
+- Status: OPEN (P4-T4)
