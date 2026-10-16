@@ -25,7 +25,7 @@ import argparse
 import getpass
 import os
 import sys
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -81,9 +81,18 @@ def cleanup_command(args: argparse.Namespace) -> int:
 
 
 def seed_command(args: argparse.Namespace) -> int:
-    """Load deterministic synthetic warehouses, products and opening stock."""
+    """Load deterministic synthetic warehouses, products, stock, suppliers and orders.
+
+    Today's date is the demo's "as of" date: order history ends today and orders
+    not yet delivered are open. The same seed on the same day gives the same data.
+    """
     try:
-        plan = build_plan(seed=args.seed, n_products=args.products, n_warehouses=args.warehouses)
+        plan = build_plan(
+            seed=args.seed,
+            n_products=args.products,
+            n_warehouses=args.warehouses,
+            as_of=datetime.now(UTC).date(),
+        )
         with Session(get_engine()) as session:
             summary = load_plan(session, plan)
             session.commit()
@@ -93,7 +102,8 @@ def seed_command(args: argparse.Namespace) -> int:
     print(
         f"Loaded SYNTHETIC data (seed {args.seed}): {summary['warehouses']} warehouses, "
         f"{summary['products']} products, {summary['opening_movements']} opening stock "
-        f"movements, {summary['units']} units"
+        f"movements, {summary['units']} units, {summary['suppliers']} suppliers, "
+        f"{summary['purchase_orders']} purchase orders ({summary['open_purchase_orders']} open)"
     )
     return 0
 

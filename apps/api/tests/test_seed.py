@@ -2,6 +2,7 @@
 
 import os
 from collections import defaultdict
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -9,8 +10,19 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from app import cli
-from app.models import AuditEvent, Inventory, InventoryMovement, Product, Warehouse
+from app.models import (
+    AuditEvent,
+    Inventory,
+    InventoryMovement,
+    Product,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    Supplier,
+    Warehouse,
+)
 from app.seed import (
+    CATEGORY_SUPPLIERS,
+    HISTORY_DAYS,
     LOW_STOCK_MAX_UNITS,
     MAX_FILL_SHARE,
     OPENING_REFERENCE,
@@ -151,3 +163,100 @@ def test_plan_includes_low_stock_and_well_stocked_items() -> None:
     # Roughly 10% of stocked pairs are low (a fixed seed makes this exact and repeatable).
     assert 0.05 * len(quantities) < len(low) < 0.15 * len(quantities)
     assert max(quantities) > 100
+
+
+# --- Suppliers and purchase orders (P4-T3) ---------------------------------------
+
+
+def test_products_and_stock_are_unchanged_by_the_purchasing_data() -> None:
+    # Values produced by seed 42 before suppliers and orders existed: the purchasing
+    # data is drawn afterwards, so old seeds give the same catalogue and stock.
+    plan = build_plan(42, 200, 4)
+    first = plan.products[0]
+    assert (first.sku, first.name, first.unit_cost) == ("SYN-0001", "Classic Rug", Decimal("15.45"))
+    assert (len(plan.opening_stock), sum(s.quantity for s in plan.opening_stock)) == (654, 160712)
+
+
+def test_every_product_has_a_supplier_for_its_category_and_whole_pack_rules() -> None:
+    plan = build_plan()
+    for product in plan.products:
+        assert product.supplier_code in CATEGORY_SUPPLIERS[product.category]
+        assert product.min_order_qty >= product.pack_size >= 1
+        assert product.min_order_qty % product.pack_size == 0
+
+
+def test_purchase_orders_are_labelled_numbered_and_consistent() -> None:
+    plan = build_plan(n_products=500, n_warehouses=5)
+    products = {product.sku: product for product in plan.products}
+    leads = {supplier.code: supplier.lead_time_days for supplier in plan.suppliers}
+
+    assert all(supplier.code.startswith("SYN-SUP") for supplier in plan.suppliers)
+    numbers = [order.po_number for order in plan.purchase_orders]
+    assert numbers == [f"SYN-PO-{n:06d}" for n in range(1, len(numbers) + 1)]
+    dates = [order.ordered_date for order in plan.purchase_orders]
+    assert dates == sorted(dates)
+    for order in plan.purchase_orders:
+        assert plan.as_of - timedelta(days=HISTORY_DAYS) <= order.ordered_date <= plan.as_of
+        assert order.expected_date == order.ordered_date + timedelta(
+            days=leads[order.supplier_code]
+        )
+        if order.received_date is not None:
+            assert order.ordered_date < order.received_date <= plan.as_of
+        assert len({line.sku for line in order.lines}) == len(order.lines) > 0
+        for line in order.lines:
+            product = products[line.sku]
+            assert product.supplier_code == order.supplier_code  # ordered from its own supplier
+            assert line.quantity % product.min_order_qty == 0
+            assert line.unit_cost == product.unit_cost
+
+
+def test_history_has_open_overdue_orders_and_an_unreliable_supplier() -> None:
+    plan = build_plan()
+    open_orders = [order for order in plan.purchase_orders if order.received_date is None]
+    overdue = [order for order in open_orders if order.expected_date < plan.as_of]
+
+    def late_share(code: str) -> float:
+        received = [o for o in plan.purchase_orders if o.supplier_code == code and o.received_date]
+        return sum(o.received_date > o.expected_date for o in received) / len(received)
+
+    assert open_orders and overdue
+    # SUP04 is simulated as often late, SUP01 as reliable.
+    assert late_share("SYN-SUP04") > 0.6 > 0.2 > late_share("SYN-SUP01")
+
+
+def test_as_of_date_only_shifts_the_order_dates() -> None:
+    earlier = build_plan(as_of=date(2026, 1, 1))
+    later = build_plan(as_of=date(2026, 1, 11))
+
+    assert earlier.products == later.products
+    for a, b in zip(earlier.purchase_orders, later.purchase_orders, strict=True):
+        assert b.ordered_date - a.ordered_date == timedelta(days=10)
+        assert (a.lines, a.supplier_code) == (b.lines, b.supplier_code)
+
+
+@needs_db
+def test_load_writes_suppliers_and_orders_without_extra_stock_movements(
+    db_session: Session,
+) -> None:
+    plan = build_plan(n_products=100, n_warehouses=3)
+
+    summary = load_plan(db_session, plan)
+    db_session.commit()
+
+    def count(model) -> int:
+        return db_session.execute(select(func.count()).select_from(model)).scalar_one()
+
+    assert count(Supplier) == summary["suppliers"] == 6
+    assert count(PurchaseOrder) == summary["purchase_orders"] == len(plan.purchase_orders)
+    assert count(PurchaseOrderLine) == sum(len(order.lines) for order in plan.purchase_orders)
+    assert summary["open_purchase_orders"] == sum(
+        o.received_date is None for o in plan.purchase_orders
+    )
+    # Orders are documents: the only stock movements are the opening ones.
+    assert count(InventoryMovement) == len(plan.opening_stock)
+    linked = db_session.execute(
+        select(func.count()).select_from(Product).where(Product.supplier_id.is_not(None))
+    ).scalar_one()
+    assert linked == 100
+    event = db_session.execute(select(AuditEvent)).scalar_one()
+    assert event.details["as_of"] == plan.as_of.isoformat()
