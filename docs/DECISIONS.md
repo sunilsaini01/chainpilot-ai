@@ -145,3 +145,11 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - The ML package writes `forecasts.csv` + `manifest.json`; the API imports them with a CLI command. The API image needs no pandas or LightGBM, the import is all-or-nothing (one transaction, PostgreSQL `COPY`), and each file can be imported once (`run_key` from its checksum). `POST /forecasts/jobs` (spec section 5) needs the background worker, so it is deferred to the phase that adds workers.
 - Forecast rows are keyed by M5 series ids and labelled with their dataset, and never joined to `SYN-` products (spec section 3). Connecting model outputs to the simulated demo scenario is a P4 decision.
 - `sales_train_evaluation.csv` is used exactly once, as a final untouched check of the published forecasts.
+
+## D-040 — 2026-10-16 — Olist delivery-risk data design (fixed before any modelling)
+- Label: delivered on a later calendar day than promised. Prediction at dispatch (spec: "no actual-delivery fields in dispatch-time prediction"), so handover timing is allowed and the customer delivery date, reviews and final status are not.
+- Chronological split by purchase date: 2017 train, Jan–Mar 2018 validation, Apr–Aug 2018 test. 2016 (launch, very few orders) and Sep–Oct 2018 (almost nothing delivered) are dropped. Split dates were chosen from data availability (orders and delivery completeness per month), not from late rates.
+- Censoring rule: drop orders promised within 30 days of the data end, so late outcomes in the last weeks are not under-counted.
+- One row per order: multi-item orders are summarized (counts, totals, heaviest/biggest), with seller, category and payment type taken from the most expensive item / largest payment.
+- Distance from zip-prefix centroids, after removing coordinates outside Brazil's bounding box. Unknown zip prefixes give a missing distance (475 orders), not a guess.
+- Not used yet: seller history (past late rate per seller). It could help, but it must be computed only from orders delivered before each dispatch, to avoid leakage; a candidate for P3-T2 validation.

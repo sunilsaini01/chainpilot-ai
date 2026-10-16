@@ -1,35 +1,24 @@
 # Project Status
 
-Current phase: P2 (Demand ML)
-Current task: P2-T4, forecast publishing, import and API (completes P2)
+Current phase: P3 (Delivery ML)
+Current task: P3-T1, Olist loader, label, dispatch-time features, time split
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 0c32413 "Record validated model selection and test results" (CI #10 green). P2-T4 and the review fixes are uncommitted.
+Last commit: 8c07d78 "Record clean re-runs, holdout check and forecast API docs" (CI #11 green, P2 complete). P3-T1 is uncommitted.
 
-## P2-T4 acceptance criteria
-- [x] Forecasts for the 28 days after the data (2016-04-25..05-22) for all 30,490 M5 series, with calibrated 80% intervals, written as CSV + manifest (provenance, checksum)
-- [x] Migration 0006 (`forecast_runs`, `forecasts`) with database checks on interval order and steps
-- [x] Validated, all-or-nothing, audited import (`import-forecasts`); duplicates refused; 853,720 rows in ~45 s
-- [x] `GET /forecasts/runs`, `GET /forecasts` (filters, paging, `X-Total-Count`, `X-Dataset` label), analyst+
-- [x] M5 forecasts kept separate from the simulated SYN- products (spec section 3)
-- [x] Final check on untouched actuals: beats the moving average (WAPE 0.717 vs 0.739 at 28 days), intervals calibrated (~80%)
-- [ ] `POST /forecasts/jobs` (spec section 5): deferred to the background-worker phase
+## P3-T1 acceptance criteria
+- [x] Olist download guide; loader and structural validation (7 files; reviews deliberately not read)
+- [x] Label `late` by calendar day; prediction at dispatch; forbidden fields documented and enforced (perturbation test)
+- [x] Time split by purchase date with documented windows; censoring rule near the data end; every dropped order counted by reason
+- [x] Order-level features (timing, items, weight/volume, distance, states, payment, category) with honest missing values
+- [x] 10-order synthetic fixture covering each edge case; 16 tests; mutations caught
+- [x] Real data validated: 95,723 usable orders (train 43,406 / validation 20,627 / test 31,690)
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-## P2 phase gate (spec: "reproducible time-split metrics; inference API")
-- [x] Time-split metrics with recorded origins, versions and data checksums; baselines reproduced from clean code (identical)
-- [x] Inference served through the API (published forecasts)
-- [x] Clean re-run from `0c32413`: baselines and model selection identical (reports replaced)
-- [ ] CI green, then owner milestone check
-
-Tests executed (2026-10-16, details in docs/CLAUDE_WORK_LOG.md):
-- `ml`: 75 passed. API with PostgreSQL: 195 passed. Ruff passes.
-- Real data: publish 5 min; import 45 s; holdout check 17 s; isolated Docker end-to-end OK.
-
-Open findings: P2-T4-R1 (MEDIUM, under-forecast 5–8% on the holdout; handle in P4), P1-T4-R2 (LOW, P3/P4). See docs/REVIEW_QUEUE.md.
-Next action: owner commits and pushes; confirm CI; P2 milestone check.
+Open findings: P3-T1-R2 (MEDIUM, late rate 5.6% -> 12.9%: calibration in P3-T2), P2-T4-R1 (MEDIUM, forecast bias, P4), P1-T4-R2 (LOW, P3/P4). See docs/REVIEW_QUEUE.md.
+Next action: Owner commits and pushes P3-T1; approves scikit-learn for P3-T2.
 Blockers: none.
 
 ## Roadmap progress
@@ -45,8 +34,11 @@ Blockers: none.
 | P2-T2 Features, baselines, rolling-origin backtests, metrics | APPROVED (owner, 2026-10-15; CI #8 green on f5601f9) |
 | P2-T3 LightGBM model, uncertainty, artifacts | APPROVED as first version (owner, 2026-10-15; CI #9 green on 7ead45b) |
 | P2-T3b Improved model: validation period, weekly models, calibrated intervals | APPROVED (owner, 2026-10-16; CI #10 green on 0c32413) |
-| P2-T4 Forecast tables, import and API | READY_FOR_USER_CHECK |
-| P3–P9 | NOT_STARTED |
+| P2-T4 Forecast tables, import and API | APPROVED (CI #11 green on 8c07d78; P2 complete) |
+| P3-T1 Olist loader, label, dispatch features, split | READY_FOR_USER_CHECK |
+| P3-T2 Delivery-risk models (logistic baseline, tree), calibration | NOT_STARTED |
+| P3-T3 Delivery-risk scores in the API | NOT_STARTED |
+| P4–P9 | NOT_STARTED |
 
 ## History
 - 2026-10-08 to 2026-10-15: first attempt under the two-agent Claude↔Codex workflow. On 2026-10-15 the owner deleted it entirely, including Git history. See DECISIONS D-001.
@@ -63,3 +55,4 @@ Blockers: none.
 - 2026-10-15: P2-T3 built; LightGBM evaluated honestly (ties/loses to the 28-day moving average); artifacts pipeline works.
 - 2026-10-16: P2-T3b: weekly LightGBM chosen on validation; beats the moving average on the test windows; intervals calibrated.
 - 2026-10-16: P2-T4 built (publish, import, API, holdout check); review fixes for P2-T2-R2/R3.
+- 2026-10-16: P2 complete (CI #11). P3 started: Olist downloaded; P3-T1 built.

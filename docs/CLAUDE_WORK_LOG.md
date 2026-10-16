@@ -415,3 +415,25 @@ Append-only. Each entry records what was actually done and actually run.
 - Ending commit (if any): none. The owner will commit and push.
 - Follow-up: report writers produced Windows (CRLF) line endings on Windows (Git normalised them via `.gitattributes`, but the forecast CSV checksum, and so its `run_key`, depended on the OS). All JSON writers now pass `newline="\n"` and `publish` writes the CSV with `lineterminator="\n"`. Republished (853,720 rows; `run_key` 0352c64a147cdb3d -> 7d6a726a51bf475b); holdout re-run with `-W error`: metrics identical. The two result JSONs copied from the clean re-run were converted to LF.
 - Follow-up (my mistake): while making the fixture generator write LF, a `sed` edit applied but turned `"\n"` into a real line break in 3 places, breaking `make_m5_tiny.py` (syntax error); my grep check had wrongly reported 0 matches because of its own escaping. The tests still passed because they read the CSVs, not the script. Repaired with a checked Python edit; the generator now uses `csv.writer(file, lineterminator="\n")`; fixtures regenerate byte-identically (SHA-256 compared) as LF text. Final: ML 75 passed, API 195 passed with PostgreSQL, Ruff clean in both, `git diff --check` clean, no CRLF warnings, no data/models/secrets staged.
+
+## 2026-10-16 11:20 UTC — P2-T4 CI verification and P2 milestone
+- Owner pushed `1c477cc` (code), `4da4c05` (tests), `8c07d78` (results/docs). GitHub Actions run 38856537962 (CI #11) on `8c07d78`: `success`, all three jobs, 0 annotations. **P2 complete.**
+- Housekeeping: `ml/tests/fixtures/m5_tiny/sales_train_validation.csv` showed as modified after regeneration but was byte-identical to the commit (same SHA-256, no CR); re-staging the identical file cleared the stale status, nothing was staged.
+- Owner downloaded the Olist dataset into `data/raw/olist` (9 CSV files, ~126 MB, all ignored by Git: `git check-ignore` matched `data/raw/`). Next: P3.
+
+## 2026-10-16 12:30 UTC — P3-T1
+- Starting commit / branch: `8c07d78` on `main` (CI #11 green), working tree clean apart from the P2 milestone entries.
+- Objective and plan: Olist loader, validation, label, dispatch-time features, time split and censoring rule, fixtures, tests, docs. Profiled the orders and the delivery completeness by month first (not late rates) to choose the split windows.
+- Files changed and why:
+  - `ml/delivery_risk/__init__.py`, `ml/delivery_risk/olist_data.py` (new).
+  - `ml/tests/fixtures/make_olist_tiny.py` + `ml/tests/fixtures/olist_tiny/*.csv` (new, 10 hand-written synthetic orders), `ml/tests/test_olist_data.py` (new, 16 tests). ML total 91.
+  - `docs/{DATASETS,DECISIONS,REVIEW_QUEUE,PROJECT_STATUS}.md`, `README.md`.
+- Tests run / actual results:
+  - Real data: `validate ../data/raw/olist` with `-W error`: 99,441 raw orders -> 95,723 usable; drops 2,963 / 9 / 188 / 295 / 263 by reason; train 43,406 (late 0.056), validation 20,627 (late 0.129), test 31,690 (rate hidden); 3.2 s.
+  - Feature profile: no forbidden column present; median promise 23.2 days, handling 2.2 days, distance 433 km; distance missing for 475 orders; weights: found 16 orders wrongly at 0 kg (P3-T1-R1), fixed: now 16 missing, 5 genuine zeros.
+  - `ml`: 91 passed; Ruff passes. Mutations (restored, diff identical): a feature using the delivery date failed the leakage test; a timestamp label failed the calendar-day test; no censoring failed 4 tests; plain weight sum failed the missing-weight test.
+  - Olist fixtures regenerate byte-identically (LF).
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings and fixes: R1 VERIFIED, R3 FIXED; R2 (MEDIUM, shift in late rate) OPEN for P3-T2.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P3-T2 (logistic-regression baseline and a tree model; PR-AUC, precision, recall, calibration; threshold chosen on validation). Logistic regression needs scikit-learn, a new dependency (owner approval).

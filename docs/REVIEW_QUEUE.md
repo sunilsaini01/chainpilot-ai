@@ -332,3 +332,23 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: adding a column to the 1,947-column evaluation table fragmented it.
 - Fix and regression test: the series id is used as the index instead of a new column; the real run passes with `python -W error`.
 - Status: FIXED
+
+## P3-T1-R1 — [LOW] Missing product weights summed to 0 kg
+- Source: Claude self-review (feature profiling on real data)
+- File and reproduction: `ml/delivery_risk/olist_data.py`. pandas' `sum` treats an all-missing group as 0, so 16 orders whose products all lack a weight showed `total_weight_kg = 0` instead of unknown (5 orders genuinely weigh 0 g).
+- Expected behavior: unknown stays unknown.
+- Fix and regression test: `sum(min_count=1)`; `test_missing_weights_stay_unknown_not_zero` (fails with the old sum). Real data now: 16 missing, 5 zero.
+- Status: VERIFIED
+
+## P3-T1-R2 — [MEDIUM] Late rate jumps from 5.6% (2017) to 12.9% (Jan–Mar 2018)
+- Source: real-data validation
+- File and reproduction: train late rate 0.056, validation 0.129. A model fitted on 2017 alone would under-estimate risk in 2018.
+- Expected behavior: risk scores whose probabilities match recent reality.
+- Fix and regression test: P3-T2: report calibration on validation and test, compare models trained on 2017 with an expanding window, and consider recalibration on validation data only. Never tune on the test period.
+- Status: OPEN (P3-T2)
+
+## P3-T1-R3 — [LOW] I left a nonsense expression in the code while writing it
+- Source: Claude self-review (reading back the new module before running it)
+- File and reproduction: `dispatched_after_limit` was written as `(... if False else ...)`. It computed the right value but was confusing.
+- Fix and regression test: rewritten plainly; `test_timing_features` checks the flag for a late and an on-time handover.
+- Status: FIXED

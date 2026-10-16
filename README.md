@@ -21,9 +21,10 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/demand_forecasting/m5_data.py` | Loads and validates the Kaggle M5 dataset and turns it into one row per product, store and day. The data itself must be downloaded: see [docs/DATASETS.md](docs/DATASETS.md). |
 | `ml/demand_forecasting/{lgbm_model,conformal,model_selection,train_final}.py` | LightGBM demand model (one model per forecast week), chosen on a validation period, with calibrated 80% intervals; it beats the 28-day moving average on the test windows (WAPE 0.740 vs 0.753 at 28 days). `train_final` saves the models per store in `ml/artifacts/` (not in Git). See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `ml/demand_forecasting/{baselines,backtest,metrics,features}.py` | Baseline forecasts (seasonal naive, 28-day moving average), rolling-origin backtests with MAE/WAPE/bias/RMSSE for 7/14/28 days, and leakage-safe features. Results: [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
+| `ml/delivery_risk/olist_data.py` | Prepares the Olist marketplace data for delivery-delay risk: one row per delivered order, a `late` label, and features known at dispatch time (no delivery dates, no reviews), with a time-based split. See [docs/DATASETS.md](docs/DATASETS.md). |
 | `.github/workflows/ci.yml` | On every push and pull request: API and ML Ruff lint/format and tests (API tests against a real Postgres 16, ML tests on tiny M5-format fixtures), then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: forecast jobs from the API (needs the background worker), delivery risk, inventory decisions, agents, frontend, AWS.
+Not built yet: forecast jobs from the API (needs the background worker), delivery-risk models (P3-T2), inventory decisions, agents, frontend, AWS.
 
 ## How stock changes
 
