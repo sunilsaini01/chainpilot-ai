@@ -160,3 +160,55 @@ The published forecast file (`m5_lightgbm_weekly_2016-04-24`, 853,720 rows) cove
 - **Watch-out: bias.** The model under-forecasts by 5–8% here (the moving average by −4% to +2%). For replenishment, under-forecasting means too little stock, so P4 should add a safety-stock buffer (or a bias correction checked on validation data) rather than use the point forecast directly. See review item P2-T4-R1.
 
 Reproduce: `python -m demand_forecasting.holdout ..\data\raw\m5 ..\data\processed\forecasts\m5_lightgbm_weekly_2016-04-24 --output ..\docs\results\p2_holdout.json`
+
+## Delivery-delay risk: first experiment (P3-T2)
+
+**Data:** Olist (public Brazilian marketplace data; a different business from M5, and not ChainPilot's simulated suppliers). One row per delivered order; `late` = delivered after the promised day; features known at dispatch (`ml/delivery_risk/olist_data.py`). Train 2017 (43,406 orders), validation Jan–Mar 2018 (20,627), test Apr–Aug 2018 (31,690). The plan was written down before training (work log, 2026-10-16 13:00 UTC).
+
+**Validation** (both models fitted on 2017 only):
+
+| Model | PR-AUC | ROC-AUC | Brier | ECE | Mean predicted | Late rate |
+|---|---|---|---|---|---|---|
+| Logistic regression | **0.361** | 0.751 | 0.1138 | 0.100 | 0.029 | 0.129 |
+| LightGBM | 0.292 | 0.673 | 0.1124 | 0.089 | 0.040 | 0.129 |
+
+Chosen by the rule (highest validation PR-AUC): **logistic regression**. Platt calibration fitted on validation (slope 0.925, intercept 1.578); F1-best threshold on calibrated validation scores: 0.198 (validation: precision 0.338, recall 0.454, flags 17.3% of orders).
+
+**Test** (Apr–Aug 2018, looked at once), the pre-registered result:
+
+| | PR-AUC | ROC-AUC | Brier | ECE | Mean predicted | Late rate | Precision @ threshold | Recall @ threshold | Flagged |
+|---|---|---|---|---|---|---|---|---|---|
+| Chosen: logistic + calibration (the plan) | 0.281 | 0.806 | 0.0635 | **0.137** | **0.181** | 0.045 | 0.100 | 0.754 | 33.7% |
+
+For transparency only (not used to choose anything):
+
+| | PR-AUC | Brier | ECE | Mean predicted |
+|---|---|---|---|---|
+| Logistic regression, **uncalibrated** | 0.281 | 0.0372 | 0.0028 | 0.044 |
+| LightGBM, uncalibrated (not chosen) | 0.366 | – | – | – |
+
+Reliability of the calibrated test scores:
+
+| Predicted bin | Orders | Mean predicted | Observed late rate |
+|---|---|---|---|
+| 0.0-0.1 | 11,008 | 0.060 | 0.007 |
+| 0.1-0.2 | 10,156 | 0.145 | 0.026 |
+| 0.2-0.3 | 5,280 | 0.245 | 0.048 |
+| 0.3-0.4 | 2,580 | 0.343 | 0.082 |
+| 0.4-0.5 | 1,305 | 0.445 | 0.133 |
+| 0.5-0.6 | 692 | 0.543 | 0.197 |
+| 0.6-0.7 | 353 | 0.646 | 0.300 |
+| 0.7-0.8 | 152 | 0.744 | 0.474 |
+| 0.8-0.9 | 107 | 0.849 | 0.608 |
+| 0.9-1.0 | 57 | 0.942 | 0.895 |
+
+**Honest reading**
+- **Ranking works:** ROC-AUC 0.81 and PR-AUC 0.28 against a 4.5% late rate (about 6x better than random). The observed late rate rises steadily across the bins, from 0.8% to 89%.
+- **The planned calibration failed on test:** probabilities average 18.1% while only 4.5% of orders were late (ECE 0.137). The late rate went 5.6% (2017) -> **12.9% (Jan–Mar 2018, an unusual quarter)** -> 4.5% (Apr–Aug 2018). Calibrating to the unusual quarter made the probabilities worse; the uncalibrated model, trained on 2017, happened to be almost exactly right on test (ECE 0.003).
+- **The model choice is unstable for the same reason:** on validation the logistic regression won (0.361 vs 0.292); on test LightGBM ranks better (0.366 vs 0.281). Nothing was re-chosen after seeing the test.
+- **At the chosen threshold** the model flags 34% of orders and catches 75% of late ones, but only 10% of flagged orders are actually late: the threshold was tuned to the high-risk quarter.
+- **Lesson** (same as for demand in P2): one validation window, in an unusual period, is not enough to choose a model, a calibration or a threshold. See review item P3-T2-R1 for the proposed fix.
+
+**Provenance** (`docs/results/p3_delivery_risk.json`): code `0b891fb-dirty` (commit 0b891fb plus the uncommitted P3-T2 code), scikit-learn 1.9.1, LightGBM 4.7.0, data checksums in the JSON, runtime 5.8 s.
+
+Reproduce: `python -m delivery_risk.experiment ..\data\raw\olist --output ..\docs\results\p3_delivery_risk.json`

@@ -437,3 +437,26 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings and fixes: R1 VERIFIED, R3 FIXED; R2 (MEDIUM, shift in late rate) OPEN for P3-T2.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P3-T2 (logistic-regression baseline and a tree model; PR-AUC, precision, recall, calibration; threshold chosen on validation). Logistic regression needs scikit-learn, a new dependency (owner approval).
+
+## 2026-10-16 13:00 UTC — P3-T1 pushed; P3-T2 plan (written before any model is trained)
+- Owner pushed `6f4a75b`, `bfd499b`, `0b891fb`; CI #12 running (ML job already green). Owner: "ready for baseline and next part", taken as approval of scikit-learn for the logistic-regression baseline.
+- **Pre-registered P3-T2 plan:**
+  - Data and split as in P3-T1 (train 2017, validation Jan–Mar 2018, test Apr–Aug 2018). Features: `FEATURE_COLUMNS`. Every model is fitted on train only.
+  - Candidates, fixed settings: (A) logistic regression: median imputation + standardisation for numbers, one-hot for categories (product categories with fewer than 100 training orders grouped as "other"), C = 1.0, max 2,000 iterations. (B) LightGBM binary classifier: learning rate 0.05, 63 leaves, min 100 rows per leaf, feature/bagging fraction 0.8, 400 rounds, seed 42, deterministic, native categories.
+  - Selection: highest PR-AUC (average precision) on validation; ties within 0.005 broken by lower Brier score.
+  - Calibration (P3-T1-R2, base rate 5.6% to 12.9%): the chosen model's validation scores are recalibrated with Platt scaling (logistic regression on the score's log-odds), fitted on validation.
+  - Decision threshold: the one maximising F1 on the calibrated validation scores.
+  - Test: chosen model + calibration + threshold applied once to the test period. Report PR-AUC, ROC-AUC, Brier, log loss, expected calibration error (10 bins), precision, recall, F1 and the base rate; also the uncalibrated scores and both models' test PR-AUC for transparency (no re-choosing).
+  - Known limitation, accepted: the calibration and the threshold use the same validation predictions.
+
+## 2026-10-16 13:40 UTC — P3-T2 (first experiment)
+- Starting commit / branch: `0b891fb` on `main`. scikit-learn 1.9.1 installed (owner approval in "ready for baseline"); `pip check` clean; pinned in `ml/requirements.txt`.
+- Files changed and why: `ml/delivery_risk/evaluation.py` (metrics, ECE, reliability, F1 threshold, Platt), `ml/delivery_risk/models.py` (logistic pipeline, LightGBM), `ml/delivery_risk/experiment.py` (the pre-registered run, with a checkpoint after validation), `ml/tests/test_delivery_models.py` (13 tests), `ml/requirements.txt`, `docs/{MODEL_RESULTS,REVIEW_QUEUE,DECISIONS,PROJECT_STATUS}.md`, `docs/results/p3_delivery_risk.json`.
+- Tests run / actual results:
+  - `ml`: 104 passed; Ruff passes. Mutations: ECE without abs (2 failed), tie-break preferring the worse Brier (1 failed).
+  - Real run with `-W error`: 7.8 s. Validation PR-AUC: logistic 0.3606, LightGBM 0.2924; chosen logistic. Calibration slope 0.925, intercept 1.578; threshold 0.198. Test (calibrated): PR-AUC 0.2814, ROC-AUC 0.8058, ECE 0.1367, mean predicted 0.1815 vs late rate 0.0448, precision 0.1002, recall 0.7541, flagged 0.3369. Transparency: uncalibrated ECE 0.0028; LightGBM test PR-AUC 0.3657.
+  - My mistakes fixed along the way: an inline script turned `"\n"` into real line breaks again (now: escape sequences only via the editor); an over-engineered pipeline (P3-T2-R2); an invalid pandas call in a test (P3-T2-R3).
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings: P3-T2-R1 (MEDIUM, owner decision). Nothing was re-chosen after seeing the test results.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: owner decides on P3-T2-R1 (rolling-window evaluation, as for demand in P2-T3b) before deploying any delivery-risk model (P3-T3).

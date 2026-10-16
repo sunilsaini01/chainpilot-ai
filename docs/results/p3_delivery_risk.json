@@ -1,0 +1,203 @@
+{
+  "plan": "docs/CLAUDE_WORK_LOG.md, 'P3-T2 plan' (written before training)",
+  "dataset": "Olist Brazilian E-Commerce (public data); not ChainPilot's simulated suppliers",
+  "splits": {
+    "train": {
+      "from": "2017-01-01",
+      "to": "2017-12-31",
+      "orders": 43406
+    },
+    "validation": {
+      "from": "2018-01-01",
+      "to": "2018-03-31",
+      "orders": 20627
+    },
+    "test": {
+      "from": "2018-04-01",
+      "to": "2018-08-31",
+      "orders": 31690
+    }
+  },
+  "dropped_orders": {
+    "not delivered (outcome unknown)": 2963,
+    "missing delivery or carrier date": 9,
+    "inconsistent dates (handover before purchase, or delivery before handover)": 188,
+    "promised date within 30 days of the data end (outcome may be censored)": 295,
+    "purchased outside the split windows (2016, Sep-Oct 2018)": 263
+  },
+  "validation": {
+    "logistic_regression": {
+      "orders": 20627,
+      "late_rate": 0.1288,
+      "mean_predicted": 0.0289,
+      "pr_auc": 0.3606,
+      "roc_auc": 0.7507,
+      "brier": 0.1138,
+      "log_loss": 0.4448,
+      "ece": 0.0999
+    },
+    "lightgbm": {
+      "orders": 20627,
+      "late_rate": 0.1288,
+      "mean_predicted": 0.0401,
+      "pr_auc": 0.2924,
+      "roc_auc": 0.6734,
+      "brier": 0.1124,
+      "log_loss": 0.4705,
+      "ece": 0.0892
+    }
+  },
+  "chosen": "logistic_regression",
+  "calibration": {
+    "slope": 0.9247216466452438,
+    "intercept": 1.5777706901273174
+  },
+  "validation_calibrated": {
+    "orders": 20627,
+    "late_rate": 0.1288,
+    "mean_predicted": 0.1288,
+    "pr_auc": 0.3606,
+    "roc_auc": 0.7507,
+    "brier": 0.0985,
+    "log_loss": 0.3326,
+    "ece": 0.0064,
+    "at_threshold": {
+      "threshold": 0.198,
+      "flagged_share": 0.1729,
+      "precision": 0.3384,
+      "recall": 0.4543,
+      "f1": 0.3879
+    }
+  },
+  "threshold": 0.198,
+  "test": {
+    "calibrated": {
+      "orders": 31690,
+      "late_rate": 0.0448,
+      "mean_predicted": 0.1815,
+      "pr_auc": 0.2814,
+      "roc_auc": 0.8058,
+      "brier": 0.0635,
+      "log_loss": 0.2465,
+      "ece": 0.1367,
+      "at_threshold": {
+        "threshold": 0.198,
+        "flagged_share": 0.3369,
+        "precision": 0.1002,
+        "recall": 0.7541,
+        "f1": 0.1769
+      }
+    },
+    "uncalibrated": {
+      "orders": 31690,
+      "late_rate": 0.0448,
+      "mean_predicted": 0.0439,
+      "pr_auc": 0.2814,
+      "roc_auc": 0.8058,
+      "brier": 0.0372,
+      "log_loss": 0.1489,
+      "ece": 0.0028
+    },
+    "reliability_calibrated": [
+      {
+        "bin": "0.0-0.1",
+        "orders": 11008,
+        "mean_predicted": 0.0599,
+        "observed_late_rate": 0.0075
+      },
+      {
+        "bin": "0.1-0.2",
+        "orders": 10156,
+        "mean_predicted": 0.1449,
+        "observed_late_rate": 0.0263
+      },
+      {
+        "bin": "0.2-0.3",
+        "orders": 5280,
+        "mean_predicted": 0.2446,
+        "observed_late_rate": 0.0483
+      },
+      {
+        "bin": "0.3-0.4",
+        "orders": 2580,
+        "mean_predicted": 0.3432,
+        "observed_late_rate": 0.0818
+      },
+      {
+        "bin": "0.4-0.5",
+        "orders": 1305,
+        "mean_predicted": 0.4452,
+        "observed_late_rate": 0.1326
+      },
+      {
+        "bin": "0.5-0.6",
+        "orders": 692,
+        "mean_predicted": 0.5433,
+        "observed_late_rate": 0.1965
+      },
+      {
+        "bin": "0.6-0.7",
+        "orders": 353,
+        "mean_predicted": 0.6456,
+        "observed_late_rate": 0.3003
+      },
+      {
+        "bin": "0.7-0.8",
+        "orders": 152,
+        "mean_predicted": 0.7444,
+        "observed_late_rate": 0.4737
+      },
+      {
+        "bin": "0.8-0.9",
+        "orders": 107,
+        "mean_predicted": 0.8489,
+        "observed_late_rate": 0.6075
+      },
+      {
+        "bin": "0.9-1.0",
+        "orders": 57,
+        "mean_predicted": 0.9424,
+        "observed_late_rate": 0.8947
+      }
+    ],
+    "pr_auc_by_model": {
+      "logistic_regression": 0.2814,
+      "lightgbm": 0.3657
+    }
+  },
+  "settings": {
+    "lightgbm": {
+      "objective": "binary",
+      "learning_rate": 0.05,
+      "num_leaves": 63,
+      "min_data_in_leaf": 100,
+      "feature_fraction": 0.8,
+      "bagging_fraction": 0.8,
+      "bagging_freq": 1,
+      "seed": 42,
+      "deterministic": true,
+      "num_threads": 4,
+      "verbose": -1
+    },
+    "lightgbm_rounds": 400,
+    "logistic_regression": "C=1.0, max_iter=2000, median impute, standardise, one-hot"
+  },
+  "provenance": {
+    "git_commit": "0b891fb-dirty",
+    "python": "3.11.9",
+    "pandas": "3.0.6",
+    "numpy": "2.4.6",
+    "scikit_learn": "1.9.1",
+    "lightgbm": "4.7.0",
+    "data_sha256": {
+      "orders": "8df58ef3d2d7e9944010f7beecd9b75367f5588ec6e3c91cec19ae3345ef9ecf",
+      "items": "0bc4d068c4fe38cbb01bd90e8746e3c613fe7b4baef75fab7b0e329701c3e279",
+      "products": "3e6569628a17fbc75fd206ee357b59e20364b9afa90f5b6cd5b4d624c58aa9cc",
+      "sellers": "1f643d2b950373b85735e7794b20986f528d7a000432e7c6f9bcbb44d0846a0e",
+      "customers": "983a422239e1712ded753b3bf9ecf47dc73f144d306029dcfa99e70a226883d2",
+      "payments": "4f713964f2815dbbaa40b9488268c55aac3627bfce5aa96cf58d1f3616de3cc0",
+      "geolocation": "b514f6fc991b9566aeba02aa5d67e2c3630f034b60a0e05aa0d082a3b66d88d6"
+    }
+  },
+  "runtime_seconds": 5.8
+}

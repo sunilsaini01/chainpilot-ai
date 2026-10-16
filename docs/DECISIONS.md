@@ -153,3 +153,7 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - One row per order: multi-item orders are summarized (counts, totals, heaviest/biggest), with seller, category and payment type taken from the most expensive item / largest payment.
 - Distance from zip-prefix centroids, after removing coordinates outside Brazil's bounding box. Unknown zip prefixes give a missing distance (475 orders), not a guess.
 - Not used yet: seller history (past late rate per seller). It could help, but it must be computed only from orders delivered before each dispatch, to avoid leakage; a candidate for P3-T2 validation.
+
+## D-041 — 2026-10-16 — Delivery-risk metrics and the first experiment's result
+- PR-AUC is the main ranking metric (late orders are rare); Brier, log loss and ECE judge the probabilities; precision/recall/F1 at a threshold describe an alerting policy. Accuracy is not reported (always saying "on time" is ~90% accurate).
+- The first pre-registered experiment is reported as run, including its failure: calibrating on one unusual quarter (Jan–Mar 2018) over-predicts later risk. No model is deployed from it. The owner decides whether to run a rolling-window evaluation (P3-T2-R1) before P3-T3.

@@ -345,10 +345,30 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: train late rate 0.056, validation 0.129. A model fitted on 2017 alone would under-estimate risk in 2018.
 - Expected behavior: risk scores whose probabilities match recent reality.
 - Fix and regression test: P3-T2: report calibration on validation and test, compare models trained on 2017 with an expanding window, and consider recalibration on validation data only. Never tune on the test period.
-- Status: OPEN (P3-T2)
+- Update 2026-10-16: P3-T2 ran the pre-registered recalibration on validation. It made things worse: the test period's late rate (4.5%) is close to 2017's (5.6%), and Jan–Mar 2018 (12.9%) was the unusual quarter. Calibrated test ECE 0.137 vs 0.003 uncalibrated. Superseded by P3-T2-R1.
+- Status: OPEN (see P3-T2-R1)
 
 ## P3-T1-R3 — [LOW] I left a nonsense expression in the code while writing it
 - Source: Claude self-review (reading back the new module before running it)
 - File and reproduction: `dispatched_after_limit` was written as `(... if False else ...)`. It computed the right value but was confusing.
 - Fix and regression test: rewritten plainly; `test_timing_features` checks the flag for a late and an on-time handover.
+- Status: FIXED
+
+## P3-T2-R1 — [MEDIUM] One unusual validation quarter made the model choice, calibration and threshold unreliable
+- Source: pre-registered P3-T2 experiment (docs/results/p3_delivery_risk.json)
+- File and reproduction: `ml/delivery_risk/experiment.py`. Validation (Jan–Mar 2018) had a 12.9% late rate, unlike 2017 (5.6%) and the test period (4.5%). Results: logistic regression chosen on validation (PR-AUC 0.361 vs 0.292) but LightGBM ranks better on test (0.366 vs 0.281); Platt calibration fitted on validation over-predicts on test (mean 18.2% vs 4.5% actual, ECE 0.137); the F1 threshold flags 34% of test orders at 10% precision.
+- Expected behavior: choices that hold up when conditions change.
+- Fix and regression test (proposed, needs the owner's go-ahead, and a new plan written before running): rolling-origin evaluation with several monthly windows inside Jan 2017 – Mar 2018 (no test data) to choose the model; calibrate on a **recent rolling window** (e.g. the 8 weeks of delivered orders before each scoring date) and check that rule across the windows; choose the threshold from a business rule (e.g. a fixed share of orders to review) rather than F1 on one quarter. Then evaluate once more on the unchanged test period.
+- Status: OPEN (owner decision)
+
+## P3-T2-R2 — [LOW] Over-engineered first version of the logistic pipeline
+- Source: Claude self-review (reading back before running)
+- File and reproduction: the first draft used a hand-made transformer and a nested `ColumnTransformer` just to turn categories into strings.
+- Fix and regression test: replaced by a plain `logistic_inputs()` helper; covered by the model tests (unseen categories, missing values).
+- Status: FIXED
+
+## P3-T2-R3 — [LOW] My test used an invalid pandas call
+- Source: test failure
+- File and reproduction: `column.where(False, "D")` raised ValueError inside a test that sets unseen categories.
+- Fix and regression test: sets the categories explicitly; both models now pass the unseen-category test.
 - Status: FIXED

@@ -1,25 +1,25 @@
 # Project Status
 
 Current phase: P3 (Delivery ML)
-Current task: P3-T1, Olist loader, label, dispatch-time features, time split
+Current task: P3-T2, delivery-risk models (first experiment)
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 8c07d78 "Record clean re-runs, holdout check and forecast API docs" (CI #11 green, P2 complete). P3-T1 is uncommitted.
+Last commit: 0b891fb "Document Olist data preparation and start Phase 3". P3-T2 is uncommitted.
 
-## P3-T1 acceptance criteria
-- [x] Olist download guide; loader and structural validation (7 files; reviews deliberately not read)
-- [x] Label `late` by calendar day; prediction at dispatch; forbidden fields documented and enforced (perturbation test)
-- [x] Time split by purchase date with documented windows; censoring rule near the data end; every dropped order counted by reason
-- [x] Order-level features (timing, items, weight/volume, distance, states, payment, category) with honest missing values
-- [x] 10-order synthetic fixture covering each edge case; 16 tests; mutations caught
-- [x] Real data validated: 95,723 usable orders (train 43,406 / validation 20,627 / test 31,690)
+## P3-T2 acceptance criteria
+- [x] Logistic-regression baseline and LightGBM, fixed settings, fitted on 2017 only (spec section 4.D)
+- [x] Time-based split; PR-AUC, precision, recall, calibration (Brier, log loss, ECE, reliability table)
+- [x] Plan written before training; test looked at once; nothing re-chosen afterwards
+- [x] Ranking clearly better than random on test (ROC-AUC 0.81, PR-AUC 0.28 vs 4.5% late rate)
+- [ ] **Calibrated scores: NO** on test (ECE 0.137; the validation quarter was unusual). Owner decision (P3-T2-R1)
+- [ ] Stable model choice: NO (validation and test disagree). Owner decision (P3-T2-R1)
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Open findings: P3-T1-R2 (MEDIUM, late rate 5.6% -> 12.9%: calibration in P3-T2), P2-T4-R1 (MEDIUM, forecast bias, P4), P1-T4-R2 (LOW, P3/P4). See docs/REVIEW_QUEUE.md.
-Next action: Owner commits and pushes P3-T1; approves scikit-learn for P3-T2.
-Blockers: none.
+Open findings: P3-T2-R1 (MEDIUM, owner decision), P3-T1-R2 (MEDIUM, superseded by P3-T2-R1), P2-T4-R1 (MEDIUM, P4), P1-T4-R2 (LOW, P3/P4). See docs/REVIEW_QUEUE.md.
+Next action: Owner reviews the results, commits and pushes, and decides on P3-T2-R1.
+Blockers: decision on a rolling-window re-evaluation before any delivery-risk model is served.
 
 ## Roadmap progress
 | Phase / task | Status |
@@ -35,8 +35,8 @@ Blockers: none.
 | P2-T3 LightGBM model, uncertainty, artifacts | APPROVED as first version (owner, 2026-10-15; CI #9 green on 7ead45b) |
 | P2-T3b Improved model: validation period, weekly models, calibrated intervals | APPROVED (owner, 2026-10-16; CI #10 green on 0c32413) |
 | P2-T4 Forecast tables, import and API | APPROVED (CI #11 green on 8c07d78; P2 complete) |
-| P3-T1 Olist loader, label, dispatch features, split | READY_FOR_USER_CHECK |
-| P3-T2 Delivery-risk models (logistic baseline, tree), calibration | NOT_STARTED |
+| P3-T1 Olist loader, label, dispatch features, split | APPROVED (pushed 0b891fb; CI #12) |
+| P3-T2 Delivery-risk models (logistic baseline, tree), calibration | READY_FOR_USER_CHECK (calibration failed on test; decision needed) |
 | P3-T3 Delivery-risk scores in the API | NOT_STARTED |
 | P4–P9 | NOT_STARTED |
 
@@ -56,3 +56,4 @@ Blockers: none.
 - 2026-10-16: P2-T3b: weekly LightGBM chosen on validation; beats the moving average on the test windows; intervals calibrated.
 - 2026-10-16: P2-T4 built (publish, import, API, holdout check); review fixes for P2-T2-R2/R3.
 - 2026-10-16: P2 complete (CI #11). P3 started: Olist downloaded; P3-T1 built.
+- 2026-10-16: P3-T2 first experiment: ranking good, calibration and model choice unstable across periods.
