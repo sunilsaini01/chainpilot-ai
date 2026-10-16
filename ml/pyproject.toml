@@ -6,7 +6,8 @@ requires-python = ">=3.11,<3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+# ../apps/api: the shared inventory policy math (D-044).
+pythonpath = [".", "../apps/api"]
 # Every warning fails the run, as in the API.
 filterwarnings = ["error"]
 
