@@ -165,6 +165,23 @@ class SupplierOut(BaseModel):
     lead_time_std_days: Decimal
 
 
+class SupplierRiskOut(BaseModel):
+    """Delivery performance per supplier (see policies/supplier-performance.md)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    supplier_id: int
+    code: str
+    name: str
+    rating: Literal["good", "watch", "at_risk", "not_rated"]
+    on_time_rate: float | None
+    received_orders: int  # received in the last 90 days
+    on_time_orders: int
+    average_days_late: float | None
+    open_orders: int
+    overdue_orders: list[str]  # purchase order numbers
+
+
 class PurchaseOrderLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

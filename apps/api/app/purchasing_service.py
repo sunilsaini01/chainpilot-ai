@@ -6,13 +6,21 @@ line into stock through `record_movement`, so the ledger and the warehouse
 capacity check apply, and marks the order received, all in one transaction.
 """
 
-from datetime import date
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import date, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.inventory_service import record_movement
-from app.models import MovementReason, PurchaseOrder, PurchaseOrderLine, PurchaseOrderStatus
+from app.models import (
+    MovementReason,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    PurchaseOrderStatus,
+    Supplier,
+)
 
 
 class PurchaseOrderNotOpenError(Exception):
@@ -74,3 +82,83 @@ def receive_purchase_order(
     order.received_by_user_id = actor_user_id
     session.flush()
     return order
+
+
+# --- Supplier performance (rules from policies/supplier-performance.md) ----------
+
+WINDOW_DAYS = 90  # received orders of the last 90 days are rated
+MIN_ORDERS = 5  # fewer received orders than this: not rated
+GOOD_SHARE, WATCH_SHARE = 0.90, 0.75  # on-time share: good >= 90%, watch >= 75%, else at risk
+
+
+@dataclass(frozen=True)
+class SupplierPerformance:
+    supplier_id: int
+    code: str
+    name: str
+    received_orders: int  # in the window
+    on_time_orders: int  # received on or before the expected date
+    on_time_rate: float | None  # None when there is nothing to rate
+    average_days_late: float | None  # over received orders, on-time ones count as 0
+    rating: str  # good, watch, at_risk or not_rated
+    open_orders: int
+    overdue_orders: list[str]  # PO numbers: open and past the expected date
+
+
+def rating_for(on_time: int, received: int) -> str:
+    if received < MIN_ORDERS:
+        return "not_rated"
+    share = on_time / received
+    if share >= GOOD_SHARE:
+        return "good"
+    return "watch" if share >= WATCH_SHARE else "at_risk"
+
+
+def supplier_performance(
+    session: Session, as_of: date, supplier_id: int | None = None
+) -> list[SupplierPerformance]:
+    """On-time delivery per supplier, by supplier code.
+
+    Rated: orders received from `as_of` minus WINDOW_DAYS up to `as_of` (both included).
+    """
+    supplier_query = select(Supplier).order_by(Supplier.code)
+    if supplier_id is not None:
+        supplier_query = supplier_query.where(Supplier.id == supplier_id)
+    suppliers = session.execute(supplier_query).scalars().all()
+
+    orders = session.execute(
+        select(PurchaseOrder).where(
+            PurchaseOrder.supplier_id.in_([supplier.id for supplier in suppliers]),
+            PurchaseOrder.status != PurchaseOrderStatus.CANCELLED,
+        )
+    ).scalars()
+    received: dict[int, list[PurchaseOrder]] = defaultdict(list)
+    still_open: dict[int, list[PurchaseOrder]] = defaultdict(list)
+    window_start = as_of - timedelta(days=WINDOW_DAYS)
+    for order in orders:
+        if order.status == PurchaseOrderStatus.OPEN:
+            still_open[order.supplier_id].append(order)
+        elif window_start <= order.received_date <= as_of:
+            received[order.supplier_id].append(order)
+
+    results = []
+    for supplier in suppliers:
+        done = received[supplier.id]
+        on_time = sum(order.received_date <= order.expected_date for order in done)
+        days_late = [max((o.received_date - o.expected_date).days, 0) for o in done]
+        overdue = sorted(o.po_number for o in still_open[supplier.id] if o.expected_date < as_of)
+        results.append(
+            SupplierPerformance(
+                supplier_id=supplier.id,
+                code=supplier.code,
+                name=supplier.name,
+                received_orders=len(done),
+                on_time_orders=on_time,
+                on_time_rate=round(on_time / len(done), 4) if done else None,
+                average_days_late=round(sum(days_late) / len(done), 2) if done else None,
+                rating=rating_for(on_time, len(done)),
+                open_orders=len(still_open[supplier.id]),
+                overdue_orders=overdue,
+            )
+        )
+    return results

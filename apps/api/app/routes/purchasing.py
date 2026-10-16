@@ -16,8 +16,13 @@ from app.dependencies import get_db_session, require_role
 from app.inventory_service import WarehouseCapacityError
 from app.models import PurchaseOrder, PurchaseOrderLine, Role, Supplier, User
 from app.pagination import fetch_page
-from app.purchasing_service import PurchaseOrderNotOpenError, receive_purchase_order
-from app.schemas import PurchaseOrderOut, SupplierOut
+from app.purchasing_service import (
+    PurchaseOrderNotOpenError,
+    SupplierPerformance,
+    receive_purchase_order,
+    supplier_performance,
+)
+from app.schemas import PurchaseOrderOut, SupplierOut, SupplierRiskOut
 
 router = APIRouter(tags=["purchasing"])
 
@@ -33,6 +38,21 @@ def list_suppliers(
 ) -> list[Supplier]:
     query = select(Supplier).order_by(Supplier.code)
     return list(fetch_page(session, query, limit, offset, response).scalars())
+
+
+@router.get("/suppliers/risks", response_model=list[SupplierRiskOut])
+def supplier_risks(
+    user: User = Depends(require_role(Role.ANALYST)),
+    session: Session = Depends(get_db_session),
+) -> list[SupplierPerformance]:
+    """On-time delivery over the last 90 days and a rating per supplier, worst first.
+
+    Rules from policies/supplier-performance.md: good at 90% on time or more,
+    watch from 75%, at risk below 75%, not rated with fewer than 5 received orders.
+    """
+    rows = supplier_performance(session, datetime.now(UTC).date())
+    order = {"at_risk": 0, "watch": 1, "good": 2, "not_rated": 3}
+    return sorted(rows, key=lambda row: (order[row.rating], row.code))
 
 
 @router.get("/purchase-orders", response_model=list[PurchaseOrderOut])

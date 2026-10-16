@@ -69,15 +69,18 @@ SITES = [
 ]
 
 # Simulated suppliers: (code, name, country, promised lead time in days, its
-# standard deviation, average days late). Two are deliberately unreliable
-# (SUP04, SUP06) so that supplier-risk checks have something to find.
+# standard deviation for planning, share of deliveries on time, most days late).
+# An on-time delivery arrives 0-2 days before the promised date; a late one 1 to
+# "most days late" days after it. SUP01 and SUP05 are reliable, SUP03 needs
+# watching, SUP04 and SUP06 are deliberately unreliable, so the supplier ratings
+# (policies/supplier-performance.md) have a clear signal to find.
 SUPPLIERS = [
-    ("SYN-SUP01", "Simulated Housewares Supplier", "United Kingdom", 4, 0.5, 0.0),
-    ("SYN-SUP02", "Simulated General Importer", "Netherlands", 7, 1.0, 0.5),
-    ("SYN-SUP03", "Simulated Garden Supplier", "Poland", 10, 2.0, 1.0),
-    ("SYN-SUP04", "Simulated Far-East Trader", "China", 21, 4.0, 4.0),
-    ("SYN-SUP05", "Simulated Sports Supplier", "Germany", 6, 1.0, 0.0),
-    ("SYN-SUP06", "Simulated Toy Maker", "Vietnam", 18, 3.0, 2.5),
+    ("SYN-SUP01", "Simulated Housewares Supplier", "United Kingdom", 4, 0.5, 0.97, 2),
+    ("SYN-SUP02", "Simulated General Importer", "Netherlands", 7, 1.0, 0.92, 3),
+    ("SYN-SUP03", "Simulated Garden Supplier", "Poland", 10, 2.0, 0.82, 5),
+    ("SYN-SUP04", "Simulated Far-East Trader", "China", 21, 4.0, 0.50, 10),
+    ("SYN-SUP05", "Simulated Sports Supplier", "Germany", 6, 1.0, 0.95, 3),
+    ("SYN-SUP06", "Simulated Toy Maker", "Vietnam", 18, 3.0, 0.65, 8),
 ]
 # Which suppliers can supply each category (one is picked per product).
 CATEGORY_SUPPLIERS = {
@@ -114,7 +117,8 @@ class PlannedSupplier:
     country: str
     lead_time_days: int
     lead_time_std_days: Decimal
-    average_days_late: float  # only used to simulate the order history
+    on_time_share: float  # these two only simulate the order history
+    max_days_late: int
 
 
 @dataclass(frozen=True)
@@ -225,8 +229,8 @@ def build_plan(
     # Suppliers and orders (P4-T3) are drawn after the products and stock, so a
     # given seed still produces the same products and stock as before they existed.
     suppliers = [
-        PlannedSupplier(code, name, country, lead, Decimal(str(std)), late)
-        for code, name, country, lead, std, late in SUPPLIERS
+        PlannedSupplier(code, name, country, lead, Decimal(str(std)), on_time, max_late)
+        for code, name, country, lead, std, on_time, max_late in SUPPLIERS
     ]
     products = [_with_purchasing_rules(product, rng) for product in products]
     purchase_orders = _order_history(rng, suppliers, warehouses, products, as_of)
@@ -253,8 +257,8 @@ def _order_history(
 ) -> list[PlannedPurchaseOrder]:
     """Orders placed over the last HISTORY_DAYS from each supplier to each warehouse.
 
-    The actual lead time is drawn around the promised one plus the supplier's
-    average lateness. Orders that arrived by `as_of` are received (their goods
+    Each delivery is on time with the supplier's `on_time_share` (0-2 days early)
+    or late by 1 to `max_days_late` days. Orders that arrived by `as_of` are received (their goods
     are part of the opening stock, so no extra stock movements are made); the
     others are still open, and some of those are already overdue.
     """
@@ -266,12 +270,10 @@ def _order_history(
                 continue
             ordered = as_of - timedelta(days=HISTORY_DAYS - rng.randint(0, 9))
             while ordered <= as_of:
-                actual_days = round(
-                    rng.gauss(
-                        supplier.lead_time_days + supplier.average_days_late,
-                        float(supplier.lead_time_std_days),
-                    )
-                )
+                if rng.random() < supplier.on_time_share:
+                    actual_days = supplier.lead_time_days - rng.randint(0, 2)
+                else:
+                    actual_days = supplier.lead_time_days + rng.randint(1, supplier.max_days_late)
                 arrival = ordered + timedelta(days=max(actual_days, 1))
                 count = min(rng.randint(*LINES_PER_ORDER), len(catalogue))
                 chosen = sorted(rng.sample(catalogue, count), key=lambda p: p.sku)
