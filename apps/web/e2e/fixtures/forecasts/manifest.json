@@ -1,0 +1,12 @@
+{
+  "run_key": "e2e-synthetic-7ad714ea",
+  "dataset": "SYNTHETIC test forecasts for browser tests (not M5, not a model)",
+  "model": "flat made-up demand",
+  "trained_through": "2016-04-24",
+  "forecast_start": "2016-04-25",
+  "forecast_end": "2016-05-22",
+  "horizon_days": 28,
+  "series": 12,
+  "rows": 336,
+  "csv_sha256": "7ad714eaa7c2f6c8f7640b693cbbc648e54f51e0366e6c926e5a7787b205391a"
+}

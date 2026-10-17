@@ -87,6 +87,7 @@ describe("the next login after logging out", () => {
 
     await screen.findByRole("heading", { name: "Suppliers and orders" });
     await userEvent.click(screen.getByRole("button", { name: "Log out" }));
+    await screen.findByRole("form", { name: "Log in" }); // logging out is asynchronous
     await logIn("analyst@example.com", "any-password-here");
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();

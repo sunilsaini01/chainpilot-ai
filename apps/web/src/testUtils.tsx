@@ -21,22 +21,34 @@ export interface Call {
   path: string;
   params: URLSearchParams; // the query string, e.g. params.get("status")
   body: unknown;
+  headers: Headers;
 }
+
+/** A fixed answer, a network failure, or a function of the request (e.g. fail once, then succeed). */
+export type Answer = [number, unknown] | Error | ((call: Call) => [number, unknown] | Error);
 
 /**
  * A fetch stand-in that answers by "METHOD /path" or just "/path", e.g.
  * { "/auth/me": [200, body], "POST /users": [201, body] }. Every request is
  * recorded in `calls`, so a test can check what was sent.
  */
-export function fakeApi(routes: Record<string, [number, unknown] | Error>) {
+export function fakeApi(routes: Record<string, Answer>) {
   const calls: Call[] = [];
   const fetchFn = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = new URL(String(input));
     const path = url.pathname;
     const method = init.method ?? "GET";
-    calls.push({ method, path, params: url.searchParams, body: init.body ? JSON.parse(String(init.body)) : null });
-    const answer = routes[`${method} ${path}`] ?? routes[path];
-    if (answer === undefined) return new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 });
+    const call = {
+      method,
+      path,
+      params: url.searchParams,
+      body: init.body ? JSON.parse(String(init.body)) : null,
+      headers: new Headers(init.headers),
+    };
+    calls.push(call);
+    const route = routes[`${method} ${path}`] ?? routes[path];
+    if (route === undefined) return new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 });
+    const answer = typeof route === "function" ? route(call) : route;
     if (answer instanceof Error) throw answer;
     const [status, body] = answer;
     // 204 No Content must not carry a body.
@@ -81,7 +93,7 @@ export function baseRoutes(user: unknown = USER): Record<string, [number, unknow
 }
 
 /** With a saved session and `routes` as the API, render the app at `path`. */
-export function openPage(path: string, routes: Record<string, [number, unknown] | Error>, user: unknown = USER) {
+export function openPage(path: string, routes: Record<string, Answer>, user: unknown = USER) {
   sessionStorage.setItem("chainpilot.token", "saved");
   const api = fakeApi({ ...baseRoutes(user), ...routes });
   vi.stubGlobal("fetch", api);

@@ -14,6 +14,14 @@ compose up --build --detach --wait --wait-timeout 180
 compose run --rm -T api python -m app.cli seed
 compose run --rm -T api python -m app.cli load-policies
 
+# Synthetic test forecasts (e2e/fixtures/make_forecasts.py), so the stack has
+# stock-out risks and recommendations to approve. `pwd -W` gives a Windows path in
+# Git Bash; MSYS_NO_PATHCONV stops Git Bash from rewriting the container path.
+host_dir="$(pwd -W 2>/dev/null || pwd)/apps/web/e2e/fixtures/forecasts"
+MSYS_NO_PATHCONV=1 compose run --rm -T -v "$host_dir:/fixtures/forecasts:ro" api \
+  python -m app.cli import-forecasts /fixtures/forecasts
+compose run --rm -T api python -m app.cli link-demand-profiles
+
 # Fresh random passwords on every run; they exist only in this shell.
 for role in admin manager analyst; do
   password="e2e-$(head -c 18 /dev/urandom | base64 | tr -d '/+=')"

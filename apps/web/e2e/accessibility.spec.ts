@@ -20,7 +20,7 @@ test("the 'page not found' page", async ({ page }) => {
 const PAGES: [string, string][] = [
   ["/", "Overview"],
   ["/risks", "Stock-out risks"],
-  ["/recommendations", "Recommendations"],
+  ["/recommendations", "Approval queue"],
   ["/suppliers", "Suppliers and orders"],
   ["/forecasts", "Demand forecasts"],
   ["/delivery-risk", "Delivery risk"],

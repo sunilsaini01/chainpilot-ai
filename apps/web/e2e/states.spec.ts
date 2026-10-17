@@ -1,15 +1,23 @@
-// Empty and error states in the real app. The test stack has no forecasts, no
-// delivery-risk scores and no AI key, so those pages must say so plainly.
+// Empty and error states in the real app. The test stack has only a few synthetic
+// forecasts, no delivery-risk scores and no AI key, so those pages must say so plainly.
 
 import { expect, test } from "@playwright/test";
 
 import { openAs } from "./helpers";
 
-test("forecasts and delivery risk explain that nothing is imported yet", async ({ page }) => {
+test("forecasts show their data label, or say when an item has none", async ({ page }) => {
   await openAs(page, "analyst", "/forecasts");
-  await expect(page.getByText("No forecasts are imported yet.")).toBeVisible();
+  // The default item is not in the synthetic test forecasts.
+  await expect(page.getByText(/No forecast for FOODS_3_090 at CA_1/)).toBeVisible();
 
-  await page.getByRole("link", { name: "Delivery risk" }).click();
+  await page.getByLabel("Item").fill("FOODS_3_001");
+  await page.getByRole("button", { name: "Show" }).click();
+  const chart = page.getByRole("region", { name: "Forecast for FOODS_3_001 at CA_1" });
+  await expect(chart).toContainText("SYNTHETIC test forecasts for browser tests");
+});
+
+test("delivery risk explains that nothing is imported yet", async ({ page }) => {
+  await openAs(page, "analyst", "/delivery-risk");
   await expect(page.getByText("No delivery-risk scores are imported yet.")).toBeVisible();
 });
 
