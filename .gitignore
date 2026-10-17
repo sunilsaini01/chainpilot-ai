@@ -28,9 +28,13 @@ data/synthetic/
 ml/artifacts/
 mlruns/
 
-# Node / frontend (later phases)
+# Node / frontend (apps/web)
 node_modules/
 .next/
+apps/web/dist/
+apps/web/test-results/
+apps/web/playwright-report/
+*.tsbuildinfo
 
 # Terraform state (later phases)
 .terraform/
