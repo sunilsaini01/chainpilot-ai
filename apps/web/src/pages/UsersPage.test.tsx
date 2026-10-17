@@ -6,7 +6,6 @@ import { App } from "../App";
 import { ADMIN, fakeApi, KPIS, renderWithApp, USER } from "../testUtils";
 
 async function openUsers(routes: Parameters<typeof fakeApi>[0] = {}) {
-  sessionStorage.setItem("chainpilot.token", "saved");
   const api = fakeApi({
     "/auth/me": [200, ADMIN],
     "/dashboard/kpis": [200, KPIS],
@@ -25,8 +24,7 @@ function rowOf(email: string) {
 
 describe("users page", () => {
   it("is offered to admins only", async () => {
-    sessionStorage.setItem("chainpilot.token", "saved");
-    vi.stubGlobal("fetch", fakeApi({ "/auth/me": [200, USER], "/dashboard/kpis": [200, KPIS] }));
+      vi.stubGlobal("fetch", fakeApi({ "/auth/me": [200, USER], "/dashboard/kpis": [200, KPIS] }));
     renderWithApp(<App />, "/users");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("This page is for administrators.");

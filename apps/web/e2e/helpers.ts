@@ -6,6 +6,9 @@ import { expect, type Page } from "@playwright/test";
 
 export type Role = "admin" | "manager" | "analyst";
 
+// The test stack's API (see stack.env); the browser talks to it directly.
+export const API_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:8002";
+
 export function account(role: Role): { email: string; password: string } {
   const password = process.env[`E2E_${role.toUpperCase()}_PASSWORD`];
   if (!password) throw new Error(`E2E_${role.toUpperCase()}_PASSWORD is not set: run the tests with e2e/run-e2e.sh`);

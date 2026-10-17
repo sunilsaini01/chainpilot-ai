@@ -84,7 +84,8 @@ export const MANAGER = { ...USER, id: 5, email: "manager@example.com", full_name
 /** Answers every page needs: who is logged in, and the id-to-code lookups. */
 export function baseRoutes(user: unknown = USER): Record<string, [number, unknown]> {
   return {
-    "/auth/me": [200, user],
+    // The login cookie is the browser's business; /auth/me says who it belongs to.
+    "/auth/me": [200, { ...(user as object), csrf_token: "csrf-test" }],
     "/dashboard/kpis": [200, KPIS],
     "/warehouses": [200, [{ id: 1, code: "SYN-WH1", name: "North DC", city: "Leeds", capacity_units: 60000 }]],
     "/suppliers": [200, [{ id: 4, code: "SYN-SUP04", name: "Far-East", country: "China", lead_time_days: 21, lead_time_std_days: "4.00" }]],
@@ -92,9 +93,8 @@ export function baseRoutes(user: unknown = USER): Record<string, [number, unknow
   };
 }
 
-/** With a saved session and `routes` as the API, render the app at `path`. */
+/** Logged in as `user` (the API's /auth/me answers), with `routes` as the API, render the app at `path`. */
 export function openPage(path: string, routes: Record<string, Answer>, user: unknown = USER) {
-  sessionStorage.setItem("chainpilot.token", "saved");
   const api = fakeApi({ ...baseRoutes(user), ...routes });
   vi.stubGlobal("fetch", api);
   renderWithApp(<App />, path);

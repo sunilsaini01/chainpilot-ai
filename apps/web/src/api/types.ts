@@ -20,11 +20,19 @@ export interface NewUser {
   password: string; // temporary; the user changes it on "My account"
 }
 
+// The login answer. The dashboard ignores access_token (for scripts): its session
+// is the httpOnly cookie the API sets with this answer.
 export interface TokenResponse {
   access_token: string;
   token_type: "bearer";
   expires_at: string;
+  csrf_token: string;
   user: User;
+}
+
+/** GET /auth/me: the user, plus the CSRF token of a cookie session. */
+export interface Me extends User {
+  csrf_token: string | null;
 }
 
 export type StockStatus = "out_of_stock" | "at_risk" | "ok" | "excess";

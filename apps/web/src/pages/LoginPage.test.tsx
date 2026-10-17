@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { getCsrfToken } from "../api/client";
 import { fakeApi, KPIS, renderWithApp, USER } from "../testUtils";
 
 async function logIn(email: string, password: string) {
@@ -12,9 +13,10 @@ async function logIn(email: string, password: string) {
 }
 
 describe("login", () => {
-  it("sends visitors without a session to the login page", () => {
+  it("sends visitors without a session to the login page", async () => {
+    vi.stubGlobal("fetch", fakeApi({ "/auth/me": [401, { detail: "Not authenticated" }] }));
     renderWithApp(<App />, "/");
-    expect(screen.getByRole("form", { name: "Log in" })).toBeInTheDocument();
+    expect(await screen.findByRole("form", { name: "Log in" })).toBeInTheDocument();
     expect(screen.getByText("Simulated data")).toBeInTheDocument();
   });
 
@@ -22,11 +24,13 @@ describe("login", () => {
     vi.stubGlobal(
       "fetch",
       fakeApi({
-        "/auth/login": [200, { access_token: "t", token_type: "bearer", expires_at: "", user: USER }],
+        "/auth/me": [401, { detail: "Not authenticated" }],
+        "/auth/login": [200, { access_token: "t", token_type: "bearer", expires_at: "", csrf_token: "c1", user: USER }],
         "/dashboard/kpis": [200, KPIS],
       }),
     );
     renderWithApp(<App />, "/");
+    await screen.findByRole("form", { name: "Log in" }); // after /auth/me says "nobody"
 
     await logIn("analyst@example.com", "correct-horse-battery");
 
@@ -53,29 +57,35 @@ describe("login", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("The API cannot be reached");
   });
 
-  it("keeps a saved session and logs out", async () => {
-    sessionStorage.setItem("chainpilot.token", "saved");
-    vi.stubGlobal("fetch", fakeApi({ "/auth/me": [200, USER], "/dashboard/kpis": [200, KPIS], "/auth/logout": [204, null] }));
+  it("restores the session from the cookie, then logs out with the CSRF token", async () => {
+    const api = fakeApi({
+      "/auth/me": [200, { ...USER, csrf_token: "c1" }],
+      "/dashboard/kpis": [200, KPIS],
+      "/auth/logout": [204, null],
+    });
+    vi.stubGlobal("fetch", api);
     renderWithApp(<App />, "/");
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Log out" }));
 
     expect(await screen.findByRole("form", { name: "Log in" })).toBeInTheDocument();
-    expect(sessionStorage.getItem("chainpilot.token")).toBeNull();
+    const logoutCall = api.calls.find((c) => c.path === "/auth/logout");
+    expect(logoutCall?.headers.get("X-CSRF-Token")).toBe("c1");
+    expect(getCsrfToken()).toBeNull();
+    expect(sessionStorage.length).toBe(0); // nothing about the session is stored
   });
 });
 
 
 describe("the next login after logging out", () => {
   it("starts at the overview, not on the previous user's page", async () => {
-    sessionStorage.setItem("chainpilot.token", "saved");
     vi.stubGlobal(
       "fetch",
       fakeApi({
         "/auth/me": [200, USER],
         "/auth/logout": [204, null],
-        "/auth/login": [200, { access_token: "new", expires_at: "2030-01-01T00:00:00Z", user: USER }],
+        "/auth/login": [200, { access_token: "new", expires_at: "2030-01-01T00:00:00Z", csrf_token: "c2", user: USER }],
         "/dashboard/kpis": [200, KPIS],
         "/purchase-orders": [200, []],
         "/suppliers": [200, []],
@@ -97,7 +107,6 @@ describe("the next login after logging out", () => {
 
 describe("logout when the API is down", () => {
   it("still logs out in this browser, without an unhandled error", async () => {
-    sessionStorage.setItem("chainpilot.token", "saved");
     vi.stubGlobal(
       "fetch",
       fakeApi({ "/auth/me": [200, USER], "/dashboard/kpis": [200, KPIS], "/auth/logout": new TypeError("Failed to fetch") }),
@@ -108,6 +117,6 @@ describe("logout when the API is down", () => {
     await userEvent.click(screen.getByRole("button", { name: "Log out" }));
 
     expect(await screen.findByRole("form", { name: "Log in" })).toBeInTheDocument();
-    expect(sessionStorage.getItem("chainpilot.token")).toBeNull();
+    expect(getCsrfToken()).toBeNull();
   });
 });

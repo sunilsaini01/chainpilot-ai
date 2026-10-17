@@ -6,7 +6,6 @@ import { App } from "../App";
 import { fakeApi, KPIS, renderWithApp, USER } from "../testUtils";
 
 async function openAccount(routes: Parameters<typeof fakeApi>[0]) {
-  sessionStorage.setItem("chainpilot.token", "saved");
   const api = fakeApi({ "/auth/me": [200, USER], "/dashboard/kpis": [200, KPIS], ...routes });
   vi.stubGlobal("fetch", api);
   renderWithApp(<App />, "/account");

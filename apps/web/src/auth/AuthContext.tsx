@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
-import { api, getToken, login as apiLogin, logout as apiLogout } from "../api/client";
+import { api, login as apiLogin, logout as apiLogout } from "../api/client";
 import type { Role, User } from "../api/types";
 
 interface AuthState {
@@ -18,12 +18,12 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [checking, setChecking] = useState(() => getToken() !== null);
+  const [checking, setChecking] = useState(true);
   const [loggedOut, setLoggedOut] = useState(false);
 
-  // A token saved earlier in this tab: ask the API who it belongs to.
+  // The login cookie cannot be read here (httpOnly), so ask the API who is logged
+  // in. 401 means nobody: the login page shows.
   useEffect(() => {
-    if (!getToken()) return;
     api
       .me()
       .then(({ data }) => setUser(data))
