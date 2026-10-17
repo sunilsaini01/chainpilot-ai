@@ -255,7 +255,7 @@ class RecommendationOut(BaseModel):
 
     id: int
     kind: Literal["reorder", "transfer"]
-    status: Literal["pending", "superseded"]
+    status: Literal["pending", "superseded", "rejected", "executed", "failed"]
     product_id: int
     warehouse_id: int
     source_warehouse_id: int | None
@@ -266,6 +266,38 @@ class RecommendationOut(BaseModel):
     service_level: Decimal
     details: dict[str, Any]
     created_by_user_id: int | None
+    created_at: datetime
+
+
+# --- Approval workflow (P7) ------------------------------------------------------
+
+
+class DecisionRequest(BaseModel):
+    decision: Literal["approve", "reject"]
+    # Required to reject (checked in the service); optional note when approving.
+    comment: str | None = Field(default=None, max_length=500)
+
+    @field_validator("comment")
+    @classmethod
+    def strip_comment(cls, value: str | None) -> str | None:
+        # "   " is no reason: treat blank text as no comment.
+        if value is None or not value.strip():
+            return None
+        return value.strip()
+
+
+class ApprovalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    recommendation_id: int
+    decision: Literal["approved", "rejected"]
+    comment: str | None
+    decided_by_user_id: int
+    decided_by_email: str
+    outcome: Literal["executed", "failed"] | None
+    outcome_details: dict[str, Any]
+    purchase_order_id: int | None
     created_at: datetime
 
 

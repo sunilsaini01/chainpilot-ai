@@ -168,16 +168,19 @@ class RecommendationKind(StrEnum):
 
 
 class RecommendationStatus(StrEnum):
-    PENDING = "pending"  # waiting for a manager (approval workflow: P7)
-    SUPERSEDED = "superseded"  # replaced by a newer recommendation run
+    PENDING = "pending"  # waiting for a manager's decision
+    SUPERSEDED = "superseded"  # replaced by a newer recommendation run before a decision
+    REJECTED = "rejected"  # a manager said no (with a reason)
+    EXECUTED = "executed"  # approved and carried out: order placed or stock moved
+    FAILED = "failed"  # approved, but could not be carried out (see its approval)
 
 
 class Recommendation(Base):
     """A proposed reorder or transfer, with the numbers it was based on.
 
-    Only a proposal: nothing changes stock or creates an order until it is
-    approved and executed (P7). `details` keeps the inputs (stock, forecast,
-    lead time, target level) so every recommendation can be explained.
+    Only a proposal: nothing changes stock or creates an order until a manager
+    approves it (app/approval_service.py). `details` keeps the inputs (stock,
+    forecast, lead time, target level) so every recommendation can be explained.
     """
 
     __tablename__ = "recommendations"
@@ -223,6 +226,71 @@ class Recommendation(Base):
         ForeignKey("users.id", ondelete="RESTRICT")
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ApprovalDecision(StrEnum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class ApprovalOutcome(StrEnum):
+    EXECUTED = "executed"
+    FAILED = "failed"
+
+
+class Approval(Base):
+    """A manager's decision on one recommendation, and what happened when it was carried out.
+
+    One per recommendation. Approved decisions are executed in the same request,
+    so `outcome` is set for them; rejected ones have no outcome. Never edited.
+    """
+
+    __tablename__ = "approvals"
+    __table_args__ = (
+        CheckConstraint(
+            "decision IN (" + ", ".join(f"'{d.value}'" for d in ApprovalDecision) + ")",
+            name="decision_allowed",
+        ),
+        CheckConstraint(
+            "outcome IN (" + ", ".join(f"'{o.value}'" for o in ApprovalOutcome) + ")",
+            name="outcome_allowed",
+        ),
+        # Approved: always an outcome. Rejected: no outcome, but a reason.
+        CheckConstraint(
+            "(decision = 'approved' AND outcome IS NOT NULL) OR "
+            "(decision = 'rejected' AND outcome IS NULL AND comment IS NOT NULL)",
+            name="decision_fields",
+        ),
+        # Only an executed approval can have created a purchase order.
+        CheckConstraint(
+            "purchase_order_id IS NULL OR outcome = 'executed'", name="order_only_if_executed"
+        ),
+        Index("ix_approvals_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recommendation_id: Mapped[int] = mapped_column(
+        ForeignKey("recommendations.id", ondelete="RESTRICT"), unique=True
+    )
+    decision: Mapped[str] = mapped_column(String(20))
+    comment: Mapped[str | None] = mapped_column(Text)
+    decided_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    # The client's Idempotency-Key: a retried request returns this decision again.
+    idempotency_key: Mapped[str] = mapped_column(String(100), unique=True)
+    outcome: Mapped[str | None] = mapped_column(String(20))
+    # What execution did or why it failed, e.g. {"po_number": ...} or {"error": ...}.
+    outcome_details: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    purchase_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="RESTRICT")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    decided_by: Mapped["User"] = relationship(lazy="raise")
+    recommendation: Mapped[Recommendation] = relationship(lazy="raise")
+
+    @property
+    def decided_by_email(self) -> str:
+        return self.decided_by.email
 
 
 class Product(Base):
