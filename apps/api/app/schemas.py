@@ -47,6 +47,17 @@ class CreateUserRequest(BaseModel):
     password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
+
+
+class SetPasswordRequest(BaseModel):
+    """An admin sets a temporary password for a user."""
+
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
+
+
 class UpdateUserRequest(BaseModel):
     """Only the fields that are sent are changed."""
 
@@ -255,6 +266,29 @@ class RecommendationOut(BaseModel):
     details: dict[str, Any]
     created_by_user_id: int | None
     created_at: datetime
+
+
+# --- Dashboard (P6) ------------------------------------------------------------
+
+
+class InventoryKpis(BaseModel):
+    products: int
+    warehouses: int
+    units_on_hand: int
+    stock_value: float  # units on hand x unit cost
+
+
+class DashboardKpisOut(BaseModel):
+    label: str  # data label: simulated operations, borrowed demand
+    inventory: InventoryKpis
+    # Counts per status (out_of_stock, at_risk, ok, excess, unassessed);
+    # None when no forecast run is imported (see stock_status_note).
+    stock_status: dict[str, int] | None
+    stock_status_note: str | None
+    forecast_run_id: int | None
+    pending_recommendations: dict[str, int]  # reorder, transfer
+    purchase_orders: dict[str, int]  # open, overdue
+    supplier_ratings: dict[str, int]  # good, watch, at_risk, not_rated
 
 
 # --- AI copilot (P5) -----------------------------------------------------------

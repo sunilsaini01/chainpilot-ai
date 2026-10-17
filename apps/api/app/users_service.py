@@ -131,6 +131,35 @@ def revoke_token(session: Session, raw_token: str) -> None:
     )
 
 
+class WrongPasswordError(Exception):
+    """The current password given to change a password is not the user's password."""
+
+
+def set_password(session: Session, user: User, new_password: str, keep_token: str | None) -> int:
+    """Store a new password and sign out the user's other sessions. Returns how many.
+
+    `keep_token` (the caller's own token) stays valid; None signs out every session,
+    e.g. after an admin sets a temporary password. Does not commit.
+    """
+    validate_password(new_password)
+    user.password_hash = hash_password(new_password)
+    sessions = update(AuthToken).where(AuthToken.user_id == user.id, AuthToken.revoked_at.is_(None))
+    if keep_token is not None:
+        sessions = sessions.where(AuthToken.token_hash != hash_token(keep_token))
+    return session.execute(sessions.values(revoked_at=datetime.now(UTC))).rowcount
+
+
+def change_own_password(
+    session: Session, user: User, current_password: str, new_password: str, current_token: str
+) -> int:
+    """A user changes their own password. Raises WrongPasswordError or ValueError."""
+    if not verify_password(current_password, user.password_hash):
+        raise WrongPasswordError("The current password is incorrect")
+    if new_password == current_password:
+        raise ValueError("The new password must be different from the current one")
+    return set_password(session, user, new_password, keep_token=current_token)
+
+
 class LastAdminError(Exception):
     """Raised when a change would leave no active admin (nobody could manage users)."""
 

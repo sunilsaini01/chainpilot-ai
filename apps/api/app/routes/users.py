@@ -10,8 +10,14 @@ from app.audit import record_event
 from app.dependencies import get_db_session, require_role
 from app.models import Role, User
 from app.pagination import fetch_page
-from app.schemas import CreateUserRequest, UpdateUserRequest, UserOut
-from app.users_service import LastAdminError, UserAlreadyExistsError, create_user, update_user
+from app.schemas import CreateUserRequest, SetPasswordRequest, UpdateUserRequest, UserOut
+from app.users_service import (
+    LastAdminError,
+    UserAlreadyExistsError,
+    create_user,
+    set_password,
+    update_user,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,3 +104,41 @@ def change_user(
     session.commit()
     logger.info("Admin %s updated user %s: %s", admin.id, user.id, sorted(changes))
     return user
+
+
+@router.post(
+    "/{user_id}/password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"description": "User not found"}},
+)
+def set_user_password(
+    user_id: int,
+    body: SetPasswordRequest,
+    admin: User = Depends(require_role(Role.ADMIN)),
+    session: Session = Depends(get_db_session),
+) -> Response:
+    """Set a temporary password, e.g. for a user who forgot theirs.
+
+    All of that user's sessions are signed out; they log in with the new password
+    and should then change it on their account page.
+    """
+    user = session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    try:
+        signed_out = set_password(session, user, body.new_password, keep_token=None)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+    record_event(
+        session,
+        "user.password_reset",
+        "user",
+        user.id,
+        actor=admin,
+        details={"sessions_signed_out": signed_out},
+    )
+    session.commit()
+    logger.info("Admin %s set a temporary password for user %s", admin.id, user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

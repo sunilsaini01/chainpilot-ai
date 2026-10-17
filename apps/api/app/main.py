@@ -1,6 +1,7 @@
 """FastAPI application entry point. Run with: uvicorn app.main:app"""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logging_config import configure_logging
@@ -8,6 +9,7 @@ from app.routes import (
     agents,
     audit,
     auth,
+    dashboard,
     delivery_risk,
     forecasts,
     health,
@@ -26,7 +28,17 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_format)
     app = FastAPI(title=settings.app_name, version="0.1.0")
+    # The web app (P6) runs on another origin. Only the listed origins may call the
+    # API from a browser, and the paging/label headers are made readable to them.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origin_list,
+        allow_methods=["GET", "POST", "PATCH"],
+        allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+        expose_headers=["X-Total-Count", "X-Dataset", "X-Unassessed-Count", "Retry-After"],
+    )
     app.include_router(health.router)
+    app.include_router(dashboard.router)
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(products.router)

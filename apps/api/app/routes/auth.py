@@ -10,8 +10,14 @@ from app.config import get_settings
 from app.dependencies import get_bearer_token, get_current_user, get_db_session
 from app.login_throttle import RETRY_AFTER_SECONDS, is_login_blocked, record_attempt
 from app.models import User
-from app.schemas import LoginRequest, TokenResponse, UserOut
-from app.users_service import authenticate, issue_token, revoke_token
+from app.schemas import ChangePasswordRequest, LoginRequest, TokenResponse, UserOut
+from app.users_service import (
+    WrongPasswordError,
+    authenticate,
+    change_own_password,
+    issue_token,
+    revoke_token,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +81,56 @@ def logout(
     record_event(session, "user.logout", "user", user.id, actor=user)
     session.commit()
     logger.info("User %s logged out", user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        400: {"description": "Current password is incorrect"},
+        429: {"description": "Too many failed attempts; try again later"},
+    },
+)
+def change_password(
+    body: ChangePasswordRequest,
+    request: Request,
+    token: str = Depends(get_bearer_token),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> Response:
+    """Change your own password. Your other sessions are signed out; this one stays."""
+    client_ip = request.client.host if request.client else None
+    # A wrong current password counts as a failed login, so a stolen session cannot
+    # be used to guess the password faster than the login page allows.
+    if is_login_blocked(session, user.email, client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed attempts. Try again later.",
+            headers={"Retry-After": str(RETRY_AFTER_SECONDS)},
+        )
+    try:
+        signed_out = change_own_password(
+            session, user, body.current_password, body.new_password, token
+        )
+    except WrongPasswordError as error:
+        record_attempt(session, user.email, client_ip, succeeded=False)
+        session.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+    record_event(
+        session,
+        "user.password_changed",
+        "user",
+        user.id,
+        actor=user,
+        details={"other_sessions_signed_out": signed_out},
+    )
+    session.commit()
+    logger.info("User %s changed their password", user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

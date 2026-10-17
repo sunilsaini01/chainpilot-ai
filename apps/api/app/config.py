@@ -48,8 +48,15 @@ class Settings(BaseSettings):
     groq_model: str = ""
     gemini_api_key: SecretStr = SecretStr("")
     gemini_model: str = ""
+    # Browser origins allowed to call the API (the web app, P6), comma-separated.
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
     # Cost control: investigations each user may start per hour.
     copilot_runs_per_hour: int = Field(default=20, ge=1, le=1000)
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def database_url(self) -> URL:
