@@ -71,6 +71,7 @@ class AuditEventOut(BaseModel):
 
     id: int
     actor_user_id: int | None
+    actor_email: str | None  # None for system actions (seed, imports)
     action: str
     entity_type: str
     entity_id: str | None

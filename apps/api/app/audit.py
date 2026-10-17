@@ -7,7 +7,7 @@ the change it describes, so a change and its audit record succeed or fail togeth
 from typing import Any
 
 from sqlalchemy import Select, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import AuditEvent, User
 
@@ -34,7 +34,8 @@ def record_event(
 
 def events_query(entity_type: str | None = None, entity_id: str | None = None) -> Select:
     """Query for audit events, newest first, optionally about one entity type or entity."""
-    query = select(AuditEvent)
+    # The actor is loaded with the events (one extra query), for the actor's email.
+    query = select(AuditEvent).options(selectinload(AuditEvent.actor))
     if entity_type is not None:
         query = query.where(AuditEvent.entity_type == entity_type)
     if entity_id is not None:

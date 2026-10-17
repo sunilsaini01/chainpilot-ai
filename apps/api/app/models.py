@@ -427,6 +427,13 @@ class AuditEvent(Base):
     details: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    # Who acted, for showing an email instead of an id (None for system actions).
+    actor: Mapped["User | None"] = relationship(lazy="raise")
+
+    @property
+    def actor_email(self) -> str | None:
+        return self.actor.email if self.actor else None
+
 
 class ForecastRun(Base):
     """One imported forecast file (see ml/demand_forecasting/publish.py).

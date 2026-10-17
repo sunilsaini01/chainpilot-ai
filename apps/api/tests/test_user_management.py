@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
+from app.audit import record_event
 from app.models import AuditEvent, Role, User
 from app.users_service import LastAdminError, update_user
 from tests.conftest import TEST_PASSWORD, login
@@ -218,3 +219,20 @@ def test_audit_events_can_be_filtered_and_are_newest_first(
     assert [event["action"] for event in events] == ["user.updated", "user.updated"]
     assert "full_name" in events[0]["details"]["changes"]  # newest first
     assert "role" in events[1]["details"]["changes"]
+
+
+def test_audit_events_name_the_actor_by_email(
+    api_client: TestClient, make_user: Callable[..., User], db_session: Session
+) -> None:
+    # A user action names its actor; a system action (no user) has no email.
+    admin = make_user(Role.ADMIN)
+    headers = login(api_client, admin.email)
+    record_event(db_session, "seed.loaded", "seed", None, actor=None)
+    db_session.commit()
+
+    events = api_client.get("/audit-events", headers=headers).json()
+
+    login_event = next(e for e in events if e["action"] == "user.login")
+    assert login_event["actor_email"] == "admin@example.com"
+    seed_event = next(e for e in events if e["action"] == "seed.loaded")
+    assert seed_event["actor_email"] is None
