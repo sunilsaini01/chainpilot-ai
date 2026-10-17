@@ -17,7 +17,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/policies/`, `apps/api/app/policies_service.py` | Six policy documents for the simulated company (written for the demo, labelled as such) and their search, the grounding for the AI copilot (P5). |
 | `apps/api/app/copilot/tools.py` | The AI copilot's seven read-only tools (P5-T2): typed inputs, results with citations to real records, run in a database transaction that PostgreSQL keeps read-only. |
 | `apps/api/app/copilot/{graph,model,service}.py` | The AI copilot (P5-T3): a LangGraph supervisor with demand, inventory, supplier and decision specialists, Groq or Gemini behind one small adapter, verified citations, limits on calls and tools, and every run stored with its trace. |
-| `apps/web` | The dashboard (P6): React + TypeScript + Vite. Login; overview; stock risks; recommendations; suppliers and purchase orders; forecasts; delivery risk; ask the copilot; audit log (managers and admins); users (admins); my account. A "Simulated data" badge on every page. The approval queue comes with the approval workflow (P7). In Docker Compose it is served by nginx at http://127.0.0.1:8080; browser tests in `apps/web/e2e`. |
+| `apps/web` | The dashboard (P6): React + TypeScript + Vite. Login; overview; stock risks; the approval queue (managers approve or reject recommendations); suppliers and purchase orders; forecasts; delivery risk; ask the copilot; audit log (managers and admins); users (admins); my account. A "Simulated data" badge on every page. In Docker Compose it is served by nginx at http://127.0.0.1:8080; browser tests in `apps/web/e2e`. |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
@@ -33,7 +33,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/inventory_sim/` | Replay simulator (P4): real M5 sales are replayed day by day through the inventory policy (weekly review, random 5–9 day lead times, lost sales) and compared with a simple reorder rule. With LightGBM forecasts the policy needed 17–34% less stock for the same fill rate. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `.github/workflows/ci.yml` | On every push and pull request: API and ML lint and tests (API tests against a real Postgres 16), the dashboard's type-check, unit tests and build, browser tests against a throwaway stack, and a Docker smoke test. See [Continuous integration](#continuous-integration). |
 
-Not built yet: forecast and scoring jobs from the API (needs the background worker), the approval queue screen (P7-T2), login cookies instead of a token in the browser (P7-T3), AWS (P8).
+Not built yet: forecast and scoring jobs from the API (needs the background worker), login cookies instead of a token in the browser (P7-T3), AWS (P8).
 
 ## How stock changes
 
@@ -294,7 +294,7 @@ npm run build          # type-check + production build into dist/
 
 **In Docker:** `docker compose up --build -d` also starts the dashboard at **http://127.0.0.1:8080** (the built files, served by nginx as an unprivileged user; reloading any page works). The browser calls the API directly, so the API address is built into the files: if you change `API_HOST_PORT` or `WEB_HOST_PORT`, also change `WEB_API_URL` and `CORS_ORIGINS` in `.env` (see `.env.example`).
 
-**Browser tests (Playwright).** `apps/web/e2e/run-e2e.sh` starts a throwaway copy of the whole stack (project `chainpilot-e2e`, ports 8082/8002/5436, its own `e2e/stack.env`, so the real `.env`, database and AI key are never used), loads the demo data, creates one user per role with fresh random passwords, runs the tests in Chromium and then removes the stack, its data and its images. Needs Docker and Git Bash on Windows:
+**Browser tests (Playwright).** `apps/web/e2e/run-e2e.sh` starts a throwaway copy of the whole stack (project `chainpilot-e2e`, ports 8082/8002/5436, its own `e2e/stack.env`, so the real `.env`, database and AI key are never used), loads the demo data, creates one user per role with fresh random passwords, runs the tests in Chromium and then removes the stack, its data and its images. The test stack imports a tiny **synthetic** forecast file (`apps/web/e2e/fixtures/`, flat made-up demand, labelled as such; not M5 and not a model) so it has recommendations to approve. Needs Docker and Git Bash on Windows:
 
 ```bash
 cd apps/web
@@ -302,7 +302,7 @@ npx playwright install chromium     # once
 bash e2e/run-e2e.sh                 # or: npm run e2e
 ```
 
-They cover: login (wrong password, keyboard only, deep links, reload, logout), what each role sees, receiving an order and finding it in the audit log, cancelling that confirmation, an admin adding a user who then logs in, the empty states (no forecasts, no delivery-risk scores, copilot not set up), an API error with "Try again", the "page not found" page, and an automatic accessibility check (axe, WCAG 2.1 A and AA) of every page. Automatic checks find only part of the accessibility problems; they do not replace a review with a screen reader.
+They cover: login (wrong password, keyboard only, deep links, reload, logout), what each role sees, receiving an order and finding it in the audit log, cancelling that confirmation, an admin adding a user who then logs in, the approval queue (making recommendations, approving a reorder and finding its purchase order and audit entry, approving a transfer, rejecting with a reason, two managers deciding the same recommendation, analysts read-only), the empty states (no delivery-risk scores, copilot not set up, an item without a forecast), an API error with "Try again", the "page not found" page, and an automatic accessibility check (axe, WCAG 2.1 A and AA) of every page. Automatic checks find only part of the accessibility problems; they do not replace a review with a screen reader.
 
 To use another API address, copy `apps/web/.env.example` to `.env.local` and set `VITE_API_URL`. The API accepts browser calls only from the origins in `CORS_ORIGINS` (default `http://localhost:5173,http://127.0.0.1:5173`).
 
@@ -314,7 +314,7 @@ Every page shows a **Simulated data** badge. The login token is kept for the bro
 |---|---|---|
 | Overview | headline numbers from `GET /dashboard/kpis` | |
 | Stock risks | every product at every warehouse: status, stock, on order, demand per day, reorder point, target, shortfall, days of cover | filter by warehouse and status |
-| Recommendations | pending transfers and reorders with the numbers behind them (proposals only) | managers: make new recommendations at a chosen service level |
+| Approval queue | pending transfers and reorders with the numbers behind them and their age; decided ones (executed, failed, rejected, superseded); recent decisions with who decided and what happened | managers: make new recommendations; approve (after a confirmation) or reject (with a reason) |
 | Suppliers & orders | on-time ratings for 90 days; purchase orders with an overdue mark | managers: receive an open order |
 | Forecasts | one M5 item at one M5 store: 28 days with the 80% range (chart + table), labelled as M5 data | choose store and item |
 | Delivery risk | the day's late-delivery alerts with tier, probability and reasons, labelled as Olist data | choose a dispatch day |

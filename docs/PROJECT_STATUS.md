@@ -1,24 +1,23 @@
 # Project Status
 
 Current phase: P7 (Approval and security)
-Current task: P7-T1, approval workflow in the API
+Current task: P7-T2, the approval queue screen
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 835a6d5 (CI #29 green, five jobs). P7-T1 is uncommitted.
+Last commit: ce3de6c (P7-T1, pushed; CI #30 result NOT VERIFIED by me: GitHub API rate limit). P7-T2 is uncommitted.
 
-## P7-T1 acceptance criteria
-- [x] Managers and admins approve or reject pending recommendations; analysts and anonymous users are refused (403/401)
-- [x] Approving executes (simulated): reorder → open purchase order; transfer → stock moved through the ledger; failures stored with the reason, no stock change
-- [x] Decided only once (row lock; two managers at once: one acts); superseded ones cannot be decided
-- [x] Idempotency-Key required; retries return the stored decision; reused keys refused
-- [x] Audit events in the same transaction; `GET /approvals` with the decider's email
-- [x] Tests: 13 new, mutation-checked; API 415 passed
-- [ ] CI green on GitHub. NOT VERIFIED: requires a push
+## P7-T2 acceptance criteria
+- [x] Approval queue: pending proposals with their numbers and age; Approve with a confirmation, Reject with a reason; managers and admins only
+- [x] Retry-safe: one Idempotency-Key per recommendation and decision, reused after a lost answer
+- [x] Decided recommendations by status, and recent decisions with who decided and the outcome
+- [x] Browser tests on the real API: reorder → purchase order + audit, transfer, reject, two managers at once, analysts read-only, accessibility
+- [x] Tests: web 53 unit (mutation-checked), 23 browser tests
+- [ ] CI green on GitHub. NOT VERIFIED: requires a push (and CI #30 for P7-T1 is still to be confirmed)
 
-Open findings: P7-T1-R1 (LOW), P7-T1-R2 (LOW, P7-T2), P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, P8), P6-T2-R1 (LOW), P6-T1-R3 (MEDIUM, P7-T3), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, partly fixed), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
-Next action: Owner checks and pushes; then P7-T2 (approval queue screen).
+Open findings: P7-T1-R1 (LOW, mitigated), P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, P8), P6-T2-R1 (LOW), P6-T1-R3 (MEDIUM, P7-T3), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, partly fixed), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
+Next action: Owner confirms CI #30, checks the queue in the dashboard, pushes; then P7-T3.
 Blockers: none.
 
 ## Roadmap progress
@@ -52,8 +51,8 @@ Blockers: none.
 | P6-T2 Risk, recommendation, supplier, forecast and delivery-risk screens | APPROVED (CI #27 green on 2106dcb) |
 | P6-T3 Copilot view and audit timeline (approval queue moved to P7) | APPROVED (CI #28 green on 7164f10) |
 | P6-T4 Browser end-to-end tests, error/empty states, accessibility, Compose | APPROVED (CI #29 green on 835a6d5) |
-| P7-T1 Approval workflow in the API (decide, execute, idempotency, concurrency, audit) | READY_FOR_USER_CHECK |
-| P7-T2 Approval queue screen with browser tests | NOT_STARTED |
+| P7-T1 Approval workflow in the API (decide, execute, idempotency, concurrency, audit) | READY_FOR_USER_CHECK (pushed as ce3de6c; CI #30 not yet confirmed) |
+| P7-T2 Approval queue screen with browser tests | READY_FOR_USER_CHECK |
 | P7-T3 Login token in an httpOnly cookie with CSRF protection | NOT_STARTED |
 | P7-T4 Security sweep: every write endpoint against every role; API security headers | NOT_STARTED |
 | P8–P9 | NOT_STARTED |
@@ -95,3 +94,4 @@ Blockers: none.
 - 2026-10-17: P6-T3: copilot screen and audit log in the dashboard.
 - 2026-10-17: P6-T4: browser tests and accessibility checks in CI; the dashboard in Docker Compose.
 - 2026-10-17: P6 complete (CI #29). P7-T1: managers approve or reject recommendations; approved ones become purchase orders or stock transfers.
+- 2026-10-17: P7-T2: the approval queue in the dashboard; approvals tested end to end in a browser.

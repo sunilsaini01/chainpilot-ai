@@ -859,3 +859,17 @@ Append-only. Each entry records what was actually done and actually run.
 - To use it on your database: `docker compose up -d --build` (runs migration 0012), then `docker compose run --rm api python -m app.cli load-policies` (loads policy version 2 for the copilot).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P7-T2 (approval queue screen with browser tests).
+
+## 2026-10-17 15:00 UTC — P7-T2 results: the approval queue screen
+- Plan (stated in the chat before coding; no separate log entry): the Recommendations page becomes the approval queue with Approve (confirmed) and Reject (with a reason), status filter, age, recent decisions; browser tests against the real API; the test stack gets synthetic forecasts so it has recommendations.
+- Files changed and why: `apps/web/src/pages/RecommendationsPage.tsx` (the queue), `src/api/client.ts` (`decide` with the `Idempotency-Key` header, `approvals`, `newIdempotencyKey`), `src/api/types.ts` (`Approval`, all statuses), `src/components/Layout.tsx` ("Approval queue"), `src/components/Badge.tsx` (words for the new statuses), `src/testUtils.tsx` (the fake API records headers and can answer with a function), `src/pages/approvals.test.tsx` (new, 9 tests), `src/pages/LoginPage.test.tsx` (race fixed, P7-T2-R1); `e2e/approvals.spec.ts` (new, 6 tests), `e2e/states.spec.ts`, `e2e/accessibility.spec.ts`, `e2e/run-e2e.sh` (imports the synthetic forecasts and links demand profiles), `e2e/fixtures/make_forecasts.py` and `e2e/fixtures/forecasts/` (new: 336 rows, 12 series, labelled SYNTHETIC).
+- Tests run / actual results:
+  - `apps/web`: type-check (app and e2e) passes; 53 unit tests pass (3 full runs).
+  - Mutation checks (each restored): a new key on every click fails "sends the same key again"; ignoring the confirmation fails "does nothing when the confirmation is cancelled"; undoing the logout fix still fails its test.
+  - Browser tests (`bash apps/web/e2e/run-e2e.sh`): first run 17 passed, 1 failed (my test expected reorders on the first page; transfers come first and there were 258 proposals); second run 22 passed, 1 failed (the second window in the two-managers test showed transfers, not the reorder); after both test fixes: 23 passed. Stack removed each time.
+  - The real flow in the browser: "Make new recommendations" made 258 proposals from the synthetic forecasts; approving a reorder placed `PO-REC-…`, seen as open on the orders page and as `recommendation.approved` by the manager in the audit log; approving a transfer moved the stock; rejecting stored the reason; the second manager got "not pending"; the queue with real rows has 0 axe problems.
+  - API: no change in this step.
+  - NOT VERIFIED: CI on GitHub for this step (not pushed). CI #30 (P7-T1, ce3de6c) could not be read: my status check polled the GitHub API too often and hit its hourly limit for unauthenticated requests. I stopped the polling.
+- Self-review findings: P7-T2-R1 (VERIFIED); P7-T1-R2 VERIFIED; P7-T1-R1 mitigated. Decision D-060.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P7-T3 (login token in an httpOnly cookie with CSRF protection).

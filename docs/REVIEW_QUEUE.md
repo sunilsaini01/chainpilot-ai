@@ -670,10 +670,18 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `apps/api/app/approval_service.py` executes an approved reorder as recommended. If stock arrived or another order was placed after the recommendation was made, approving it can over-order. Transfers are re-checked by the ledger (stock and space), reorders are not.
 - Expected behavior: managers decide on current numbers.
 - Fix and regression test: making new recommendations replaces stale pending ones; the approval queue (P7-T2) will show each recommendation's age and the numbers it used. A "still needed" re-check at approval time can be added if wanted.
-- Status: OPEN (documented)
+- Update 2026-10-17 (P7-T2): the queue shows each proposal's age ("today", "3 days ago") and the stock, on-order and target numbers it used.
+- Status: OPEN (mitigated; re-check optional)
 
 ## P7-T1-R2 — [LOW] The dashboard does not know the new recommendation statuses yet
 - Source: Claude self-review
 - File and reproduction: `apps/web/src/api/types.ts` types a recommendation's status as pending or superseded; the API now also returns rejected, executed and failed. The current screens only ask for pending ones, so nothing breaks.
 - Fix and regression test: P7-T2 (approval queue screen).
-- Status: OPEN (P7-T2)
+- Update 2026-10-17 (P7-T2): the types and the screen know every status; the screen can show each of them.
+- Status: VERIFIED
+
+## P7-T2-R1 — [LOW] A unit test raced the asynchronous logout
+- Source: test run (failed every time on this machine after unrelated changes; it passed in CI #29)
+- File and reproduction: `apps/web/src/pages/LoginPage.test.tsx` typed into the login form right after clicking "Log out", before the form was shown. The same timing mistake as in the browser helper (P6-T4).
+- Fix and regression test: the test waits for the login form; 3 full runs passed; the logout fix still makes it fail when undone (checked).
+- Status: VERIFIED
