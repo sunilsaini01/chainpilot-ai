@@ -17,7 +17,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/policies/`, `apps/api/app/policies_service.py` | Six policy documents for the simulated company (written for the demo, labelled as such) and their search, the grounding for the AI copilot (P5). |
 | `apps/api/app/copilot/tools.py` | The AI copilot's seven read-only tools (P5-T2): typed inputs, results with citations to real records, run in a database transaction that PostgreSQL keeps read-only. |
 | `apps/api/app/copilot/{graph,model,service}.py` | The AI copilot (P5-T3): a LangGraph supervisor with demand, inventory, supplier and decision specialists, Groq or Gemini behind one small adapter, verified citations, limits on calls and tools, and every run stored with its trace. |
-| `apps/web` | The dashboard (P6): React + TypeScript + Vite. Login; overview; stock risks; recommendations; suppliers and purchase orders; forecasts; delivery risk; users (admins); my account. A "Simulated data" badge on every page. The copilot, approval queue and audit timeline follow in P6-T3. |
+| `apps/web` | The dashboard (P6): React + TypeScript + Vite. Login; overview; stock risks; recommendations; suppliers and purchase orders; forecasts; delivery risk; ask the copilot; audit log (managers and admins); users (admins); my account. A "Simulated data" badge on every page. The approval queue comes with the approval workflow (P7). |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
@@ -288,6 +288,8 @@ Every page shows a **Simulated data** badge. The login token is kept for the bro
 | Suppliers & orders | on-time ratings for 90 days; purchase orders with an overdue mark | managers: receive an open order |
 | Forecasts | one M5 item at one M5 store: 28 days with the 80% range (chart + table), labelled as M5 data | choose store and item |
 | Delivery risk | the day's late-delivery alerts with tier, probability and reasons, labelled as Olist data | choose a dispatch day |
+| Ask the copilot | the answer, its checked citations, a "verified" or "not verified" mark, removed citations, limitations, and every step it took (tools used, tokens, time); earlier questions | ask a question (calls the AI provider; limited per hour) |
+| Audit log | who did what and when, newest first (managers and admins) | filter by kind of record |
 | Users | accounts (admins only) | add, change role, deactivate, set a temporary password |
 | My account | your details | change your password |
 

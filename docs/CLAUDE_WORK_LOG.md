@@ -786,3 +786,19 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P6-T2-R1 (LOW, documented).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P6-T3 (copilot view, read-only approval queue, audit timeline).
+
+## 2026-10-17 17:00 UTC — P6-T2 approved; P6-T3 plan (written before coding)
+- Owner pushed `a626ec9`, `faee22f`, `2106dcb`; CI #27 on `2106dcb`: `success`, all four jobs. Owner tried the screens and received SYN-PO-000210 (SYN-SUP05) through the dashboard: the order is `received` today with the owner's account, one `purchase_order.received` audit event, and the supplier table updated (25 -> 26 received, 2 -> 1 open, 96% -> 96.2% on time).
+- **P6-T3 plan:** (1) AI copilot screen: ask a question (up to 500 characters), see the answer, its verified citations, removed citations, limitations, a "verified" or "not verified" mark, the steps taken (supervisor choices, tool calls, notes), tokens and time; earlier runs to reopen; clear messages for "not configured" (503) and the hourly limit (429). (2) Audit timeline (managers and admins, as the API allows): newest first, filter by kind of record, who did it (the API adds the actor's email, so managers need not read the admin-only user list), paging. (3) The approval queue moves to P7, where approving and rejecting are built; a read-only copy now would only repeat the Recommendations screen.
+
+## 2026-10-17 17:50 UTC — P6-T3 results: copilot screen and audit log
+- Files changed and why: API: `app/models.py` (`AuditEvent.actor` relationship, `lazy="raise"` so it is never loaded row by row, and `actor_email`), `app/audit.py` (loads the actor with the events), `app/schemas.py` (`actor_email`), `tests/test_user_management.py` (+1 test). Web: `src/pages/CopilotPage.tsx` and `AuditPage.tsx` (new), `src/auth/AuthContext.tsx` (`atLeast` and `RequireRole`, the API's role rule, replacing `RequireAdmin`), `src/components/Layout.tsx` (navigation by role: Audit log for managers and up, Users for admins), `src/App.tsx`, `src/api/client.ts` and `types.ts`, `styles.css`, `src/pages/copilotAudit.test.tsx` (new, 8 tests).
+- Tests run / actual results:
+  - `apps/api` with `RUN_DB_TESTS=1`: 402 passed; Ruff passes.
+  - `apps/web`: type-check passes; 43 tests pass; production build works; `npm audit`: 0 vulnerabilities.
+  - Contract check against the real API (isolated Docker stack; a copilot run stored with the scripted test model, so no provider was called): every field the two screens read is present; the actor email shows for the login and is empty ("system") for the seed and the command-line run. Stack removed.
+  - My mistakes fixed along the way: one test looked for the question text, which appears twice on the page (summary and answer); a Node patch script failed on escaping again (fixed with the editor).
+  - NOT VERIFIED: CI on GitHub (not pushed yet); a real-browser run (P6-T4).
+- Decision: the approval queue moves to P7 (D-057).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P6-T4 (Playwright browser tests, accessibility checks, the web app in Docker Compose).

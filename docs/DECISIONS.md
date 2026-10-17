@@ -254,3 +254,7 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 - `POST /auth/password` lets anyone change their own password. It needs the current password, and a wrong one counts as a failed login in the existing throttle (5 per email per 15 minutes), so a stolen session cannot be used to guess faster. Other sessions are signed out; the current one stays.
 - `POST /users/{id}/password` lets an admin set a temporary password, for example when someone forgot theirs. All of that user's sessions are signed out. Emailed reset links would need an email service and are left for later.
 - Audit events record that a password was changed or reset and how many sessions were signed out, never the password.
+
+## D-057 — 2026-10-17 — The approval queue is built with the approval workflow (P7)
+- The spec's dashboard lists an approval queue. Until P7 there is nothing to approve or reject, so a read-only queue would only repeat the Recommendations screen or show buttons that do nothing. It is built in P7 together with approve/reject, so the screen and the rules arrive together.
+- The audit log shows the actor's email: the API now returns `actor_email` with each audit event (loaded in one extra query), because the user list that maps ids to people is for admins only, while the audit log is for managers too.
