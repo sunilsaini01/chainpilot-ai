@@ -17,7 +17,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/policies/`, `apps/api/app/policies_service.py` | Six policy documents for the simulated company (written for the demo, labelled as such) and their search, the grounding for the AI copilot (P5). |
 | `apps/api/app/copilot/tools.py` | The AI copilot's seven read-only tools (P5-T2): typed inputs, results with citations to real records, run in a database transaction that PostgreSQL keeps read-only. |
 | `apps/api/app/copilot/{graph,model,service}.py` | The AI copilot (P5-T3): a LangGraph supervisor with demand, inventory, supplier and decision specialists, Groq or Gemini behind one small adapter, verified citations, limits on calls and tools, and every run stored with its trace. |
-| `apps/web` | The dashboard (P6): React + TypeScript + Vite. Login, an overview of the headline numbers, and a "Simulated data" badge on every page. Further screens follow in P6-T2/T3. |
+| `apps/web` | The dashboard (P6): React + TypeScript + Vite. Login; overview; stock risks; recommendations; suppliers and purchase orders; forecasts; delivery risk; users (admins); my account. A "Simulated data" badge on every page. The copilot, approval queue and audit timeline follow in P6-T3. |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
@@ -277,6 +277,19 @@ npm run build          # type-check + production build into dist/
 To use another API address, copy `apps/web/.env.example` to `.env.local` and set `VITE_API_URL`. The API accepts browser calls only from the origins in `CORS_ORIGINS` (default `http://localhost:5173,http://127.0.0.1:5173`).
 
 Every page shows a **Simulated data** badge. The login token is kept for the browser tab only (`sessionStorage`). Each page has loading, error (with "Try again") and empty states.
+
+**Screens.** Every list has filters where useful, paging with the total, and loading, error and empty states. Statuses are written out ("out of stock", "at risk"), so colour is never the only signal.
+
+| Screen | What it shows | Actions |
+|---|---|---|
+| Overview | headline numbers from `GET /dashboard/kpis` | |
+| Stock risks | every product at every warehouse: status, stock, on order, demand per day, reorder point, target, shortfall, days of cover | filter by warehouse and status |
+| Recommendations | pending transfers and reorders with the numbers behind them (proposals only) | managers: make new recommendations at a chosen service level |
+| Suppliers & orders | on-time ratings for 90 days; purchase orders with an overdue mark | managers: receive an open order |
+| Forecasts | one M5 item at one M5 store: 28 days with the 80% range (chart + table), labelled as M5 data | choose store and item |
+| Delivery risk | the day's late-delivery alerts with tier, probability and reasons, labelled as Olist data | choose a dispatch day |
+| Users | accounts (admins only) | add, change role, deactivate, set a temporary password |
+| My account | your details | change your password |
 
 **Accounts for real users.** There is no public sign-up: ChainPilot is an internal tool.
 1. The first administrator is created on the server: `python -m app.cli create-user --email ... --full-name ... --role admin`.

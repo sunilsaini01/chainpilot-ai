@@ -1,25 +1,23 @@
 # Project Status
 
 Current phase: P6 (Frontend)
-Current task: P6-T1, web app foundation and overview, plus P6-T1b user accounts
+Current task: P6-T2, data screens
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 9b6bce5 (CI #25 green; P5 closed with P5-T4-R6/R7 open). P6-T1 and P6-T1b are uncommitted.
+Last commit: c0cb7db (CI #26 green, including the web job). P6-T2 is uncommitted.
 
-## P6-T1 acceptance criteria
-- [x] React + TypeScript + Vite app in `apps/web`, exact pins and lock file, 0 known vulnerabilities
-- [x] Login, session check, logout (also when the API is down), protected pages
-- [x] Layout with navigation and a "Simulated data" badge on every page
-- [x] Overview page on `GET /dashboard/kpis` with loading, error (retry) and empty states
-- [x] CORS for the web origin only; paging and label headers readable
-- [x] Tests: API 394; web 14 unit tests, type-check and build; CI job added
-- [x] P6-T1b: Users page for admins (add, role, deactivate, temporary password) and My account (change password); API 401 tests, web 25
+## P6-T2 acceptance criteria
+- [x] Stock risks, recommendations, suppliers and purchase orders, forecasts, delivery risk, on the existing API
+- [x] Filters, paging with totals, loading/error/empty states; statuses written out, not colour only
+- [x] Data labels: simulated operations, M5 forecasts, Olist delivery risk
+- [x] Manager actions where the API allows them (make recommendations, receive an order); analysts do not see them
+- [x] Tests: web 35 unit tests, type-check, build; contract check of every field against the real API (0 problems)
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Open findings: P6-T1-R3 (MEDIUM, P7/P8), P6-T1b-R1 (LOW, documented), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
-Next action: Owner checks and pushes; then P6-T2.
+Open findings: P6-T2-R1 (LOW), P6-T1-R3 (MEDIUM, P7/P8), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
+Next action: Owner checks and pushes; then P6-T3.
 Blockers: none.
 
 ## Roadmap progress
@@ -48,9 +46,9 @@ Blockers: none.
 | P5-T2 Typed read-only tools with citations | APPROVED (CI #21 green on 69d4f77) |
 | P5-T3 LangGraph supervisor (Groq or Gemini) | READY_FOR_USER_CHECK (real-model check waits for a key) |
 | P5-T4 Grounding, tool and safety evaluation | APPROVED (CI #25; run 1 gate passed, run 2 not; R6/R7 left open by the owner) |
-| P6-T1 Web app foundation, login, overview | READY_FOR_USER_CHECK |
-| P6-T1b User accounts in the dashboard (Users page, My account) | READY_FOR_USER_CHECK |
-| P6-T2 Risk, recommendation, supplier, forecast and delivery-risk screens | NOT_STARTED |
+| P6-T1 Web app foundation, login, overview | APPROVED (CI #26 green on c0cb7db) |
+| P6-T1b User accounts in the dashboard (Users page, My account) | APPROVED (CI #26 green on c0cb7db) |
+| P6-T2 Risk, recommendation, supplier, forecast and delivery-risk screens | READY_FOR_USER_CHECK |
 | P6-T3 Copilot view, approval queue (read-only), audit timeline | NOT_STARTED |
 | P6-T4 Browser end-to-end tests, error/empty states, accessibility, Compose | NOT_STARTED |
 | P7–P9 | NOT_STARTED |
@@ -88,3 +86,4 @@ Blockers: none.
 - 2026-10-17: request-size fix; second Groq run 12/14, gate not passed (rate limit, citation format).
 - 2026-10-17: P5 closed (CI #25). P6 started: web app foundation, login and overview.
 - 2026-10-17: P6-T1b: admins manage accounts in the dashboard; users change their own password.
+- 2026-10-17: P6-T2: five data screens in the dashboard.

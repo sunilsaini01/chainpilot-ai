@@ -765,3 +765,24 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P6-T1b-R1 (LOW, documented).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P6-T2.
+
+## 2026-10-17 15:30 UTC — P6-T1/T1b approved; P6-T2 plan (written before coding)
+- Owner pushed `428de3f`, `01e59e7`, `c0cb7db`; CI #26 on `c0cb7db`: `success`, all four jobs including the new web job. Owner tried the Users and My account pages.
+- **P6-T2 plan:** five screens on the existing API, no API changes expected:
+  1. Stock risks (`/inventory/risks`): warehouse and status filters, paging with the total, "not assessed" count, empty state when no forecasts are imported (409).
+  2. Recommendations (`/inventory/recommendations`): pending proposals with SKU, sites, supplier, quantity, reason and the numbers behind them; managers can generate a new set (service level, default 95%); says plainly that nothing is ordered until approval (P7).
+  3. Suppliers and orders: supplier ratings (`/suppliers/risks`) and purchase orders with status filter and overdue mark; managers can receive an open order (capacity refusals shown).
+  4. Forecasts (`/forecasts`): one M5 item at one M5 store, 28 days with the 80% range, as a small SVG chart plus a table; labelled as M5 public data.
+  5. Delivery risk (`/delivery-risk/alerts`): the day's alerts with tier, probability, percentile and reasons; labelled as Olist public data.
+- Shared: a small loading/error/retry hook, a pager, text-based status badges (colour is never the only signal), and id-to-code lookups for warehouses, suppliers and products.
+
+## 2026-10-17 16:30 UTC — P6-T2 results: five data screens
+- Files changed and why (web only, no API change): `src/pages/RisksPage.tsx`, `RecommendationsPage.tsx`, `SuppliersPage.tsx`, `ForecastsPage.tsx`, `DeliveryRiskPage.tsx` (new), `src/hooks/useApi.ts` (loading/error/retry, ignores answers for old filters) and `useLookups.ts` (codes for ids), `src/components/Pager.tsx` and `Badge.tsx` (new), `src/api/client.ts` and `types.ts` (calls and types for the screens), `src/App.tsx`, `Layout.tsx` (routes and navigation), `styles.css`, `src/testUtils.tsx` (fake API records the query string; `openPage` helper), `src/pages/screens.test.tsx` (new, 10 tests).
+- Tests run / actual results:
+  - `apps/web`: type-check passes; 35 tests pass; production build 295 kB JS (91 kB gzipped); `npm audit`: 0 vulnerabilities.
+  - Contract check against the real API (isolated Docker stack: seed 42, real forecasts, real delivery-risk scores, one recommendation run): every field the screens read was present in every endpoint's rows (risks 800 total, recommendations 174 with sku/site/position/target in their details, 6 supplier ratings, 20 open orders, 28 forecast days, delivery runs and alerts with the Olist label). 0 problems. Stack removed.
+  - My mistakes fixed along the way: a "rank in the day" column that showed "top 0%" for the riskiest order (replaced by the percentile itself); a test helper parameter that was not used.
+  - NOT VERIFIED: CI on GitHub (not pushed yet); a real-browser run (P6-T4). No API tests changed.
+- Self-review findings: P6-T2-R1 (LOW, documented).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P6-T3 (copilot view, read-only approval queue, audit timeline).

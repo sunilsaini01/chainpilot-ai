@@ -630,3 +630,10 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: acceptable for an internal tool; emailed reset links need an email service, short-lived signed tokens and rate limits.
 - Fix and regression test: later, if wanted (P9 or after).
 - Status: OPEN (documented limitation)
+
+## P6-T2-R1 — [LOW] The delivery-risk screen opens on a thin day
+- Source: contract check against the real data
+- File and reproduction: `apps/web/src/pages/DeliveryRiskPage.tsx` starts on the last scored day (2018-08-31), which had only 3 dispatches and so 1 alert (the small-day effect of P3-T3-R3).
+- Expected behavior: the first view shows a typical day.
+- Fix and regression test: if wanted, an API field with the busiest recent day, or start a week earlier. Not changed: the date can be picked freely.
+- Status: OPEN (documented)
