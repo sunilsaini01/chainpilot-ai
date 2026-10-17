@@ -22,6 +22,7 @@ from app.routes import (
     users,
     warehouses,
 )
+from app.security_headers import security_headers_middleware
 
 
 def create_app() -> FastAPI:
@@ -41,6 +42,8 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-CSRF-Token"],
         expose_headers=["X-Total-Count", "X-Dataset", "X-Unassessed-Count", "Retry-After"],
     )
+    # Added last, so it runs outermost: CORS answers (preflights) get the headers too.
+    app.middleware("http")(security_headers_middleware(https_only=settings.cookie_secure))
     app.include_router(health.router)
     app.include_router(dashboard.router)
     app.include_router(auth.router)
