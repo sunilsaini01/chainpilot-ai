@@ -1,7 +1,7 @@
 # Project Status
 
 Current phase: P5 (AI copilot)
-Current task: P5-T4, copilot evaluation (first real run done)
+Current task: P5-T4, copilot evaluation (two real runs done)
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
@@ -14,12 +14,13 @@ Last commit: 099f3ab (CI #22 green). The provider switch (D-052) and P5-T4 are u
 - [x] The checks themselves tested with scripted good and bad models; 13/13 mutations caught
 - [x] Dry run on the real demo data with a fake model: expected answers computed correctly; no provider called
 - [x] Real run with the owner's permission: Groq `qwen/qwen3.8-27b` 12/14, gate PASSED (configured Groq model retired; Gemini project denied by Google)
+- [x] Request-size fix (P5-T4-R3) and a second run: 12/14, gate NOT passed (one 429 rate limit; tool messages listed as citations, removed by verification)
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-P5 gate ("grounded output; tool and safety evaluation"): met by the Groq run; open: free-tier request size (P5-T4-R3).
+P5 gate ("grounded output; tool and safety evaluation"): passed in run 1, not repeated in run 2; open: P5-T4-R6 (rate limits), P5-T4-R7 (citation format).
 
-Open findings: P5-T4-R3 (MEDIUM, next), P5-T4-R4 (LOW, documented), P5-T4-R5 (owner: model name and Gemini key), P4-T4-R3 (LOW, documented), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
-Next action: Owner pushes; sets GROQ_MODEL=qwen/qwen3.8-27b and a new Gemini key if wanted; then P5-T4-R3 and a second run.
+Open findings: P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW, documented), P5-T4-R5 (owner: model name and Gemini key), P4-T4-R3 (LOW, documented), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
+Next action: Owner pushes; decides: fix P5-T4-R7/R6 and run a third time, or move on to P6 with them open.
 Blockers: none.
 
 ## Roadmap progress
@@ -47,7 +48,7 @@ Blockers: none.
 | P5-T1 Policy documents and retrieval | APPROVED (CI #20 green on 988d83e) |
 | P5-T2 Typed read-only tools with citations | APPROVED (CI #21 green on 69d4f77) |
 | P5-T3 LangGraph supervisor (Groq or Gemini) | READY_FOR_USER_CHECK (real-model check waits for a key) |
-| P5-T4 Grounding, tool and safety evaluation | READY_FOR_USER_CHECK (Groq run: 12/14, gate passed) |
+| P5-T4 Grounding, tool and safety evaluation | READY_FOR_USER_CHECK (run 1 gate passed, run 2 not) |
 | P6–P9 | NOT_STARTED |
 
 ## History
@@ -80,3 +81,4 @@ Blockers: none.
 - 2026-10-17: copilot provider switched from OpenAI to Groq and Gemini (D-052).
 - 2026-10-17: P5-T4 evaluation built and dry-run on real data; no provider call made.
 - 2026-10-17: first real copilot evaluation: Groq qwen3.8-27b 12/14, gate passed; P5 gate met.
+- 2026-10-17: request-size fix; second Groq run 12/14, gate not passed (rate limit, citation format).

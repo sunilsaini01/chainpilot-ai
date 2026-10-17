@@ -560,7 +560,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `apps/api/app/copilot/graph.py`. Two of 14 cases failed with HTTP 413 "Request too large ... input tokens per minute: Limit 7000" because tool results (up to 6,000 characters each) and the answer prompt (up to 18,000 characters) add up. Questions also took 6–139 s, mostly waiting for rate limits.
 - Expected behavior: questions fit the free tier, or the run says clearly that the limit was hit.
 - Fix and regression test (next task, then a second evaluation run reported next to the first): send the model compact tool results (fewer fields, smaller limits), and on a 413 retry once with half the evidence. A paid Groq tier is the alternative (owner's choice).
-- Status: OPEN
+- Update 2026-10-17: done (`MAX_RESULT_CHARS` 3,000, `MAX_EVIDENCE_CHARS` 8,000, compact JSON, `RequestTooLargeError` with one half-size retry, a specialist stops with a note). 5 new tests; 5 of 5 mutations caught. Second run: 0 refusals for size (2 before).
+- Status: VERIFIED
 
 ## P5-T4-R4 — [LOW] The checks do not catch every factual slip
 - Source: reading the saved answers
@@ -575,3 +576,17 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: `.env` names a model that exists, with a key that is allowed.
 - Fix and regression test: owner's choice: set `GROQ_MODEL=qwen/qwen3.8-27b` (the model that passed), and for Gemini create a key in a new Google AI Studio project. Not changed by Claude (owner's file and choice).
 - Status: OPEN (owner action)
+
+## P5-T4-R6 — [MEDIUM] Groq's free tier also limits output tokens per minute
+- Source: second real evaluation run
+- File and reproduction: the injection-data case failed with HTTP 429 "output tokens per minute (OTPM): Limit 1000", after the OpenAI client's 2 retries.
+- Expected behavior: a question waits out short rate limits instead of failing.
+- Fix and regression test: more retries for rate limits only (the reply says how long to wait), or a paid tier (owner's choice). Not changed yet.
+- Status: OPEN
+
+## P5-T4-R7 — [MEDIUM] The model may put tool error messages in its citation list
+- Source: second real evaluation run ("missing" case)
+- File and reproduction: `apps/api/app/copilot/graph.py` answer prompt. The model listed "Unknown warehouse 'SYN-WH9'" and "No product matches 'SYN-4242'" as citations. Verification removed them and marked the answer not grounded, so the user never saw them as evidence, but the pre-registered gate counts them.
+- Expected behavior: citations are only record ids from the tools.
+- Fix and regression test: say in the answer prompt that a citation looks like `supplier:SYN-SUP04` and that messages are not citations, and give the citation list shown to the model separately from the messages; then a third run reported next to the others. The evaluation rule itself stays as it is.
+- Status: OPEN

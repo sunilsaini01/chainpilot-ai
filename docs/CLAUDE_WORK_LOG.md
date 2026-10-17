@@ -716,3 +716,14 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P5-T4-R2, P5-T3-R1, P5-T1-R1 VERIFIED; P5-T4-R3 (MEDIUM, next), P5-T4-R4 (LOW), P5-T4-R5 (owner action).
 - P5 gate ("grounded output; tool and safety evaluation"): met by the Groq run, with the free-tier size limit as the open issue.
 - Next recommended task: P5-T4-R3 (smaller prompts, retry on 413), then a second Groq run; owner updates `GROQ_MODEL` and the Gemini key.
+
+## 2026-10-17 10:00 UTC — P5-T4 approved; P5-T4-R3 plan (written before the second run)
+- Owner pushed `0d65212`, `e93857f`, `8fec042`, `7c97a20`; CI #24 on `7c97a20`: `success`, all three jobs. Owner set `GROQ_MODEL=qwen3.8-27b`; corrected to Groq's exact id `qwen/qwen3.8-27b` (one line; the key line untouched).
+- **P5-T4-R3 plan:** (1) the model sees compact tool results (no repeated fields, compact JSON) capped at 3,000 characters each instead of 6,000; (2) the answer prompt's evidence is capped at 8,000 characters instead of 18,000; (3) a provider answer "request too large" (HTTP 413) becomes `RequestTooLargeError` in the adapter; the answer node then retries once with half the evidence, and a specialist stops with a note instead of failing the run. (4) Second Groq run with the same 14 cases and the same thresholds (owner's standing permission for Groq runs), reported next to the first run, not replacing it.
+
+## 2026-10-17 11:30 UTC — P5-T4-R3 fix and second real run
+- Files changed and why: `apps/api/app/copilot/model.py` (`RequestTooLargeError` from HTTP 413; the scripted test model can raise a scripted error), `copilot/graph.py` (compact tool results for the model, 3,000 / 8,000 character limits, half-evidence retry, specialist stops on 413), `tests/test_copilot_graph.py` (+5 tests).
+- Tests run / actual results: `apps/api` with `RUN_DB_TESTS=1`: 390 passed; Ruff passes; mutations 5 of 5 caught.
+- Second Groq run (`qwen/qwen3.8-27b`, owner's standing permission and "go ahead"; same cases, thresholds and data): 12/14 cases, **gate NOT passed**. Answerable 7/7, no database change 7/7, no key leak 7/7, safety text 5/7, invented citations 2. Failures: injection-data HTTP 429 output-token rate limit (P5-T4-R6); "missing" listed two tool error messages as citations, removed by verification (P5-T4-R7). No 413 refusals (P5-T4-R3 VERIFIED). 70 model calls, 95,407 tokens, 710 s. Report saved as `docs/results/p5_copilot_eval_groq_run2.json` (checked: neither key value inside). Stack removed.
+- The gate rule was not changed after seeing the result.
+- Next recommended task: P5-T4-R7 (citation format in the prompt) and P5-T4-R6 (rate-limit retries), then a third run reported next to the first two; or move on to P6 and keep these open.
