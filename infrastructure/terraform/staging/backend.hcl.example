@@ -1,0 +1,4 @@
+# Copy to backend.hcl (ignored by Git) after the bootstrap step and fill in the
+# bucket from its output `state_bucket`. Then: terraform init -backend-config=backend.hcl
+bucket = "chainpilot-tfstate-<your-account-id>"
+region = "ap-south-1"

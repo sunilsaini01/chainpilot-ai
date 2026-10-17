@@ -36,10 +36,13 @@ apps/web/test-results/
 apps/web/playwright-report/
 *.tsbuildinfo
 
-# Terraform state (later phases)
+# Terraform: state, plugins, the filled-in backend file and variable files (may hold emails)
 .terraform/
 *.tfstate
 *.tfstate.*
+*.tfplan
+backend.hcl
+*.tfvars
 
 # Editors and OS
 .vscode/
