@@ -31,13 +31,22 @@ const PAGES: [string, string][] = [
 ];
 
 test("every page an admin can open", async ({ page }) => {
+  // Records Content Security Policy violations (a blocked script, style or request).
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { cspViolations: string[] }).cspViolations = seen;
+    document.addEventListener("securitypolicyviolation", (e) => seen.push(`${e.violatedDirective} ${e.blockedURI}`));
+  });
   await openAs(page, "admin");
   for (const [path, heading] of PAGES) {
     await test.step(path, async () => {
-      await page.goto(path);
+      const response = await page.goto(path);
+      expect(response?.headers()["content-security-policy"]).toContain("script-src 'self'");
       await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
       await waitForData(page);
       await expectAccessible(page);
+      const violations = await page.evaluate(() => (window as unknown as { cspViolations: string[] }).cspViolations);
+      expect(violations, `content policy violations on ${path}`).toEqual([]);
     });
   }
 });

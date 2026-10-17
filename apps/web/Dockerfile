@@ -13,7 +13,12 @@ ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build
 
 FROM nginx:1.30.5-alpine
+# The same API address again (each build stage has its own arguments): the
+# content policy below may only let the page talk to this API.
+ARG VITE_API_URL=http://127.0.0.1:8000
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+RUN sed -i "s#__API_ORIGIN__#${VITE_API_URL}#" /etc/nginx/conf.d/default.conf \
+    && ! grep -q "__API_ORIGIN__" /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 # Run as the unprivileged nginx user, like the API image: the pid file moves to /tmp
 # and the cache folders become writable for that user. Port 8080 needs no root.
