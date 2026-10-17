@@ -34,10 +34,16 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
+    access_token: str  # for scripts (Authorization: Bearer); browsers use the cookie
     token_type: Literal["bearer"] = "bearer"
     expires_at: datetime
+    csrf_token: str  # browsers send it as X-CSRF-Token on requests that change data
     user: UserOut
+
+
+class MeOut(UserOut):
+    # Only for cookie sessions; null when the request used an Authorization header.
+    csrf_token: str | None
 
 
 class CreateUserRequest(BaseModel):

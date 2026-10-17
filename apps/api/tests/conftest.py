@@ -178,6 +178,10 @@ def login(client: TestClient, email: str, password: str = TEST_PASSWORD) -> dict
     """Log in through the API and return the Authorization header to use."""
     response = client.post("/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200, response.text
+    # Login also sets the browser cookie in the test client. Tests authenticate with
+    # the returned Bearer header instead; dropping the cookie keeps "no header" meaning
+    # "not logged in" (tests/test_session_cookie.py covers the cookie).
+    client.cookies.clear()
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 

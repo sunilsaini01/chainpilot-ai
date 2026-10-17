@@ -34,8 +34,11 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
+        # The dashboard's login cookie goes with its requests. Safe only because the
+        # origins are an explicit list (never "*") and changes need the CSRF token.
+        allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH"],
-        allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+        allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-CSRF-Token"],
         expose_headers=["X-Total-Count", "X-Dataset", "X-Unassessed-Count", "Retry-After"],
     )
     app.include_router(health.router)

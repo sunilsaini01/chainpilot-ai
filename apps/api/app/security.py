@@ -82,3 +82,18 @@ def hash_token(token: str) -> str:
     values, so guessing one is infeasible however fast the hash is.
     """
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def csrf_token_for(session_token: str) -> str:
+    """The CSRF token that belongs to a session: SHA-256 of "csrf:" + the session token.
+
+    Derived, so nothing extra is stored. It is a different value from the stored
+    token hash (prefix), and a hash cannot be turned back into the session token.
+    """
+    return hashlib.sha256(f"csrf:{session_token}".encode()).hexdigest()
+
+
+def csrf_token_matches(session_token: str, given: str | None) -> bool:
+    if not given:
+        return False
+    return hmac.compare_digest(csrf_token_for(session_token), given)

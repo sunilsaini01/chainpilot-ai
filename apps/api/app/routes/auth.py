@@ -7,10 +7,17 @@ from sqlalchemy.orm import Session
 
 from app.audit import record_event
 from app.config import get_settings
-from app.dependencies import get_bearer_token, get_current_user, get_db_session
+from app.dependencies import (
+    SESSION_COOKIE,
+    SessionToken,
+    get_current_user,
+    get_db_session,
+    get_session_token,
+)
 from app.login_throttle import RETRY_AFTER_SECONDS, is_login_blocked, record_attempt
 from app.models import User
-from app.schemas import ChangePasswordRequest, LoginRequest, TokenResponse, UserOut
+from app.schemas import ChangePasswordRequest, LoginRequest, MeOut, TokenResponse, UserOut
+from app.security import csrf_token_for
 from app.users_service import (
     WrongPasswordError,
     authenticate,
@@ -24,6 +31,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def set_session_cookie(response: Response, token: str, max_age_seconds: int) -> None:
+    """The browser's login: httpOnly (page scripts cannot read it), sent only to this
+    site (SameSite=Strict), and only over HTTPS outside local development."""
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=max_age_seconds,
+        path="/",
+        httponly=True,
+        secure=get_settings().cookie_secure,
+        samesite="strict",
+    )
+
+
 @router.post(
     "/login",
     response_model=TokenResponse,
@@ -33,9 +54,17 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     },
 )
 def login(
-    body: LoginRequest, request: Request, session: Session = Depends(get_db_session)
+    body: LoginRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_db_session),
 ) -> TokenResponse:
-    """Exchange email + password for a bearer token."""
+    """Log in with email + password.
+
+    Browsers get the session as an httpOnly cookie and use `csrf_token` in the
+    `X-CSRF-Token` header for requests that change data. Scripts can instead send
+    `access_token` as `Authorization: Bearer <token>`.
+    """
     # Behind a load balancer this is the balancer's address until proxy headers
     # are configured for deployment (P8).
     client_ip = request.client.host if request.client else None
@@ -61,27 +90,40 @@ def login(
         )
 
     record_attempt(session, body.email, client_ip, succeeded=True)
-    raw_token, record = issue_token(session, user, get_settings().access_token_ttl_minutes)
+    ttl_minutes = get_settings().access_token_ttl_minutes
+    raw_token, record = issue_token(session, user, ttl_minutes)
     record_event(session, "user.login", "user", user.id, actor=user)
     session.commit()
     logger.info("User %s logged in", user.id)
+    set_session_cookie(response, raw_token, ttl_minutes * 60)
     return TokenResponse(
-        access_token=raw_token, expires_at=record.expires_at, user=UserOut.model_validate(user)
+        access_token=raw_token,
+        expires_at=record.expires_at,
+        csrf_token=csrf_token_for(raw_token),
+        user=UserOut.model_validate(user),
     )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
-    token: str = Depends(get_bearer_token),
+    token: SessionToken = Depends(get_session_token),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> Response:
-    """Revoke the token used for this request."""
-    revoke_token(session, token)
+    """Revoke the token used for this request and delete the browser's cookie."""
+    revoke_token(session, token.value)
     record_event(session, "user.logout", "user", user.id, actor=user)
     session.commit()
     logger.info("User %s logged out", user.id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.delete_cookie(
+        SESSION_COOKIE,
+        path="/",
+        httponly=True,
+        secure=get_settings().cookie_secure,
+        samesite="strict",
+    )
+    return response
 
 
 @router.post(
@@ -95,7 +137,7 @@ def logout(
 def change_password(
     body: ChangePasswordRequest,
     request: Request,
-    token: str = Depends(get_bearer_token),
+    token: SessionToken = Depends(get_session_token),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> Response:
@@ -111,7 +153,7 @@ def change_password(
         )
     try:
         signed_out = change_own_password(
-            session, user, body.current_password, body.new_password, token
+            session, user, body.current_password, body.new_password, token.value
         )
     except WrongPasswordError as error:
         record_attempt(session, user.email, client_ip, succeeded=False)
@@ -134,7 +176,11 @@ def change_password(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/me", response_model=UserOut)
-def me(user: User = Depends(get_current_user)) -> User:
-    """The currently logged-in user."""
-    return user
+@router.get("/me", response_model=MeOut)
+def me(
+    token: SessionToken = Depends(get_session_token), user: User = Depends(get_current_user)
+) -> MeOut:
+    """The currently logged-in user. For a cookie session also its CSRF token, so the
+    dashboard can carry on after a page reload (it keeps the token only in memory)."""
+    csrf = csrf_token_for(token.value) if token.from_cookie else None
+    return MeOut(**UserOut.model_validate(user).model_dump(), csrf_token=csrf)

@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
@@ -40,6 +40,9 @@ class Settings(BaseSettings):
 
     # How long a login token stays valid (default 8 hours = one working day; max 7 days).
     access_token_ttl_minutes: int = Field(default=480, ge=5, le=7 * 24 * 60)
+    # The browser's login cookie is sent only over HTTPS when Secure is set. Default:
+    # Secure everywhere except ENVIRONMENT=local (plain http://127.0.0.1).
+    session_cookie_secure: bool | None = None
 
     # AI copilot (P5-T3): Groq or Google Gemini (decision D-052). Only the chosen
     # provider's key and model are needed; without them the copilot answers 503.
@@ -53,6 +56,21 @@ class Settings(BaseSettings):
 
     # Cost control: investigations each user may start per hour.
     copilot_runs_per_hour: int = Field(default=20, ge=1, le=1000)
+
+    @field_validator("cors_origins")
+    @classmethod
+    def no_wildcard_origin(cls, value: str) -> str:
+        # The API allows credentials (the login cookie), so "*" would let any site
+        # make logged-in requests. Origins must be listed one by one.
+        if "*" in value:
+            raise ValueError("CORS_ORIGINS must list origins explicitly; '*' is not allowed")
+        return value
+
+    @property
+    def cookie_secure(self) -> bool:
+        if self.session_cookie_secure is not None:
+            return self.session_cookie_secure
+        return self.environment != "local"
 
     @property
     def cors_origin_list(self) -> list[str]:
