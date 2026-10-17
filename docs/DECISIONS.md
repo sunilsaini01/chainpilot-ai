@@ -242,3 +242,15 @@ Short records of meaningful choices. Append new decisions; mark superseded ones 
 ## D-054 — 2026-10-17 — Evaluation model for the first real run
 - The configured Groq model (`llama-3.1-8b-instant`) no longer exists on Groq, and the Gemini project is denied access. To make the permitted run meaningful, the evaluation used `qwen/qwen3.8-27b` from Groq's current list, passed for that run only; the owner's `.env` was not changed.
 - `openai/gpt-oss-*` models on Groq were not used: they are open models run by Groq (no data goes to OpenAI), but the owner asked to drop OpenAI, so a non-OpenAI model was the clearer choice.
+
+## D-055 — 2026-10-17 — Frontend: React + TypeScript + Vite, kept simple (P6)
+- React 19 with TypeScript and Vite, React Router for pages, plain CSS, no UI framework or state library: the dashboard is mostly tables and numbers from the API, and fewer dependencies are easier to keep safe (109 packages installed, 0 known vulnerabilities).
+- Exact versions in `package.json` plus `package-lock.json`; each version was the newest one at least two weeks old when chosen. CI installs with `npm ci` and runs a type-check (`tsc --noEmit`, strict), the unit tests (Vitest + Testing Library) and a production build. GitHub actions stay pinned to commit SHAs (`actions/setup-node` v6.5.0).
+- The browser talks to the API directly; CORS allows only the configured origins and exposes the paging and data-label headers. `GET /dashboard/kpis` reuses the existing services, so the overview always agrees with the detailed screens.
+- The login token is kept in `sessionStorage` (tab only). An httpOnly cookie would protect it better against injected scripts; that belongs to the security phase (P6-T1-R3).
+
+## D-056 — 2026-10-17 — Accounts are created by admins; users change their own password
+- No public sign-up: accounts are created by an admin (CLI for the first one, then the Users page), each with a role and a temporary password. This is the owner's choice after asking how real users get accounts.
+- `POST /auth/password` lets anyone change their own password. It needs the current password, and a wrong one counts as a failed login in the existing throttle (5 per email per 15 minutes), so a stolen session cannot be used to guess faster. Other sessions are signed out; the current one stays.
+- `POST /users/{id}/password` lets an admin set a temporary password, for example when someone forgot theirs. All of that user's sessions are signed out. Emailed reset links would need an email service and are left for later.
+- Audit events record that a password was changed or reset and how many sessions were signed out, never the password.

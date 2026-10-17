@@ -1,26 +1,25 @@
 # Project Status
 
-Current phase: P5 (AI copilot)
-Current task: P5-T4, copilot evaluation (two real runs done)
+Current phase: P6 (Frontend)
+Current task: P6-T1, web app foundation and overview, plus P6-T1b user accounts
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 099f3ab (CI #22 green). The provider switch (D-052) and P5-T4 are uncommitted.
+Last commit: 9b6bce5 (CI #25 green; P5 closed with P5-T4-R6/R7 open). P6-T1 and P6-T1b are uncommitted.
 
-## P5-T4 acceptance criteria
-- [x] 14 pre-registered cases (7 answerable, 7 safety) and pass thresholds, fixed before any run
-- [x] Checks: grounding, expected citations, unsupported numbers, refusal, injection, key leak, exact database-change check
-- [x] The checks themselves tested with scripted good and bad models; 13/13 mutations caught
-- [x] Dry run on the real demo data with a fake model: expected answers computed correctly; no provider called
-- [x] Real run with the owner's permission: Groq `qwen/qwen3.8-27b` 12/14, gate PASSED (configured Groq model retired; Gemini project denied by Google)
-- [x] Request-size fix (P5-T4-R3) and a second run: 12/14, gate NOT passed (one 429 rate limit; tool messages listed as citations, removed by verification)
+## P6-T1 acceptance criteria
+- [x] React + TypeScript + Vite app in `apps/web`, exact pins and lock file, 0 known vulnerabilities
+- [x] Login, session check, logout (also when the API is down), protected pages
+- [x] Layout with navigation and a "Simulated data" badge on every page
+- [x] Overview page on `GET /dashboard/kpis` with loading, error (retry) and empty states
+- [x] CORS for the web origin only; paging and label headers readable
+- [x] Tests: API 394; web 14 unit tests, type-check and build; CI job added
+- [x] P6-T1b: Users page for admins (add, role, deactivate, temporary password) and My account (change password); API 401 tests, web 25
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-P5 gate ("grounded output; tool and safety evaluation"): passed in run 1, not repeated in run 2; open: P5-T4-R6 (rate limits), P5-T4-R7 (citation format).
-
-Open findings: P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW, documented), P5-T4-R5 (owner: model name and Gemini key), P4-T4-R3 (LOW, documented), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW, documented), P3-T2b-R2 (LOW, documented). See docs/REVIEW_QUEUE.md.
-Next action: Owner pushes; decides: fix P5-T4-R7/R6 and run a third time, or move on to P6 with them open.
+Open findings: P6-T1-R3 (MEDIUM, P7/P8), P6-T1b-R1 (LOW, documented), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
+Next action: Owner checks and pushes; then P6-T2.
 Blockers: none.
 
 ## Roadmap progress
@@ -48,8 +47,13 @@ Blockers: none.
 | P5-T1 Policy documents and retrieval | APPROVED (CI #20 green on 988d83e) |
 | P5-T2 Typed read-only tools with citations | APPROVED (CI #21 green on 69d4f77) |
 | P5-T3 LangGraph supervisor (Groq or Gemini) | READY_FOR_USER_CHECK (real-model check waits for a key) |
-| P5-T4 Grounding, tool and safety evaluation | READY_FOR_USER_CHECK (run 1 gate passed, run 2 not) |
-| P6–P9 | NOT_STARTED |
+| P5-T4 Grounding, tool and safety evaluation | APPROVED (CI #25; run 1 gate passed, run 2 not; R6/R7 left open by the owner) |
+| P6-T1 Web app foundation, login, overview | READY_FOR_USER_CHECK |
+| P6-T1b User accounts in the dashboard (Users page, My account) | READY_FOR_USER_CHECK |
+| P6-T2 Risk, recommendation, supplier, forecast and delivery-risk screens | NOT_STARTED |
+| P6-T3 Copilot view, approval queue (read-only), audit timeline | NOT_STARTED |
+| P6-T4 Browser end-to-end tests, error/empty states, accessibility, Compose | NOT_STARTED |
+| P7–P9 | NOT_STARTED |
 
 ## History
 - 2026-10-08 to 2026-10-15: first attempt under the two-agent Claude↔Codex workflow. On 2026-10-15 the owner deleted it entirely, including Git history. See DECISIONS D-001.
@@ -82,3 +86,5 @@ Blockers: none.
 - 2026-10-17: P5-T4 evaluation built and dry-run on real data; no provider call made.
 - 2026-10-17: first real copilot evaluation: Groq qwen3.8-27b 12/14, gate passed; P5 gate met.
 - 2026-10-17: request-size fix; second Groq run 12/14, gate not passed (rate limit, citation format).
+- 2026-10-17: P5 closed (CI #25). P6 started: web app foundation, login and overview.
+- 2026-10-17: P6-T1b: admins manage accounts in the dashboard; users change their own password.

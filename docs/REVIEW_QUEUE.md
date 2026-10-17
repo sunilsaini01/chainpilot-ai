@@ -487,7 +487,7 @@ History note: the review queue from the deleted first attempt (including Codex f
 
 ## P4-T4-R3 — [LOW] Known simplifications in the recommendations
 - Source: Claude self-review
-- File and reproduction: transfers are treated as arriving at once (no travel time); there is no ordering or transfer cost, so the plan does not trade a transfer against an order; risks are not stored as alerts (D-047); the seed overstocks most items (242 of 800 pairs are excess with the real forecasts), which makes transfers dominate.
+- File and reproduction: transfers are treated as arriving at once (no travel time); there is no ordering or transfer cost, so the plan does not trade a transfer against an order; risks are not stored as alerts (D-047); the seed overstocks most items (542 of 800 pairs are excess with the real forecasts; first written as 242, see P6-T1-R5), which makes transfers dominate.
 - Expected behavior: documented, so the demo is read correctly.
 - Fix and regression test: none now; revisit with the dashboard (P6) and approvals (P7).
 - Status: OPEN (documented limitation)
@@ -590,3 +590,43 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: citations are only record ids from the tools.
 - Fix and regression test: say in the answer prompt that a citation looks like `supplier:SYN-SUP04` and that messages are not citations, and give the citation list shown to the model separately from the messages; then a third run reported next to the others. The evaluation rule itself stays as it is.
 - Status: OPEN
+
+## P6-T1-R1 — [LOW] Logging out with the API down gave an unhandled error
+- Source: test run (unhandled promise rejection reported by Vitest)
+- File and reproduction: `apps/web/src/auth/AuthContext.tsx`. If the logout request failed (API down), the error went up to the button handler and was never caught.
+- Expected behavior: the user is logged out in this browser either way (the token is cleared first), without an error.
+- Fix and regression test: the context catches the failure; test "still logs out in this browser, without an unhandled error".
+- Status: VERIFIED
+
+## P6-T1-R2 — [LOW] My own test setup ran six tests twice and faked an impossible reply
+- Source: test count (20 instead of 14) and the same Vitest report
+- File and reproduction: `apps/web/src/pages/OverviewPage.test.tsx` imported example data from another test file, which runs that file's tests again; the fake API built a "204 No Content" reply with a body, which browsers refuse.
+- Fix and regression test: shared example data moved to `src/testUtils.tsx`; the fake API sends no body with 204. 14 tests, each run once.
+- Status: VERIFIED
+
+## P6-T1-R3 — [MEDIUM] The login token is readable by scripts in the page
+- Source: Claude self-review (design)
+- File and reproduction: `apps/web/src/api/client.ts` keeps the token in `sessionStorage`. A script injected into the page (XSS) could read it.
+- Expected behavior: tokens out of reach of page scripts.
+- Fix and regression test: move to an httpOnly, Secure, SameSite cookie set by the API (with CSRF protection) in the security phase (P7/P8). React's escaping and no third-party scripts reduce the risk meanwhile.
+- Status: OPEN (P7/P8)
+
+## P6-T1-R4 — [LOW] The first overview showed stock value in pounds
+- Source: Claude self-review
+- File and reproduction: `apps/web/src/pages/OverviewPage.tsx` formatted the value with a £ sign, but the simulated data has no currency.
+- Fix and regression test: plain amount with two decimals; the overview test checks "1,234.50".
+- Status: VERIFIED
+
+## P6-T1-R5 — [LOW] The docs gave 242 "excess" items instead of 542
+- Source: the owner's screenshot of the new overview (146 + 24 + 88 + 542 = 800 pairs)
+- File and reproduction: my P4-T4 and P5-T2 checks counted statuses from `GET /inventory/risks?limit=500`, which returns at most 500 of the 800 rows (most urgent first), so 300 "excess" rows were missed. The README and P4-T4-R3 said 242; the dashboard counts all rows and shows 542. The other three counts were right (they all fall in the first 500).
+- Expected behavior: published numbers count every row.
+- Fix and regression test: README and P4-T4-R3 corrected; the work log gets a correction entry (it is append-only). `test_kpis_match_the_detailed_services` checks the dashboard's counts against the services.
+- Status: VERIFIED
+
+## P6-T1b-R1 — [LOW] No self-service "forgot password" by email
+- Source: Claude self-review
+- File and reproduction: a user who forgets their password must ask an admin for a temporary one.
+- Expected behavior: acceptable for an internal tool; emailed reset links need an email service, short-lived signed tokens and rate limits.
+- Fix and regression test: later, if wanted (P9 or after).
+- Status: OPEN (documented limitation)

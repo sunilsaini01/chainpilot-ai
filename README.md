@@ -17,6 +17,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/policies/`, `apps/api/app/policies_service.py` | Six policy documents for the simulated company (written for the demo, labelled as such) and their search, the grounding for the AI copilot (P5). |
 | `apps/api/app/copilot/tools.py` | The AI copilot's seven read-only tools (P5-T2): typed inputs, results with citations to real records, run in a database transaction that PostgreSQL keeps read-only. |
 | `apps/api/app/copilot/{graph,model,service}.py` | The AI copilot (P5-T3): a LangGraph supervisor with demand, inventory, supplier and decision specialists, Groq or Gemini behind one small adapter, verified citations, limits on calls and tools, and every run stored with its trace. |
+| `apps/web` | The dashboard (P6): React + TypeScript + Vite. Login, an overview of the headline numbers, and a "Simulated data" badge on every page. Further screens follow in P6-T2/T3. |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
@@ -32,7 +33,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/inventory_sim/` | Replay simulator (P4): real M5 sales are replayed day by day through the inventory policy (weekly review, random 5–9 day lead times, lost sales) and compared with a simple reorder rule. With LightGBM forecasts the policy needed 17–34% less stock for the same fill rate. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `.github/workflows/ci.yml` | On every push and pull request: API and ML Ruff lint/format and tests (API tests against a real Postgres 16, ML tests on tiny M5-format fixtures), then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
 
-Not built yet: forecast and scoring jobs from the API (needs the background worker), approving and executing recommendations (P7), the copilot's evaluation (P5-T4), frontend, AWS.
+Not built yet: forecast and scoring jobs from the API (needs the background worker), approving and executing recommendations (P7), most dashboard screens (P6-T2 onwards), AWS.
 
 ## How stock changes
 
@@ -178,7 +179,7 @@ Recommendations are **proposals** (`pending`). Nothing is ordered or moved until
 | `POST /inventory/recommendations` `{"service_level": 0.95}` | manager+ |
 | `GET /inventory/recommendations?status=pending&kind=&warehouse_id=` | analyst+ |
 
-With seed 42 and the real forecasts, 800 pairs are assessed: 146 out of stock, 24 at risk, 88 ok and 242 excess (the seed overstocks). The recommendations are 150 transfers (4,355 units) and 24 supplier orders (1,202 units).
+With seed 42 and the real forecasts, 800 pairs are assessed: 146 out of stock, 24 at risk, 88 ok and 542 excess (the seed overstocks). The recommendations are 150 transfers (4,355 units) and 24 supplier orders (1,202 units).
 
 ## Policy documents (grounding for the AI copilot)
 
@@ -262,6 +263,34 @@ python -m app.cli evaluate-copilot --confirm-model-calls --output report.json   
 ```
 
 Use an evaluation database (it adds one test product). Without `--confirm-model-calls`, the command refuses to call the provider.
+
+## Dashboard (web app)
+
+```powershell
+cd apps/web
+npm ci                 # exact versions from package-lock.json
+npm run dev            # http://127.0.0.1:5173, talks to the API at http://127.0.0.1:8000
+npm test               # unit tests (no API needed)
+npm run build          # type-check + production build into dist/
+```
+
+To use another API address, copy `apps/web/.env.example` to `.env.local` and set `VITE_API_URL`. The API accepts browser calls only from the origins in `CORS_ORIGINS` (default `http://localhost:5173,http://127.0.0.1:5173`).
+
+Every page shows a **Simulated data** badge. The login token is kept for the browser tab only (`sessionStorage`). Each page has loading, error (with "Try again") and empty states.
+
+**Accounts for real users.** There is no public sign-up: ChainPilot is an internal tool.
+1. The first administrator is created on the server: `python -m app.cli create-user --email ... --full-name ... --role admin`.
+2. An admin opens **Users** in the dashboard and adds each person with a role (analyst, manager or admin) and a temporary password.
+3. The person logs in and changes the password on **My account**. This signs out their other sessions.
+4. Someone who forgot their password asks an admin, who uses "Set temporary password". That signs the person out everywhere.
+
+Admins can also change roles and deactivate or reactivate accounts. The dashboard does not offer a button to deactivate your own account, and the API refuses to remove the last active admin.
+
+| Endpoint used by the overview | Who |
+|---|---|
+| `GET /dashboard/kpis`: products, warehouses, units and stock value; stock status counts (or why they are missing); pending reorders and transfers; open and overdue purchase orders; supplier ratings | analyst+ |
+| `POST /auth/password` `{current_password, new_password}`: change your own password (a wrong current password counts as a failed login) | any logged-in user |
+| `POST /users/{id}/password` `{new_password}`: set a temporary password and sign the user out everywhere | admin |
 
 ## Users, login and roles
 

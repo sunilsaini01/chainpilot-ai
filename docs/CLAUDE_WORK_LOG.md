@@ -727,3 +727,41 @@ Append-only. Each entry records what was actually done and actually run.
 - Second Groq run (`qwen/qwen3.8-27b`, owner's standing permission and "go ahead"; same cases, thresholds and data): 12/14 cases, **gate NOT passed**. Answerable 7/7, no database change 7/7, no key leak 7/7, safety text 5/7, invented citations 2. Failures: injection-data HTTP 429 output-token rate limit (P5-T4-R6); "missing" listed two tool error messages as citations, removed by verification (P5-T4-R7). No 413 refusals (P5-T4-R3 VERIFIED). 70 model calls, 95,407 tokens, 710 s. Report saved as `docs/results/p5_copilot_eval_groq_run2.json` (checked: neither key value inside). Stack removed.
 - The gate rule was not changed after seeing the result.
 - Next recommended task: P5-T4-R7 (citation format in the prompt) and P5-T4-R6 (rate-limit retries), then a third run reported next to the first two; or move on to P6 and keep these open.
+
+## 2026-10-17 12:30 UTC — P5 closed; P6 plan (written before coding)
+- Owner pushed `e33408b`, `b5e265f`, `9b6bce5`; CI #25 on `9b6bce5`: `success`, all three jobs. Owner: move on to P6 and leave P5-T4-R6 and P5-T4-R7 open.
+- **P6 split** (spec 4.B; gate "browser e2e flows, errors/empty states"): P6-T1 React + TypeScript + Vite app in `apps/web` (login, layout and navigation, typed API client, simulated-data badge, overview page on a new `GET /dashboard/kpis`, CORS on the API, unit tests, CI job); P6-T2 risks, recommendations, suppliers and purchase orders, forecasts, delivery risk; P6-T3 AI investigation view, approval queue (read-only until P7), audit timeline; P6-T4 Playwright browser tests, error and empty states, accessibility checks, the web app in Docker Compose.
+- Versions pinned exactly, each the newest release at least two weeks old (before 2026-10-03): react/react-dom 19.3.0, react-router-dom 7.18.4, vite 8.3.2, @vitejs/plugin-react 6.1.1, typescript 7.0.2, vitest 5.0.3, @testing-library/react 16.3.3, @testing-library/jest-dom 7.0.1, @testing-library/user-event 14.6.7, jsdom 30.1.1, @types/react and @types/react-dom 19.3.0 (Playwright 1.63.0 in P6-T4). Peer dependencies checked.
+- Login token kept in `sessionStorage` (gone when the tab closes); moving to an httpOnly cookie is a P7/P8 hardening item. The API allows the web app's origin through CORS (setting `CORS_ORIGINS`) and exposes `X-Total-Count`, `X-Dataset`, `X-Unassessed-Count`, `Retry-After`.
+
+## 2026-10-17 13:20 UTC — P6-T1 results
+- Files changed and why: API: `app/routes/dashboard.py` (new: `GET /dashboard/kpis` from existing services), `app/schemas.py`, `app/config.py` (`CORS_ORIGINS`), `app/main.py` (CORS middleware, router), `tests/test_dashboard.py` (new, 4 tests). Web: `apps/web/` (new: package files with exact pins and lock file, Vite and TypeScript config, API client, login state, layout with data badge, login and overview pages, loading/error/empty states, CSS, 14 unit tests, `.env.example`). CI: new job "Web type-check, tests and build" (`actions/setup-node` pinned to v6.5.0's commit). `.gitignore`: web build and test output.
+- Tests run / actual results:
+  - `apps/api` with `RUN_DB_TESTS=1`: 394 passed; Ruff passes.
+  - `apps/web` from a clean `npm ci`: type-check passes, 14 tests pass, production build 267 kB JS (85 kB gzipped); `npm audit`: 0 vulnerabilities (109 packages).
+  - My mistakes fixed along the way: an unhandled logout error (P6-T1-R1); test data imported from another test file ran six tests twice, and a fake 204 reply had a body (P6-T1-R2); a made-up currency on the overview (P6-T1-R4); a wrong comment in a dashboard test.
+  - Live check (isolated Docker stack + Vite dev server, seed 42, no forecasts): preflight and requests from `http://127.0.0.1:5173` allowed, paging/label headers exposed, another origin not allowed; KPIs: 200 products, 4 warehouses, 160,712 units, 20 open orders (2 overdue), supplier ratings 3 good / 2 watch / 1 at risk; stock status missing with the "No forecast run imported" note. The dev server served the app pointed at the test API. Stopped by PID (only the process on port 5173) and the stack removed. A real browser click-through comes with Playwright in P6-T4.
+  - NOT VERIFIED: CI on GitHub (not pushed yet).
+- Self-review findings: P6-T1-R1, R2, R4 (fixed); P6-T1-R3 (MEDIUM, P7/P8).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P6-T2 (risks, recommendations, suppliers and purchase orders, forecasts, delivery risk screens).
+
+## 2026-10-17 13:50 UTC — Owner's first look at the dashboard; a correction
+- The owner ran the stack and the web app locally. The first account was not created, because a 10-character password is below the 12-character minimum. A second attempt created `xyz@gmail.com`, but the password typed into the hidden prompt did not match the one typed at login (4 failures; the account was not locked). A further account was created with the password set through `CHAINPILOT_NEW_USER_PASSWORD`, and login worked. The overview showed 200 products, 4 warehouses, 160,712 units; risks 146 / 24 / 88 / 542; 20 open orders, 2 overdue; suppliers 3 / 2 / 1 / 0.
+- **Correction** to the P4-T4 (2026-10-16 23:20) and P5-T2 (2026-10-17 03:00) entries: the "excess" count was 542, not 242. My check read only the first 500 of 800 rows (`limit=500`). README and review queue corrected (P6-T1-R5).
+
+## 2026-10-17 14:10 UTC — P6-T1b plan: user accounts in the dashboard (owner's request)
+- Owner asked how real users get accounts, then: "yes add this" (a Users admin page and "change my password"), before committing P6-T1.
+- No public sign-up (an internal tool: admins create accounts). New API: `POST /auth/password` (any logged-in user: current + new password; a wrong current password counts as a failed login for the login throttle; other sessions of that user are signed out, the current one stays) and `POST /users/{id}/password` (admin sets a temporary password; all of that user's sessions are signed out). Both audited without any password in the details.
+- Web: "Users" page (admins only: list, create with role and temporary password, change role, deactivate/reactivate, set a temporary password) and "My account" page (change password). Navigation shows "Users" only to admins; the API still checks the role on every call.
+
+## 2026-10-17 14:50 UTC — P6-T1b results: user accounts in the dashboard
+- Files changed and why: API: `app/users_service.py` (`set_password`, `change_own_password`, `WrongPasswordError`), `app/routes/auth.py` (`POST /auth/password` with the login throttle), `app/routes/users.py` (`POST /users/{id}/password`), `app/schemas.py`, `tests/test_passwords.py` (new, 7 tests). Web: `src/pages/UsersPage.tsx` and `src/pages/AccountPage.tsx` (new), `src/components/Layout.tsx` (Users only for admins, My account), `src/auth/AuthContext.tsx` (`RequireAdmin`), `src/App.tsx`, `src/api/client.ts` and `types.ts`, `src/styles.css`, `src/testUtils.tsx` (fake API matches the method and records requests), 2 new test files (11 tests).
+- Tests run / actual results:
+  - `apps/api` with `RUN_DB_TESTS=1`: 401 passed; Ruff passes. Mutations: 4 of 4 meaningful ones caught (keeping the current session, checking the current password, counting a wrong one, refusing the same password). A fifth (admin reset keeping a token that is not the user's) behaves the same as the real code, so it cannot be caught.
+  - `apps/web`: type-check passes, 25 tests pass, production build works.
+  - My mistakes fixed along the way: a test that assumed the admin's id; a test that typed an empty string.
+  - NOT VERIFIED: CI on GitHub (not pushed yet); a real-browser run of these pages (P6-T4).
+- Self-review findings: P6-T1b-R1 (LOW, documented).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P6-T2.
