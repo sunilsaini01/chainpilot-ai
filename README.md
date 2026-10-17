@@ -372,6 +372,8 @@ How it is kept safe:
 - Failed logins return the same message whether the email exists or not, and take about the same time either way.
 - Emails are stored lower-case, so `Ana@X.com` and `ana@x.com` are the same account.
 - Logs record user ids, never passwords, tokens or the emails used in failed attempts.
+- **Every endpoint is checked** (`tests/test_security_sweep.py`): a table says who may call each of the 43 operations. For each, the test checks that no login gives 401, the role just below gives 403, and a cookie without the CSRF token gives 403 for changes. A new endpoint makes the test fail until it is added to the table.
+- **Security headers** on every API answer: `nosniff`, no framing, no referrer, `Cache-Control: no-store`, and a content policy that allows nothing (the API serves no pages; `/docs` excepted). Over HTTPS also `Strict-Transport-Security`. The dashboard has its own content policy: scripts, styles and requests only from itself and its API, with no inline scripts and no frames.
 - **Rate limiting:** after 5 failed logins for one email (or 20 from one IP) within 15 minutes, login returns **429** with `Retry-After: 900`, even for the right password. The check runs before the slow password hash. A successful login resets that email's count, and blocks expire on their own.
 - **Last admin protection:** the last active admin cannot be demoted or deactivated (409). The check locks the admin rows, so two admins demoting each other at the same moment cannot leave zero admins.
 - Deactivating a user (`PATCH /users/{id}` with `{"is_active": false}`) blocks their login and stops their existing tokens immediately.

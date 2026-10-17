@@ -1,24 +1,24 @@
 # Project Status
 
 Current phase: P7 (Approval and security)
-Current task: P7-T3, login cookie and CSRF protection
+Current task: P7-T4, security sweep and headers
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: f70d33d (CI #31 green). P7-T3 is uncommitted.
+Last commit: 46135fe (CI #32 green). P7-T4 is uncommitted.
 
-## P7-T3 acceptance criteria
-- [x] The browser's login is an httpOnly, SameSite=Strict cookie (Secure outside local); nothing about the session in browser storage
-- [x] Cookie requests that change data need the CSRF token (403 otherwise); Bearer clients unchanged
-- [x] CORS allows credentials only for listed origins; `*` refused
-- [x] Logout revokes the session and deletes the cookie
-- [x] Tests: API 425 (10 new, mutation-checked); web 54; browser 25 (cookie checked in Chromium)
+## P7-T4 acceptance criteria
+- [x] Every API operation is in one table of who may call it; the test fails for an unclassified one
+- [x] No login → 401, the role below → 403, cookie without CSRF → 403, for every operation (68 tests, mutation-checked)
+- [x] Security headers on all API answers; HSTS over HTTPS only
+- [x] Dashboard content policy; no violations on any page in the browser; a broken policy is caught
+- [x] Tests: API 497; web 54; browser 25
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
 Open findings: P7-T3-R1 (LOW), P7-T3-R2 (LOW), P7-T1-R1 (LOW, mitigated), P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, P8), P6-T2-R1 (LOW), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, partly fixed), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
-Next action: Owner checks and pushes; then P7-T4 (security sweep).
-Blockers: none.
+Next action: Owner checks and pushes; when CI is green, P7 is complete. P8 (AWS) starts with a cost estimate for the owner's approval.
+Blockers: none for P7. P8 needs the owner's approval before anything billable.
 
 ## Roadmap progress
 | Phase / task | Status |
@@ -53,8 +53,8 @@ Blockers: none.
 | P6-T4 Browser end-to-end tests, error/empty states, accessibility, Compose | APPROVED (CI #29 green on 835a6d5) |
 | P7-T1 Approval workflow in the API (decide, execute, idempotency, concurrency, audit) | APPROVED (CI #30 green on ce3de6c) |
 | P7-T2 Approval queue screen with browser tests | APPROVED (CI #31 green on f70d33d) |
-| P7-T3 Login token in an httpOnly cookie with CSRF protection | READY_FOR_USER_CHECK |
-| P7-T4 Security sweep: every write endpoint against every role; API security headers | NOT_STARTED |
+| P7-T3 Login token in an httpOnly cookie with CSRF protection | APPROVED (CI #32 green on 46135fe) |
+| P7-T4 Security sweep: every write endpoint against every role; API security headers | READY_FOR_USER_CHECK |
 | P8–P9 | NOT_STARTED |
 
 ## History
@@ -96,3 +96,4 @@ Blockers: none.
 - 2026-10-17: P6 complete (CI #29). P7-T1: managers approve or reject recommendations; approved ones become purchase orders or stock transfers.
 - 2026-10-17: P7-T2: the approval queue in the dashboard; approvals tested end to end in a browser.
 - 2026-10-17: P7-T3: the dashboard's login is an httpOnly cookie with CSRF protection.
+- 2026-10-17: P7-T4: every endpoint checked against every role; security headers on the API and the dashboard.

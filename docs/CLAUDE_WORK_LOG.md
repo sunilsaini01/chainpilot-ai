@@ -902,3 +902,32 @@ Append-only. Each entry records what was actually done and actually run.
 - For the owner: after `docker compose up -d --build`, everyone has to log in again once (old sessions were in `sessionStorage`). Use `http://127.0.0.1:...` for both the dashboard and the API.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P7-T4 (security sweep: every write endpoint against every role; API security headers).
+
+## 2026-10-17 17:05 UTC — P7-T3 approved; P7-T4 plan (written before coding)
+- CI #32 green on 46135fe (P7-T3), read from the GitHub API.
+- P7-T4 scope: the spec's P7 gate ("unauthorized and unapproved actions are blocked") checked for every endpoint at once, plus HTTP security headers.
+  1. `tests/test_security_sweep.py`: an explicit table of all 43 API operations (from the OpenAPI schema) and who may call them: public, any logged-in user, analyst, manager or admin. The test fails if an operation is missing from the table, so a new endpoint must be classified. For each operation:
+     - without a login: 401 (public ones excepted);
+     - with the role just below the required one: 403;
+     - with a cookie but no CSRF token, for changes: 403.
+     Whether the allowed roles succeed is already covered by each feature's tests.
+  2. API security headers on every response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store` (the answers hold business data and personal data), and `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` (the API serves no pages; the interactive `/docs` pages are excepted, because they load the Swagger UI). `Strict-Transport-Security` when the cookie is Secure, which means HTTPS.
+  3. Dashboard Content Security Policy in nginx: scripts, styles and data only from the dashboard itself and the API address built into the image, with no inline scripts, no frames and no plugins. It is a second wall behind the httpOnly cookie against injected scripts.
+     - Browser test: every page loads with no CSP violation; the header is present.
+     - Mutation check: a policy that forbids the API address must make the browser tests fail.
+
+## 2026-10-17 17:15 UTC — P7-T4 results: security sweep and headers
+- Files changed and why: `apps/api/tests/test_security_sweep.py` (new: the operation table, 68 sweep tests, 4 header tests), `apps/api/app/security_headers.py` (new middleware), `apps/api/app/main.py` (registers it, outermost); `apps/web/nginx.conf` (content policy), `apps/web/Dockerfile` (fills in the API address; the build fails if it is missing), `apps/web/e2e/accessibility.spec.ts` (checks the policy header and records violations on every page).
+- Tests run / actual results (as pre-registered):
+  - Sweep: 68 passed on the first run. Checking the checker, each restored: opening "receive order" to analysts: the role-below test for it failed. Removing `GET /approvals` from the table: the coverage test failed.
+  - Header tests: 4 passed (normal answers and 401s, CORS preflight, `/docs` without the strict policy, HSTS only when HTTPS).
+  - Full API suite: 497 passed (425 + 72); Ruff check and format pass.
+  - Browser tests: 25 passed with the policy on every page, with no violations and the header checked.
+  - Mutation: an image whose policy leaves out the API address made the page sweep fail (the dashboard could not reach the API to log in).
+  - Probe (temporary test, deleted): a request from the page to another address was blocked, and the recorder reported exactly `connect-src http://evil.example/steal`.
+  - Web unit tests 54 passed; build works.
+  - NOT VERIFIED: CI on GitHub (not pushed).
+- Self-review: no new findings. `/docs` stays open without login in every environment, as before. It lists the endpoints but needs a login to use any of them. P8 decides whether to turn it off in production (noted in D-062).
+- With this, P7 is complete if CI is green.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P8 (AWS). It needs the owner's approval and a cost estimate before anything billable, so the first step is a plan with costs, not provisioning.
