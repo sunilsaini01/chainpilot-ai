@@ -1,23 +1,23 @@
 # Project Status
 
 Current phase: P6 (Frontend)
-Current task: P6-T3, copilot screen and audit log
+Current task: P6-T4, browser tests, accessibility, the dashboard in Docker
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 2106dcb (CI #27 green). P6-T3 is uncommitted.
+Last commit: 7164f10 (CI #28 green). P6-T4 is uncommitted.
 
-## P6-T3 acceptance criteria
-- [x] Ask the copilot: answer, checked citations, verified mark, removed citations, limitations, every step; earlier questions; clear messages for "not configured" and the hourly limit
-- [x] Audit log for managers and admins, with who did it (new `actor_email`), filter and paging
-- [x] Navigation and pages follow the API's role rule (analyst < manager < admin)
-- [x] Approval queue moved to P7 with the approval workflow (D-057)
-- [x] Tests: API 402; web 43, type-check, build; contract check against the real API
+## P6-T4 acceptance criteria
+- [x] Browser end-to-end tests against the real stack: login, roles, receiving with audit, adding a user, empty and error states (16 tests, Chromium)
+- [x] Accessibility: axe WCAG 2.1 A/AA on every page with real data, 0 problems; keyboard-only login
+- [x] The dashboard in Docker Compose (nginx, non-root, deep links work), checked in the CI smoke test
+- [x] Browser tests run in CI on every push
+- [x] Bugs found by the browser tests fixed with tests (P6-T4-R1, R2)
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Open findings: P6-T2-R1 (LOW), P6-T1-R3 (MEDIUM, P7/P8), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
-Next action: Owner checks and pushes; then P6-T4.
+Open findings: P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, P8), P6-T2-R1 (LOW), P6-T1-R3 (MEDIUM, P7/P8), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
+Next action: Owner checks and pushes; when CI is green, P6 is complete and P7 (approval workflow and security) starts.
 Blockers: none.
 
 ## Roadmap progress
@@ -49,8 +49,8 @@ Blockers: none.
 | P6-T1 Web app foundation, login, overview | APPROVED (CI #26 green on c0cb7db) |
 | P6-T1b User accounts in the dashboard (Users page, My account) | APPROVED (CI #26 green on c0cb7db) |
 | P6-T2 Risk, recommendation, supplier, forecast and delivery-risk screens | APPROVED (CI #27 green on 2106dcb) |
-| P6-T3 Copilot view and audit timeline (approval queue moved to P7) | READY_FOR_USER_CHECK |
-| P6-T4 Browser end-to-end tests, error/empty states, accessibility, Compose | NOT_STARTED |
+| P6-T3 Copilot view and audit timeline (approval queue moved to P7) | APPROVED (CI #28 green on 7164f10) |
+| P6-T4 Browser end-to-end tests, error/empty states, accessibility, Compose | READY_FOR_USER_CHECK |
 | P7–P9 | NOT_STARTED |
 
 ## History
@@ -88,3 +88,4 @@ Blockers: none.
 - 2026-10-17: P6-T1b: admins manage accounts in the dashboard; users change their own password.
 - 2026-10-17: P6-T2: five data screens in the dashboard.
 - 2026-10-17: P6-T3: copilot screen and audit log in the dashboard.
+- 2026-10-17: P6-T4: browser tests and accessibility checks in CI; the dashboard in Docker Compose.

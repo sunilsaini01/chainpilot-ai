@@ -17,7 +17,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `apps/api/policies/`, `apps/api/app/policies_service.py` | Six policy documents for the simulated company (written for the demo, labelled as such) and their search, the grounding for the AI copilot (P5). |
 | `apps/api/app/copilot/tools.py` | The AI copilot's seven read-only tools (P5-T2): typed inputs, results with citations to real records, run in a database transaction that PostgreSQL keeps read-only. |
 | `apps/api/app/copilot/{graph,model,service}.py` | The AI copilot (P5-T3): a LangGraph supervisor with demand, inventory, supplier and decision specialists, Groq or Gemini behind one small adapter, verified citations, limits on calls and tools, and every run stored with its trace. |
-| `apps/web` | The dashboard (P6): React + TypeScript + Vite. Login; overview; stock risks; recommendations; suppliers and purchase orders; forecasts; delivery risk; ask the copilot; audit log (managers and admins); users (admins); my account. A "Simulated data" badge on every page. The approval queue comes with the approval workflow (P7). |
+| `apps/web` | The dashboard (P6): React + TypeScript + Vite. Login; overview; stock risks; recommendations; suppliers and purchase orders; forecasts; delivery risk; ask the copilot; audit log (managers and admins); users (admins); my account. A "Simulated data" badge on every page. The approval queue comes with the approval workflow (P7). In Docker Compose it is served by nginx at http://127.0.0.1:8080; browser tests in `apps/web/e2e`. |
 | `apps/api/app/inventory_service.py` | `record_movement()`, the only way stock changes. See "How stock changes" below. |
 | `apps/api/app/security.py`, `users_service.py`, `dependencies.py` | Password hashing, login tokens, and the `require_role()` check used by protected endpoints. See "Users, login and roles" below. |
 | `apps/api/app/cli.py` | Command-line tool to create users (needed for the first admin). |
@@ -274,6 +274,18 @@ npm test               # unit tests (no API needed)
 npm run build          # type-check + production build into dist/
 ```
 
+**In Docker:** `docker compose up --build -d` also starts the dashboard at **http://127.0.0.1:8080** (the built files, served by nginx as an unprivileged user; reloading any page works). The browser calls the API directly, so the API address is built into the files: if you change `API_HOST_PORT` or `WEB_HOST_PORT`, also change `WEB_API_URL` and `CORS_ORIGINS` in `.env` (see `.env.example`).
+
+**Browser tests (Playwright).** `apps/web/e2e/run-e2e.sh` starts a throwaway copy of the whole stack (project `chainpilot-e2e`, ports 8082/8002/5436, its own `e2e/stack.env`, so the real `.env`, database and AI key are never used), loads the demo data, creates one user per role with fresh random passwords, runs the tests in Chromium and then removes the stack, its data and its images. Needs Docker and Git Bash on Windows:
+
+```bash
+cd apps/web
+npx playwright install chromium     # once
+bash e2e/run-e2e.sh                 # or: npm run e2e
+```
+
+They cover: login (wrong password, keyboard only, deep links, reload, logout), what each role sees, receiving an order and finding it in the audit log, cancelling that confirmation, an admin adding a user who then logs in, the empty states (no forecasts, no delivery-risk scores, copilot not set up), an API error with "Try again", the "page not found" page, and an automatic accessibility check (axe, WCAG 2.1 A and AA) of every page. Automatic checks find only part of the accessibility problems; they do not replace a review with a screen reader.
+
 To use another API address, copy `apps/web/.env.example` to `.env.local` and set `VITE_API_URL`. The API accepts browser calls only from the origins in `CORS_ORIGINS` (default `http://localhost:5173,http://127.0.0.1:5173`).
 
 Every page shows a **Simulated data** badge. The login token is kept for the browser tab only (`sessionStorage`). Each page has loading, error (with "Try again") and empty states.
@@ -357,6 +369,7 @@ cp .env.example .env          # then edit POSTGRES_PASSWORD
 docker compose up --build -d
 curl http://127.0.0.1:8000/health   # {"status":"ok"}
 curl http://127.0.0.1:8000/ready    # {"status":"ready","database":"ok"}
+# the dashboard: http://127.0.0.1:8080
 docker compose down                 # add -v to also delete the database volume
 ```
 
@@ -404,10 +417,12 @@ All settings come from environment variables (see [.env.example](.env.example)).
 
 ## Continuous integration
 
-GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on every push to `main` and every pull request. It has three jobs:
+GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on every push to `main` and every pull request. It has five jobs:
 1. **API lint and tests:** Python 3.11, Ruff, and pytest including the PostgreSQL integration tests (Postgres runs as a service container).
 2. **ML lint and tests:** Ruff and pytest for `ml/`, using tiny synthetic files in the M5 format (the real dataset is never in CI).
-3. **Docker build and smoke test:** builds the stack with Compose, waits for the healthchecks, then curls `/health` and `/ready` and checks that migrations ran.
+3. **Web type-check, tests and build:** the dashboard's TypeScript check, unit tests and production build.
+4. **Browser end-to-end tests:** `apps/web/e2e/run-e2e.sh` (above); the Playwright report is kept for 7 days when a test fails.
+5. **Docker build and smoke test:** builds the stack with Compose, waits for the healthchecks, then curls `/health`, `/ready` and the dashboard (including a deep link) and checks that migrations ran.
 
 The workflow has read-only permissions and uses no secrets; its database passwords are throwaway CI values.
 

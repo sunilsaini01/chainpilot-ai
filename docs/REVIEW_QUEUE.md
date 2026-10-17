@@ -637,3 +637,29 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: the first view shows a typical day.
 - Fix and regression test: if wanted, an API field with the busiest recent day, or start a week earlier. Not changed: the date can be picked freely.
 - Status: OPEN (documented)
+
+## P6-T4-R1 — [LOW] After "Log out", the next login opened the previous user's page
+- Source: browser test (an admin added a user, logged out; the new analyst landed on the admin-only Users page and saw "This page is for administrators")
+- File and reproduction: `apps/web/src/auth/AuthContext.tsx` remembered the page for the return after login also after an explicit logout. The server still refused the data; only the landing page was wrong.
+- Expected behavior: after "Log out", the next person on this computer starts at the overview. Deep links while logged out still return to their page.
+- Fix and regression test: `loggedOut` in the auth context; `RequireAuth` does not remember the page after a logout. Unit test "starts at the overview, not on the previous user's page" (fails without the fix, checked) and the browser test.
+- Status: VERIFIED
+
+## P6-T4-R2 — [LOW] An unknown address showed a bare "Page not found." line
+- Source: browser test
+- File and reproduction: `apps/web/src/App.tsx` had no heading, no main landmark and no way back for unknown paths.
+- Fix and regression test: `NotFoundPage` with a heading and a link to the overview; browser test and accessibility check.
+- Status: VERIFIED
+
+## P6-T4-R3 — [LOW] Accessibility is only checked automatically
+- Source: Claude self-review
+- File and reproduction: axe finds missing labels, contrast, roles and similar; it cannot judge whether pages make sense with a screen reader or keyboard alone (only the login is tested by keyboard).
+- Expected behavior: a manual pass with a screen reader (NVDA or Narrator) and keyboard only before the final demo.
+- Fix and regression test: manual check in P9.
+- Status: OPEN (P9)
+
+## P6-T4-R4 — [LOW] The API address is built into the web image
+- Source: Claude self-review
+- File and reproduction: `apps/web/Dockerfile` bakes `VITE_API_URL` at build time, so one image cannot be reused for another API address.
+- Expected behavior: acceptable locally; for AWS either build per environment or serve the API under the same domain through the load balancer (decide in P8).
+- Status: OPEN (P8)

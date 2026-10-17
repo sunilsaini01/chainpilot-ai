@@ -802,3 +802,19 @@ Append-only. Each entry records what was actually done and actually run.
 - Decision: the approval queue moves to P7 (D-057).
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P6-T4 (Playwright browser tests, accessibility checks, the web app in Docker Compose).
+
+## 2026-10-17 14:20 UTC — P6-T4 results: browser tests, accessibility, the dashboard in Docker
+- Correction: the times in today's earlier P6 headings (15:30 to 17:50 "UTC") were not read from the clock and are later than the real UTC time (this entry's time is from `date -u`). The order of the entries is right. Also: no separate P6-T4 plan entry was written before coding; the plan was given in the chat only.
+- Starting point: P6-T3 pushed by the owner; CI #28 green on 7164f10 (all four jobs). The owner's screenshots show the copilot (verified answer) and the audit log with actor emails working in a real browser.
+- Files changed and why: `apps/web/Dockerfile`, `nginx.conf`, `.dockerignore` (new: the dashboard as a container, non-root nginx); `docker-compose.yml` (`web` service on 127.0.0.1:8080, `CORS_ORIGINS` passed to the API); `.env.example` (`WEB_*`, `CORS_ORIGINS`); `apps/web/e2e/` (new: `run-e2e.sh`, `stack.env`, `helpers.ts`, four spec files, `tsconfig.json`); `apps/web/playwright.config.ts` (new); `package.json`/`package-lock.json` (pinned Playwright, axe, `@types/node`, `playwright-core`; `typecheck` also checks `e2e/`; `npm run e2e`); `src/pages/NotFoundPage.tsx` (new), `src/App.tsx`; `src/auth/AuthContext.tsx` (no return page after logout); `src/pages/LoginPage.test.tsx` (+1 test); `.github/workflows/ci.yml` (job "Browser end-to-end tests"; smoke test also checks the dashboard).
+- Tests run / actual results:
+  - Browser tests, `bash apps/web/e2e/run-e2e.sh` (throwaway stack, Chromium): first run 13 passed, 2 failed, and the clean-up failed (the script had changed folder; I removed the leftover stack by hand). The failures were a real bug (P6-T4-R1), a bare not-found page (P6-T4-R2) and a timing mistake in my login helper (it typed into the old page's "Email" field before the login form appeared). After the fixes: 16 passed, three times, the last one on the final code; each time the stack, data and images were removed.
+  - Checking the checker: a temporary page with an unlabelled input and an image without alt text made the accessibility check fail with exactly those two problems (temporary test deleted).
+  - `apps/web`: type-check (app and e2e) passes; 44 unit tests pass; the unit test for P6-T4-R1 fails when the fix is undone (checked, then restored); production build works; `npm audit`: 0 vulnerabilities.
+  - Web image on its own: deep link `/suppliers` returns the app; security headers present; `index.html` `no-store`, bundles cached for a year; every nginx process runs as `nginx`, not root; healthcheck "healthy"; no warnings in the log. `docker compose config` is valid with an empty `.env`.
+  - My mistakes fixed along the way: `npm` pulled `playwright-core` 1.64.1 (3 days old) for the accessibility package; pinned 1.63.0 directly. An edit script joined the Dockerfile's `RUN` lines; nginx 1.30 keeps its pid file in `/run`, not `/var/run`. The CI job would have failed on Linux (the script is not executable in Git from Windows, and `python` is not guaranteed on the runner); it now runs with `bash` and makes passwords from `/dev/urandom`.
+  - API: no code change, so the API tests were not run again. CI runs them.
+  - NOT VERIFIED: CI on GitHub (not pushed yet), including the new browser-test job on Linux.
+- Self-review findings: P6-T4-R1 and R2 (VERIFIED), P6-T4-R3 and R4 (LOW, open). Decision D-058.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P7-T1 (approval workflow: approve/reject recommendations with roles, audit and the approval queue screen).
