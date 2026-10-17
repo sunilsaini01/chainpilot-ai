@@ -33,7 +33,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/inventory_sim/` | Replay simulator (P4): real M5 sales are replayed day by day through the inventory policy (weekly review, random 5–9 day lead times, lost sales) and compared with a simple reorder rule. With LightGBM forecasts the policy needed 17–34% less stock for the same fill rate. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `.github/workflows/ci.yml` | On every push and pull request: API and ML lint and tests (API tests against a real Postgres 16), the dashboard's type-check, unit tests and build, browser tests against a throwaway stack, and a Docker smoke test. See [Continuous integration](#continuous-integration). |
 
-Not built yet: forecast and scoring jobs from the API (needs the background worker), AWS (P8).
+Not built yet: forecast and scoring jobs from the API (needs the background worker). AWS (P8): the Terraform is written and checked offline (`infrastructure/terraform/`, plan and costs in [docs/AWS_PLAN.md](docs/AWS_PLAN.md)); nothing is deployed yet.
 
 ## How stock changes
 
@@ -441,12 +441,13 @@ All settings come from environment variables (see [.env.example](.env.example)).
 
 ## Continuous integration
 
-GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on every push to `main` and every pull request. It has five jobs:
+GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on every push to `main` and every pull request. It has six jobs:
 1. **API lint and tests:** Python 3.11, Ruff, and pytest including the PostgreSQL integration tests (Postgres runs as a service container).
 2. **ML lint and tests:** Ruff and pytest for `ml/`, using tiny synthetic files in the M5 format (the real dataset is never in CI).
 3. **Web type-check, tests and build:** the dashboard's TypeScript check, unit tests and production build.
-4. **Browser end-to-end tests:** `apps/web/e2e/run-e2e.sh` (above); the Playwright report is kept for 7 days when a test fails.
-5. **Docker build and smoke test:** builds the stack with Compose, waits for the healthchecks, then curls `/health`, `/ready` and the dashboard (including a deep link) and checks that migrations ran.
+4. **Terraform format and validate:** `terraform fmt -check` and `validate` for `infrastructure/terraform/bootstrap` and `staging`, offline (no AWS credentials, nothing planned or applied).
+5. **Browser end-to-end tests:** `apps/web/e2e/run-e2e.sh` (above); the Playwright report is kept for 7 days when a test fails.
+6. **Docker build and smoke test:** builds the stack with Compose, waits for the healthchecks, then curls `/health`, `/ready` and the dashboard (including a deep link) and checks that migrations ran.
 
 The workflow has read-only permissions and uses no secrets; its database passwords are throwaway CI values.
 

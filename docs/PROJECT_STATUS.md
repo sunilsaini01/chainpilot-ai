@@ -1,24 +1,24 @@
 # Project Status
 
-Current phase: P7 (Approval and security)
-Current task: P7-T4, security sweep and headers
+Current phase: P8 (AWS), demo days only, ap-south-1 (D-063)
+Current task: P8-T1, Terraform for staging, checked offline
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 46135fe (CI #32 green). P7-T4 is uncommitted.
+Last commit: 6ebb899 (CI #33 green). P8-T1 is uncommitted.
 
-## P7-T4 acceptance criteria
-- [x] Every API operation is in one table of who may call it; the test fails for an unclassified one
-- [x] No login → 401, the role below → 403, cookie without CSRF → 403, for every operation (68 tests, mutation-checked)
-- [x] Security headers on all API answers; HSTS over HTTPS only
-- [x] Dashboard content policy; no violations on any page in the browser; a broken policy is caught
-- [x] Tests: API 497; web 54; browser 25
+## P8-T1 acceptance criteria
+- [x] Terraform for bootstrap (state bucket, GitHub OIDC role, budget) and staging (network, ECR, RDS, ECS + ALB, S3 + CloudFront, secrets, alarms)
+- [x] No secret values in files or state (RDS-managed password; the Groq key is filled in by the owner)
+- [x] `fmt` and `validate` pass for both folders, from a clean state with the lock files; a CI job runs them
+- [x] Cost table updated (x86; ap-south-1)
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
+- Not possible offline: plan/apply (P8-T3). Nothing has been created in AWS.
 
-Open findings: P7-T3-R1 (LOW), P7-T3-R2 (LOW), P7-T1-R1 (LOW, mitigated), P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, P8), P6-T2-R1 (LOW), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, partly fixed), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
-Next action: Owner checks and pushes; when CI is green, P7 is complete. P8 (AWS) starts with a cost estimate for the owner's approval.
-Blockers: none for P7. P8 needs the owner's approval before anything billable.
+Open findings: P8-T1-R1 (MEDIUM, P8-T3), P8-T1-R2 (MEDIUM), P8-T1-R3/R4/R5 (LOW, P8-T3), P7-T3-R1 (LOW, solved by the P8 design once deployed), P7-T3-R2 (LOW), P7-T1-R1 (LOW, mitigated), P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, solved by the P8 design once deployed), P6-T2-R1 (LOW), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, partly fixed), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
+Next action: Owner checks and pushes; then P8-T2 (account setup with the bootstrap folder, owner-run).
+Blockers: P8-T2 onwards needs the owner at their AWS account (AWS CLI install, credentials, approval of each apply).
 
 ## Roadmap progress
 | Phase / task | Status |
@@ -54,8 +54,12 @@ Blockers: none for P7. P8 needs the owner's approval before anything billable.
 | P7-T1 Approval workflow in the API (decide, execute, idempotency, concurrency, audit) | APPROVED (CI #30 green on ce3de6c) |
 | P7-T2 Approval queue screen with browser tests | APPROVED (CI #31 green on f70d33d) |
 | P7-T3 Login token in an httpOnly cookie with CSRF protection | APPROVED (CI #32 green on 46135fe) |
-| P7-T4 Security sweep: every write endpoint against every role; API security headers | READY_FOR_USER_CHECK |
-| P8–P9 | NOT_STARTED |
+| P7-T4 Security sweep: every write endpoint against every role; API security headers | APPROVED (CI #33 green on 6ebb899) |
+| P8-T1 Terraform for staging, checked offline (no AWS) | READY_FOR_USER_CHECK |
+| P8-T2 AWS account setup: budget, state bucket, GitHub OIDC role | NOT_STARTED (owner runs it) |
+| P8-T3 Plan → review → apply staging; deploy workflow; smoke tests | BLOCKED (owner approval) |
+| P8-T4 Rollback drill, alarms, dashboard, destroy/pause instructions | BLOCKED (owner approval) |
+| P9 | NOT_STARTED |
 
 ## History
 - 2026-10-08 to 2026-10-15: first attempt under the two-agent Claude↔Codex workflow. On 2026-10-15 the owner deleted it entirely, including Git history. See DECISIONS D-001.
@@ -97,3 +101,5 @@ Blockers: none for P7. P8 needs the owner's approval before anything billable.
 - 2026-10-17: P7-T2: the approval queue in the dashboard; approvals tested end to end in a browser.
 - 2026-10-17: P7-T3: the dashboard's login is an httpOnly cookie with CSRF protection.
 - 2026-10-17: P7-T4: every endpoint checked against every role; security headers on the API and the dashboard.
+- 2026-10-17: P7 complete (CI #33). P8 plan and cost estimate written; waiting for the owner's approval before any AWS action.
+- 2026-10-17: P8 approved for demo days only (ap-south-1). P8-T1: Terraform for staging written and validated offline; nothing deployed.

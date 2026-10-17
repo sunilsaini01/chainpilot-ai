@@ -931,3 +931,51 @@ Append-only. Each entry records what was actually done and actually run.
 - With this, P7 is complete if CI is green.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P8 (AWS). It needs the owner's approval and a cost estimate before anything billable, so the first step is a plan with costs, not provisioning.
+
+## 2026-10-17 17:30 UTC — P7 complete; P8 plan and cost estimate for the owner
+- CI #33 green on 6ebb899 (P7-T4), read from the GitHub API. P7-T1 to T4 approved, so P7 is complete.
+- P8 needs paid AWS resources. Following the spec ("no AWS provisioning without explicit user approval and a cost estimate; set billing budgets first"), I created nothing. I wrote `docs/AWS_PLAN.md`: the architecture (CloudFront in front of S3 for the dashboard and an ALB for the API; ECS Fargate; RDS; no NAT gateway), an estimate of about $52–60 a month if it runs all the time (about $6 for 3 demo days), guardrails, the tasks P8-T1 to T4, and the questions for the owner.
+- Prices: Fargate and RDS checked with a web search (third-party pages, listed as sources). ALB, IPv4, Secrets Manager and CloudWatch are from my own knowledge, marked as not checked live. The owner is asked to confirm in the AWS Pricing Calculator.
+- Tools: neither the Terraform CLI nor the AWS CLI is installed here. Installing them will be asked first.
+- Status: P8 waits for the owner's decision. No code changes.
+
+## 2026-10-17 17:50 UTC — P8 decisions; P8-T1 plan (written before coding)
+- Owner's answers: demo days only; ap-south-1 (Mumbai); install the Terraform and AWS CLIs; an existing AWS account (D-063). Installed with winget, pinned to releases at least 2 weeks old: Terraform 1.16.5 (2026-10-02) and AWS CLI 2.37.9 (2026-10-02). The AWS CLI installer had not finished after 10 minutes, probably waiting at the Windows administrator prompt.
+- P8-T1: Terraform only, checked offline. Nothing is applied. AWS provider pinned to 6.67.0 (2026-09-30).
+  - `infrastructure/terraform/bootstrap/`, applied once by the owner in P8-T2:
+    - the state bucket: versioned, encrypted, public access blocked; S3-native locking;
+    - the GitHub OIDC provider, with a deploy role limited to this repository's `main` branch;
+    - an AWS Budget emailing at 50%, 80% and 100%.
+  - `infrastructure/terraform/staging/`:
+    - Network: VPC, 2 public and 2 private subnets, no NAT gateway.
+    - Security groups: the load balancer accepts only CloudFront's address list; the API only the load balancer; the database only the API.
+    - ECR repository: scan on push, keep 10 images.
+    - RDS PostgreSQL 16 (db.t4g.micro, encrypted, private). AWS manages the master password in Secrets Manager, so it is never in the Terraform state.
+    - ECS Fargate: the API service with the deployment circuit breaker and automatic rollback; a task definition for migrations and other one-off commands; logs kept 14 days.
+    - The load balancer only forwards requests carrying a secret header set by CloudFront.
+    - S3 (private, reached only through CloudFront's origin access control) and CloudFront:
+      - `/api/*` goes to the load balancer without caching, with cookies and headers forwarded. A CloudFront Function strips `/api`, so the API is unchanged.
+      - Page addresses are rewritten to `index.html` by a CloudFront Function (not by custom error pages, which would also replace the API's own 404 answers).
+      - Security headers and the dashboard's content policy come from a CloudFront response headers policy, with `connect-src 'self'`, because the API is on the same address.
+    - The Groq key is an optional secret whose value the owner puts in; Terraform never holds it.
+    - CloudWatch alarms (5xx errors, unhealthy targets, API CPU, database CPU and free storage), sent by email.
+  - x86 rather than ARM for the API task: the image builds natively in CI. The cost difference is about $1.5 a month.
+- Pre-registered checks (offline only):
+  - `terraform fmt -check` and `terraform init -backend=false` + `terraform validate` for both folders, locally and in a new CI job;
+  - a search for anything that looks like a secret or a hard-coded account id;
+  - the cost table in `docs/AWS_PLAN.md` updated if the design differs from it.
+  - Not possible without AWS: `plan` and `apply` (P8-T3).
+
+## 2026-10-17 17:55 UTC — P8-T1 results: Terraform for staging, checked offline
+- Files: `infrastructure/terraform/bootstrap/` (`main.tf`, `variables.tf`, `outputs.tf`, lock file), `infrastructure/terraform/staging/` (`versions.tf`, `variables.tf`, `network.tf`, `data.tf`, `api.tf`, `web.tf`, `monitoring.tf`, `outputs.tf`, `backend.hcl.example`, lock file), `.github/workflows/ci.yml` (job "Terraform format and validate"), `.gitignore` (`backend.hcl`, `*.tfvars`, `*.tfplan`), `docs/AWS_PLAN.md` (status, x86, total), README.
+- Checks run / actual results (as pre-registered):
+  - `terraform fmt -recursive -check`: clean.
+  - `terraform init -backend=false` and `validate` for both folders: "Success! The configuration is valid." Repeated from a clean state with `-lockfile=readonly`, as CI will run it: both initialize and validate.
+  - Provider lock files hold checksums for linux_amd64, windows_amd64 and darwin_arm64.
+  - The search for secrets and account ids found only references to secret resources, no values. No account id is written anywhere; it is read at apply time.
+  - My mistake fixed: I first pinned the random provider to 3.7.2 from memory; the releases list shows 3.9.1 (2026-09-11), now pinned.
+  - NOT VERIFIED (needs AWS): `terraform plan` and `apply`, and whether AWS accepts every setting (P8-T1-R5). Nothing was sent to AWS.
+- Tools: the AWS CLI install was cancelled at the Windows administrator prompt (winget exit 12; installer code 1602, "user cancelled"). It is not needed for P8-T1. The owner can install it later.
+- Self-review findings: P8-T1-R1 (MEDIUM: plain HTTP between CloudFront and the load balancer), P8-T1-R2 (MEDIUM: broad deploy role), P8-T1-R3 to R5 (LOW). Decision D-064.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P8-T2, the owner's account setup with the bootstrap folder. It is free apart from a few cents; the owner runs it or approves each step.

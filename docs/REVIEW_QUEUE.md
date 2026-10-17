@@ -699,3 +699,35 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `POST /auth/login` returns `access_token` (for scripts) to the dashboard too. A malicious script already running in the page at the moment of login could read it.
 - Expected behavior: acceptable (such a script could act as the user anyway while it runs); the dashboard ignores the field. A separate login for scripts (e.g. API keys) could remove it later.
 - Status: OPEN (documented)
+
+## P8-T1-R1 — [MEDIUM] CloudFront reaches the load balancer over plain HTTP
+- Source: Claude self-review
+- File and reproduction: `infrastructure/terraform/staging/web.tf` (`origin_protocol_policy = "http-only"`). Between the CloudFront edge and the region, requests travel unencrypted, including the session cookie and the CSRF token. The secret header only stops people from bypassing CloudFront; it does not encrypt.
+- Expected behavior: encrypted, or private, all the way.
+- Fix and regression test: in P8-T3, when it can be tested against AWS, either a CloudFront **VPC origin** (internal load balancer, traffic stays in AWS's network, no public IPs; no domain needed) or HTTPS to the load balancer with a certificate for a domain. Must be done before staging is used with any real login.
+- Status: OPEN (P8-T3)
+
+## P8-T1-R2 — [MEDIUM] The GitHub deploy role is broad
+- Source: Claude self-review
+- File and reproduction: `infrastructure/terraform/bootstrap/main.tf` gives the deploy role `PowerUserAccess` plus IAM limited to `chainpilot-staging-*` roles. Only this repository's `main` branch can assume it (OIDC), but a compromised workflow on `main` could change most of the account.
+- Expected behavior: least privilege.
+- Fix and regression test: narrow it to the services in `staging/` after the first real apply shows which actions are used (CloudTrail), before any production use. Recommended: a dedicated AWS account for this demo.
+- Status: OPEN (P8-T3/T4)
+
+## P8-T1-R3 — [LOW] On staging the per-IP login limit sees CloudFront's addresses
+- Source: Claude self-review
+- File and reproduction: the API trusts `X-Forwarded-For` only from the VPC (the load balancer), so the client address it sees is CloudFront's edge server, not the user's. The limit of 20 failed logins per address within 15 minutes therefore applies per edge server. The per-email limit (5) is unchanged.
+- Fix and regression test: read the viewer address from a header CloudFront sets (e.g. `CloudFront-Viewer-Address`, forwarded by an origin request policy), trusted only together with the secret origin header. P8-T3.
+- Status: OPEN (P8-T3)
+
+## P8-T1-R4 — [LOW] CloudFront waits at most 60 seconds for the API
+- Source: Claude self-review
+- File and reproduction: `origin_read_timeout = 60` is the most CloudFront allows without a quota increase. A copilot question that takes longer gets a 504 at the edge, although the API finishes and stores the run.
+- Fix and regression test: measure in P8-T3; if needed ask AWS for a higher limit (up to 180 s) or make investigations asynchronous (the spec's SQS worker).
+- Status: OPEN (P8-T3)
+
+## P8-T1-R5 — [LOW] Things only a real deployment can check
+- Source: Claude self-review
+- File and reproduction: `terraform validate` checks types and references, not whether AWS accepts every setting. Not checked yet: the plan against the account; that `Authorization` headers on GET requests reach the API through CloudFront (scripts use them; the dashboard uses the cookie); the API's connection to RDS uses TLS (`sslmode=prefer`) without checking the certificate.
+- Fix and regression test: P8-T3 smoke tests against the real URL; set `sslmode=verify-full` with the RDS certificate bundle if the connection proves reliable.
+- Status: OPEN (P8-T3)
