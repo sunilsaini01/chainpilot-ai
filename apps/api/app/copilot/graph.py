@@ -23,14 +23,17 @@ from langgraph.graph import END, START, StateGraph
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from app.copilot.model import ChatModel
+from app.copilot.model import ChatModel, RequestTooLargeError
 from app.copilot.tools import TOOLS, ToolResult, resolve_citation, run_tool, tool_specs
 
 MAX_QUESTION_CHARS = 500
 MAX_TOOL_ROUNDS = 3
 MAX_MODEL_CALLS = 12
 MAX_TOOL_CALLS = 12
-MAX_RESULT_CHARS = 6000  # of one tool result, as shown to the model
+# Sizes shown to the model, kept small enough for free tiers (Groq: 7,000 input
+# tokens per minute, P5-T4-R3). The full results stay in the evidence.
+MAX_RESULT_CHARS = 3000  # one tool result, inside a specialist's conversation
+MAX_EVIDENCE_CHARS = 8000  # all tool results together, in the answer prompt
 MAX_ANSWER_RETRIES = 1
 
 SPECIALISTS = {
@@ -224,16 +227,19 @@ class Investigation:
                 if self._calls_left() <= 2:
                     self.limit_reached = True
                     break
-                reply = self._ask(messages, tools=specs)
+                try:
+                    reply = self._ask(messages, tools=specs)
+                except RequestTooLargeError:
+                    # What was gathered so far stays in the evidence for the answer.
+                    note = "Stopped: the provider refused the request as too large."
+                    break
                 if not reply.tool_calls:
                     note = reply.content or ""
                     break
                 messages.append(reply.as_message())
                 for call in reply.tool_calls:
                     result = self._run_tool(name, call.name, call.arguments, allowed)
-                    shown = result.model_dump_json()
-                    if len(shown) > MAX_RESULT_CHARS:
-                        shown = shown[:MAX_RESULT_CHARS] + " ... (truncated)"
+                    shown = _compact(_for_model(result), MAX_RESULT_CHARS)
                     messages.append({"role": "tool", "tool_call_id": call.id, "content": shown})
             if note is None:
                 note = "Stopped before writing a note (tool rounds or call limit used up)."
@@ -273,22 +279,33 @@ class Investigation:
         return result
 
     def answer(self, state: InvestigationState) -> dict:
-        evidence = [
-            {
-                "tool": result.tool,
-                "ok": result.ok,
-                "label": result.label,
-                "message": result.message,
-                "data": result.data,
-                "citations": result.citations,
+        try:
+            reply = self._write_answer(state, MAX_EVIDENCE_CHARS)
+        except RequestTooLargeError:
+            # One retry with half the evidence; a second refusal fails the run.
+            self.trace.append({"node": "answer", "retry": "request too large: half the evidence"})
+            reply = self._write_answer(state, MAX_EVIDENCE_CHARS // 2)
+        try:
+            answer = json.loads(reply.content or "")
+            answer = {
+                "answer": str(answer["answer"]),
+                "citations": [str(c) for c in answer["citations"]],
+                "limitations": str(answer["limitations"]),
             }
-            for result in self.evidence
-        ]
-        shown = json.dumps(evidence, default=str)
-        if len(shown) > MAX_RESULT_CHARS * 3:
-            shown = shown[: MAX_RESULT_CHARS * 3] + " ... (truncated)"
+        except (json.JSONDecodeError, KeyError, TypeError):
+            answer = {
+                "answer": reply.content or "",
+                "citations": [],
+                "limitations": "unreadable reply",
+            }
+        attempts = state.get("answer_attempts", 0) + 1
+        self.trace.append({"node": "answer", "attempt": attempts, "citations": answer["citations"]})
+        return {"answer": answer, "answer_attempts": attempts}
+
+    def _write_answer(self, state: InvestigationState, evidence_chars: int):
+        shown = _compact([_for_model(result) for result in self.evidence], evidence_chars)
         feedback = state.get("feedback")
-        reply = self._ask(
+        return self._ask(
             [
                 {
                     "role": "system",
@@ -310,22 +327,6 @@ class Investigation:
             ],
             schema=ANSWER_SCHEMA,
         )
-        try:
-            answer = json.loads(reply.content or "")
-            answer = {
-                "answer": str(answer["answer"]),
-                "citations": [str(c) for c in answer["citations"]],
-                "limitations": str(answer["limitations"]),
-            }
-        except (json.JSONDecodeError, KeyError, TypeError):
-            answer = {
-                "answer": reply.content or "",
-                "citations": [],
-                "limitations": "unreadable reply",
-            }
-        attempts = state.get("answer_attempts", 0) + 1
-        self.trace.append({"node": "answer", "attempt": attempts, "citations": answer["citations"]})
-        return {"answer": answer, "answer_attempts": attempts}
 
     def verify(self, state: InvestigationState) -> dict:
         answer = dict(state["answer"])
@@ -355,6 +356,22 @@ class Investigation:
             grounded=bool(valid) and not unsupported,
         )
         return {"answer": answer, "feedback": None}
+
+
+def _for_model(result: ToolResult) -> dict[str, Any]:
+    """What the model needs from a tool result: no empty fields, nothing repeated."""
+    shown: dict[str, Any] = {"tool": result.tool, "ok": result.ok}
+    for key in ("message", "label", "data", "citations"):
+        value = getattr(result, key)
+        if value:
+            shown[key] = value
+    return shown
+
+
+def _compact(value: Any, limit: int) -> str:
+    """Compact JSON, cut at `limit` characters (the full data stays in the evidence)."""
+    text = json.dumps(value, default=str, separators=(",", ":"))
+    return text if len(text) <= limit else text[:limit] + " ... (truncated)"
 
 
 def build_graph(run: Investigation):

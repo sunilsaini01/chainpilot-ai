@@ -16,7 +16,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from openai import BadRequestError, OpenAI
+from openai import APIStatusError, BadRequestError, OpenAI
 
 TIMEOUT_SECONDS = 60
 MAX_RETRIES = 2  # the client retries rate limits (common on free tiers) and network errors
@@ -24,6 +24,11 @@ PROVIDER_URLS = {
     "groq": "https://api.groq.com/openai/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
 }
+
+
+class RequestTooLargeError(Exception):
+    """The provider refused a request as too large (HTTP 413), e.g. a free tier's
+    limit on input tokens per minute. The graph sends less and tries again."""
 
 
 @dataclass(frozen=True)
@@ -130,16 +135,21 @@ class CompatibleChatModel:
         schema: dict[str, Any] | None = None,
     ) -> ModelReply:
         try:
-            response = self._client.chat.completions.create(
-                **self._request(messages, tools, schema)
-            )
-        except BadRequestError:
-            if not (schema and self.strict_json):
-                raise
-            self.strict_json = False  # this model does not take JSON schemas: use JSON mode
-            response = self._client.chat.completions.create(
-                **self._request(messages, tools, schema)
-            )
+            try:
+                response = self._client.chat.completions.create(
+                    **self._request(messages, tools, schema)
+                )
+            except BadRequestError:
+                if not (schema and self.strict_json):
+                    raise
+                self.strict_json = False  # this model does not take JSON schemas: use JSON mode
+                response = self._client.chat.completions.create(
+                    **self._request(messages, tools, schema)
+                )
+        except APIStatusError as error:
+            if error.status_code == 413:
+                raise RequestTooLargeError(str(error)[:300]) from error
+            raise
         message = response.choices[0].message
         calls = [
             ToolCall(
@@ -160,9 +170,12 @@ class CompatibleChatModel:
 
 
 class ScriptedModel:
-    """Test double: returns the prepared replies in order and records every request."""
+    """Test double: returns the prepared replies in order (raising any that are
+    exceptions) and records every request."""
 
-    def __init__(self, replies: list[ModelReply], name: str = "scripted-test-model") -> None:
+    def __init__(
+        self, replies: list[ModelReply | Exception], name: str = "scripted-test-model"
+    ) -> None:
         self.name = name
         self._replies = list(replies)
         self.requests: list[dict[str, Any]] = []
@@ -176,7 +189,10 @@ class ScriptedModel:
         self.requests.append({"messages": messages, "tools": tools, "schema": schema})
         if not self._replies:
             raise AssertionError("the scripted model ran out of replies")
-        return self._replies.pop(0)
+        reply = self._replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply  # e.g. RequestTooLargeError, to test how the graph copes
+        return reply
 
 
 def json_reply(value: dict[str, Any]) -> ModelReply:
