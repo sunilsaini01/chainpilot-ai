@@ -1,9 +1,11 @@
 // Render a page inside the app's providers, at a given address.
 
 import { render } from "@testing-library/react";
+import { vi } from "vitest";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 
+import { App } from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 
 export function renderWithApp(ui: ReactNode, path = "/") {
@@ -17,6 +19,7 @@ export function renderWithApp(ui: ReactNode, path = "/") {
 export interface Call {
   method: string;
   path: string;
+  params: URLSearchParams; // the query string, e.g. params.get("status")
   body: unknown;
 }
 
@@ -28,9 +31,10 @@ export interface Call {
 export function fakeApi(routes: Record<string, [number, unknown] | Error>) {
   const calls: Call[] = [];
   const fetchFn = async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    const path = new URL(String(input)).pathname;
+    const url = new URL(String(input));
+    const path = url.pathname;
     const method = init.method ?? "GET";
-    calls.push({ method, path, body: init.body ? JSON.parse(String(init.body)) : null });
+    calls.push({ method, path, params: url.searchParams, body: init.body ? JSON.parse(String(init.body)) : null });
     const answer = routes[`${method} ${path}`] ?? routes[path];
     if (answer === undefined) return new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 });
     if (answer instanceof Error) throw answer;
@@ -62,3 +66,25 @@ export const KPIS = {
   purchase_orders: { open: 20, overdue: 2 },
   supplier_ratings: { good: 3, watch: 2, at_risk: 1, not_rated: 0 },
 };
+
+export const MANAGER = { ...USER, id: 5, email: "manager@example.com", full_name: "Max Manager", role: "manager" };
+
+/** Answers every page needs: who is logged in, and the id-to-code lookups. */
+export function baseRoutes(user: unknown = USER): Record<string, [number, unknown]> {
+  return {
+    "/auth/me": [200, user],
+    "/dashboard/kpis": [200, KPIS],
+    "/warehouses": [200, [{ id: 1, code: "SYN-WH1", name: "North DC", city: "Leeds", capacity_units: 60000 }]],
+    "/suppliers": [200, [{ id: 4, code: "SYN-SUP04", name: "Far-East", country: "China", lead_time_days: 21, lead_time_std_days: "4.00" }]],
+    "/products": [200, [{ id: 7, sku: "SYN-0007", name: "Mug", category: "kitchen" }]],
+  };
+}
+
+/** With a saved session and `routes` as the API, render the app at `path`. */
+export function openPage(path: string, routes: Record<string, [number, unknown] | Error>, user: unknown = USER) {
+  sessionStorage.setItem("chainpilot.token", "saved");
+  const api = fakeApi({ ...baseRoutes(user), ...routes });
+  vi.stubGlobal("fetch", api);
+  renderWithApp(<App />, path);
+  return api;
+}
