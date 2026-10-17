@@ -5,6 +5,7 @@
 // injection; that hardening is planned with the approval/security phase.)
 
 import type {
+  Approval,
   AgentRun,
   AuditEvent,
   DashboardKpis,
@@ -125,8 +126,13 @@ export function query(params: Params): string {
   return pairs.length ? `?${new URLSearchParams(pairs.map(([k, v]) => [k, String(v)]))}` : "";
 }
 
-function post<T>(path: string, body: unknown): Promise<ApiResult<T>> {
-  return request<T>(path, { method: "POST", body: JSON.stringify(body) });
+function post<T>(path: string, body: unknown, headers?: HeadersInit): Promise<ApiResult<T>> {
+  return request<T>(path, { method: "POST", body: JSON.stringify(body), headers });
+}
+
+/** A new Idempotency-Key. randomUUID needs a secure page (https or localhost). */
+export function newIdempotencyKey(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export const api = {
@@ -151,6 +157,14 @@ export const api = {
   recommendations: (params: Params) => request<Recommendation[]>(`/inventory/recommendations${query(params)}`),
   generateRecommendations: (serviceLevel: number) =>
     post<Recommendation[]>("/inventory/recommendations", { service_level: serviceLevel }),
+  // Managers decide; the key makes a retried click safe (the API returns the stored decision).
+  decide: (id: number, decision: "approve" | "reject", comment: string | null, idempotencyKey: string) =>
+    post<Approval>(
+      `/inventory/recommendations/${id}/decision`,
+      { decision, comment },
+      { "Idempotency-Key": idempotencyKey },
+    ),
+  approvals: (params: Params) => request<Approval[]>(`/approvals${query(params)}`),
   supplierRisks: () => request<SupplierRisk[]>("/suppliers/risks"),
   purchaseOrders: (params: Params) => request<PurchaseOrder[]>(`/purchase-orders${query(params)}`),
   receiveOrder: (id: number) => post<PurchaseOrder>(`/purchase-orders/${id}/receive`, {}),

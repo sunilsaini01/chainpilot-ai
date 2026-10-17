@@ -12,6 +12,10 @@ const TONE: Record<string, "bad" | "warn" | "ok" | "neutral"> = {
   good: "ok",
   low: "ok",
   received: "ok",
+  executed: "ok",
+  approved: "ok",
+  failed: "bad",
+  rejected: "warn",
 };
 
 export function Badge({ value }: { value: string }) {

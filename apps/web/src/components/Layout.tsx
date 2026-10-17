@@ -10,7 +10,7 @@ import { DataBadge } from "./DataBadge";
 const PAGES: { to: string; label: string; minRole: Role }[] = [
   { to: "/", label: "Overview", minRole: "analyst" },
   { to: "/risks", label: "Stock risks", minRole: "analyst" },
-  { to: "/recommendations", label: "Recommendations", minRole: "analyst" },
+  { to: "/recommendations", label: "Approval queue", minRole: "analyst" },
   { to: "/suppliers", label: "Suppliers & orders", minRole: "analyst" },
   { to: "/forecasts", label: "Forecasts", minRole: "analyst" },
   { to: "/delivery-risk", label: "Delivery risk", minRole: "analyst" },

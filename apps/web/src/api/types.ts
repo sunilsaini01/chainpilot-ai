@@ -89,10 +89,12 @@ export interface Risk {
   demand_profile: string;
 }
 
+export type RecommendationStatus = "pending" | "superseded" | "rejected" | "executed" | "failed";
+
 export interface Recommendation {
   id: number;
   kind: "reorder" | "transfer";
-  status: "pending" | "superseded";
+  status: RecommendationStatus;
   product_id: number;
   warehouse_id: number;
   source_warehouse_id: number | null;
@@ -106,6 +108,21 @@ export interface Recommendation {
     destination?: Partial<Risk>;
     source?: Partial<Risk>;
   };
+  created_at: string;
+}
+
+/** A manager's decision on a recommendation and what happened (GET /approvals). */
+export interface Approval {
+  id: number;
+  recommendation_id: number;
+  decision: "approved" | "rejected";
+  comment: string | null;
+  decided_by_user_id: number;
+  decided_by_email: string;
+  outcome: "executed" | "failed" | null;
+  // po_number and expected_date (reorder), reference and balances (transfer), or error.
+  outcome_details: Record<string, string | number>;
+  purchase_order_id: number | null;
   created_at: string;
 }
 
