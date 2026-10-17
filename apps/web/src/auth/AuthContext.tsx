@@ -9,6 +9,7 @@ import type { Role, User } from "../api/types";
 interface AuthState {
   user: User | null;
   checking: boolean; // true while a saved token is being checked
+  loggedOut: boolean; // true after "Log out" in this tab
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(() => getToken() !== null);
+  const [loggedOut, setLoggedOut] = useState(false);
 
   // A token saved earlier in this tab: ask the API who it belongs to.
   useEffect(() => {
@@ -31,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     setUser(await apiLogin(email, password));
+    setLoggedOut(false);
   }, []);
 
   const logout = useCallback(async () => {
@@ -41,10 +44,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // (e.g. it is down), the user is still logged out in this browser.
     } finally {
       setUser(null);
+      setLoggedOut(true);
     }
   }, []);
 
-  return <AuthContext value={{ user, checking, login, logout }}>{children}</AuthContext>;
+  return <AuthContext value={{ user, checking, loggedOut, login, logout }}>{children}</AuthContext>;
 }
 
 export function useAuth(): AuthState {
@@ -53,12 +57,16 @@ export function useAuth(): AuthState {
   return state;
 }
 
-/** Shows its children only to a logged-in user; others go to the login page. */
+/**
+ * Shows its children only to a logged-in user; others go to the login page, which
+ * returns them to this page afterwards. Not after "Log out": the next person to log
+ * in on this computer should start at the overview, not on the last user's page.
+ */
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, checking } = useAuth();
+  const { user, checking, loggedOut } = useAuth();
   const location = useLocation();
   if (checking) return <p role="status">Checking your session…</p>;
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!user) return <Navigate to="/login" replace state={loggedOut ? null : { from: location.pathname }} />;
   return children;
 }
 

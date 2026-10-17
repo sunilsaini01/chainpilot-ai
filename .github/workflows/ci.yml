@@ -129,6 +129,39 @@ jobs:
       - name: Production build
         run: npm run build
 
+  web-e2e:
+    name: Browser end-to-end tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38  # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies and Chromium
+        working-directory: apps/web
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run the browser tests against a throwaway stack
+        # Starts the whole stack, seeds it, creates one user per role, runs
+        # Playwright (flows and accessibility checks), then removes the stack.
+        run: bash apps/web/e2e/run-e2e.sh
+
+      - name: Keep the test report on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+
   docker-smoke:
     name: Docker build and smoke test
     runs-on: ubuntu-24.04
@@ -153,6 +186,12 @@ jobs:
           echo
           curl --fail --silent --show-error http://127.0.0.1:8000/ready
           echo
+
+      - name: Check the web dashboard is served
+        # The app page itself, and a deep link (served by the same index.html).
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:8080/ | grep -q '<div id="root">'
+          curl --fail --silent --show-error http://127.0.0.1:8080/suppliers | grep -q '<div id="root">'
 
       - name: Check database migrations ran
         # The one-shot `migrate` service must have created the schema.

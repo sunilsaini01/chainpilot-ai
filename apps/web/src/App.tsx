@@ -8,6 +8,7 @@ import { CopilotPage } from "./pages/CopilotPage";
 import { DeliveryRiskPage } from "./pages/DeliveryRiskPage";
 import { ForecastsPage } from "./pages/ForecastsPage";
 import { LoginPage } from "./pages/LoginPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { RecommendationsPage } from "./pages/RecommendationsPage";
 import { RisksPage } from "./pages/RisksPage";
@@ -50,7 +51,7 @@ export function App() {
           }
         />
       </Route>
-      <Route path="*" element={<p role="alert">Page not found.</p>} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

@@ -67,6 +67,33 @@ describe("login", () => {
 });
 
 
+describe("the next login after logging out", () => {
+  it("starts at the overview, not on the previous user's page", async () => {
+    sessionStorage.setItem("chainpilot.token", "saved");
+    vi.stubGlobal(
+      "fetch",
+      fakeApi({
+        "/auth/me": [200, USER],
+        "/auth/logout": [204, null],
+        "/auth/login": [200, { access_token: "new", expires_at: "2030-01-01T00:00:00Z", user: USER }],
+        "/dashboard/kpis": [200, KPIS],
+        "/purchase-orders": [200, []],
+        "/suppliers": [200, []],
+        "/suppliers/risks": [200, []],
+        "/warehouses": [200, []],
+      }),
+    );
+    renderWithApp(<App />, "/suppliers");
+
+    await screen.findByRole("heading", { name: "Suppliers and orders" });
+    await userEvent.click(screen.getByRole("button", { name: "Log out" }));
+    await logIn("analyst@example.com", "any-password-here");
+
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+  });
+});
+
+
 describe("logout when the API is down", () => {
   it("still logs out in this browser, without an unhandled error", async () => {
     sessionStorage.setItem("chainpilot.token", "saved");
