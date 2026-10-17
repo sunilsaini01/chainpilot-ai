@@ -8,6 +8,11 @@ import { DataBadge } from "./DataBadge";
 // "Users" is listed only for admins; the API checks the role on every call anyway.
 const PAGES = [
   { to: "/", label: "Overview", adminOnly: false },
+  { to: "/risks", label: "Stock risks", adminOnly: false },
+  { to: "/recommendations", label: "Recommendations", adminOnly: false },
+  { to: "/suppliers", label: "Suppliers & orders", adminOnly: false },
+  { to: "/forecasts", label: "Forecasts", adminOnly: false },
+  { to: "/delivery-risk", label: "Delivery risk", adminOnly: false },
   { to: "/users", label: "Users", adminOnly: true },
   { to: "/account", label: "My account", adminOnly: false },
 ];

@@ -260,3 +260,84 @@ button.secondary {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* P6-T2 screens: filters, wide tables, badges, pager, chart. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.nav {
+  flex-wrap: wrap;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.status {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  border: 1px solid currentColor;
+}
+
+.status-bad {
+  color: var(--error);
+  background: var(--error-bg);
+}
+
+.status-warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.status-ok {
+  color: #1d5e33;
+  background: #e8f3ec;
+}
+
+.status-neutral {
+  color: var(--muted);
+}
+
+.pager {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.chart {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+}
+
+.chart-band {
+  fill: #d6e4f7;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.chart-axis {
+  stroke: var(--line);
+}
+
+.chart-label {
+  font-size: 12px;
+  fill: var(--muted);
+}
+
+.mono {
+  font-family: ui-monospace, Consolas, monospace;
+}

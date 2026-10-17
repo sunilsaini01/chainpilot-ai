@@ -4,7 +4,23 @@
 // gone when the tab closes. (An httpOnly cookie would be safer against script
 // injection; that hardening is planned with the approval/security phase.)
 
-import type { DashboardKpis, NewUser, Role, TokenResponse, User } from "./types";
+import type {
+  DashboardKpis,
+  DeliveryRiskRun,
+  DeliveryRiskScore,
+  ForecastRow,
+  NewUser,
+  Product,
+  PurchaseOrder,
+  Recommendation,
+  Risk,
+  Role,
+  Supplier,
+  SupplierRisk,
+  TokenResponse,
+  User,
+  Warehouse,
+} from "./types";
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 const TOKEN_KEY = "chainpilot.token";
@@ -99,6 +115,14 @@ export async function logout(): Promise<void> {
   }
 }
 
+export type Params = Record<string, string | number | undefined>;
+
+/** "?a=1&b=x" from the parameters that have a value ("" and undefined are left out). */
+export function query(params: Params): string {
+  const pairs = Object.entries(params).filter(([, value]) => value !== undefined && value !== "");
+  return pairs.length ? `?${new URLSearchParams(pairs.map(([k, v]) => [k, String(v)]))}` : "";
+}
+
 function post<T>(path: string, body: unknown): Promise<ApiResult<T>> {
   return request<T>(path, { method: "POST", body: JSON.stringify(body) });
 }
@@ -115,4 +139,20 @@ export const api = {
     request<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(changes) }),
   setPassword: (id: number, newPassword: string) =>
     post<null>(`/users/${id}/password`, { new_password: newPassword }),
+
+  // Lookups (small lists) for showing codes instead of ids.
+  warehouses: () => request<Warehouse[]>("/warehouses?limit=200"),
+  suppliers: () => request<Supplier[]>("/suppliers?limit=200"),
+  products: (offset: number) => request<Product[]>(`/products?limit=200&offset=${offset}`),
+
+  risks: (params: Params) => request<Risk[]>(`/inventory/risks${query(params)}`),
+  recommendations: (params: Params) => request<Recommendation[]>(`/inventory/recommendations${query(params)}`),
+  generateRecommendations: (serviceLevel: number) =>
+    post<Recommendation[]>("/inventory/recommendations", { service_level: serviceLevel }),
+  supplierRisks: () => request<SupplierRisk[]>("/suppliers/risks"),
+  purchaseOrders: (params: Params) => request<PurchaseOrder[]>(`/purchase-orders${query(params)}`),
+  receiveOrder: (id: number) => post<PurchaseOrder>(`/purchase-orders/${id}/receive`, {}),
+  forecasts: (params: Params) => request<ForecastRow[]>(`/forecasts${query(params)}`),
+  deliveryRuns: () => request<DeliveryRiskRun[]>("/delivery-risk/runs?limit=1"),
+  deliveryAlerts: (date: string) => request<DeliveryRiskScore[]>(`/delivery-risk/alerts${query({ date, limit: 200 })}`),
 };
