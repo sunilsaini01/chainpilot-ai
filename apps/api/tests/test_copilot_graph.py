@@ -22,6 +22,7 @@ from app.copilot.model import (
     PROVIDER_URLS,
     CompatibleChatModel,
     ModelReply,
+    RequestTooLargeError,
     ScriptedModel,
     ToolCall,
     json_reply,
@@ -515,3 +516,96 @@ def test_investigate_command(
     )
     assert cli.main(["investigate", "x"]) == 1
     assert "not configured" in capsys.readouterr().err
+
+
+# --- Request size (P5-T4-R3) ----------------------------------------------------------
+
+
+def test_adapter_turns_a_413_into_request_too_large(monkeypatch) -> None:
+    model = CompatibleChatModel("groq", api_key="k", model="m")
+    request = httpx2.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+    too_large = openai.APIStatusError(
+        "Request too large: input tokens per minute",
+        response=httpx2.Response(413, request=request),
+        body=None,
+    )
+    fake_client(monkeypatch, model, [too_large])
+
+    with pytest.raises(RequestTooLargeError, match="Request too large"):
+        model.complete([{"role": "user", "content": "x"}])
+
+
+@needs_db
+def test_answer_retries_once_with_half_the_evidence(db_engine: Engine, world: dict) -> None:
+    model = ScriptedModel(
+        [
+            *SUPPLIER_SCRIPT,
+            RequestTooLargeError("413"),
+            answer("SYN-SUP04 is at risk.", ["supplier:SYN-SUP04"]),
+        ]
+    )
+
+    result = graph.investigate(model, db_engine, "Which supplier is unreliable?")
+
+    assert result.status == "completed" and result.answer["grounded"] is True
+    assert {"node": "answer", "retry": "request too large: half the evidence"} in result.trace
+
+
+@needs_db
+def test_a_second_refusal_fails_the_run_cleanly(db_engine: Engine, world: dict) -> None:
+    model = ScriptedModel(
+        [*SUPPLIER_SCRIPT, RequestTooLargeError("413"), RequestTooLargeError("413")]
+    )
+
+    result = graph.investigate(model, db_engine, "Which supplier is unreliable?")
+
+    assert result.status == "failed" and result.error.startswith("RequestTooLargeError")
+
+
+@needs_db
+def test_a_specialist_stops_but_the_run_goes_on(db_engine: Engine, world: dict) -> None:
+    model = ScriptedModel(
+        [
+            route("supplier"),
+            tool_reply(("supplier_performance", {"supplier_code": "SYN-SUP04"})),
+            RequestTooLargeError("413"),
+            route("finish"),
+            answer("SYN-SUP04 is at risk.", ["supplier:SYN-SUP04"]),
+        ]
+    )
+
+    result = graph.investigate(model, db_engine, "Which supplier is unreliable?")
+
+    note = next(
+        step["note"] for step in result.trace if step["node"] == "supplier" and "note" in step
+    )
+    assert note == "Stopped: the provider refused the request as too large."
+    assert result.status == "completed" and result.answer["grounded"] is True  # evidence was kept
+
+
+@needs_db
+def test_what_the_model_sees_stays_within_the_size_limits(
+    db_engine: Engine, world: dict, monkeypatch
+) -> None:
+    original = tools.TOOLS["supplier_performance"]
+
+    def huge(session, args, today):
+        result = original.function(session, args, today)
+        return result.model_copy(update={"data": result.data * 200})  # far over any limit
+
+    monkeypatch.setitem(
+        tools.TOOLS,
+        "supplier_performance",
+        tools.Tool(original.name, original.description, original.input_model, huge),
+    )
+    model = ScriptedModel([*SUPPLIER_SCRIPT, answer("ok", ["supplier:SYN-SUP04"])])
+
+    result = graph.investigate(model, db_engine, "Which supplier is unreliable?")
+
+    tool_message = model.requests[2]["messages"][-1]
+    assert tool_message["role"] == "tool"
+    assert len(tool_message["content"]) <= graph.MAX_RESULT_CHARS + len(" ... (truncated)")
+    answer_prompt = model.requests[-1]["messages"][1]["content"]
+    shown = answer_prompt.split("Tool results:\n", 1)[1]
+    assert len(shown) <= graph.MAX_EVIDENCE_CHARS + len(" ... (truncated)")
+    assert len(result.evidence[0]["data"]) == 200  # one supplier x 200: the full data is kept
