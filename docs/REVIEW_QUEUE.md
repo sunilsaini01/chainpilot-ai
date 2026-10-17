@@ -610,7 +610,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `apps/web/src/api/client.ts` keeps the token in `sessionStorage`. A script injected into the page (XSS) could read it.
 - Expected behavior: tokens out of reach of page scripts.
 - Fix and regression test: move to an httpOnly, Secure, SameSite cookie set by the API (with CSRF protection) in the security phase (P7/P8). React's escaping and no third-party scripts reduce the risk meanwhile.
-- Status: OPEN (P7/P8)
+- Update 2026-10-17 (P7-T3): done (D-061). `tests/test_session_cookie.py` (10 API tests), web client tests, and browser tests that check the cookie is httpOnly and invisible to `document.cookie`, that browser storage is empty, and that a cookie request without the CSRF token gets 403 from the real API.
+- Status: VERIFIED
 
 ## P6-T1-R4 — [LOW] The first overview showed stock value in pounds
 - Source: Claude self-review
@@ -685,3 +686,16 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `apps/web/src/pages/LoginPage.test.tsx` typed into the login form right after clicking "Log out", before the form was shown. The same timing mistake as in the browser helper (P6-T4).
 - Fix and regression test: the test waits for the login form; 3 full runs passed; the logout fix still makes it fail when undone (checked).
 - Status: VERIFIED
+
+## P7-T3-R1 — [LOW] `localhost` and `127.0.0.1` cannot be mixed
+- Source: Claude self-review
+- File and reproduction: opening the dashboard on `http://localhost:5173` while it calls the API on `http://127.0.0.1:8000` is a cross-site request, so the strict cookie is not sent and every page acts logged out.
+- Expected behavior: one host name for both. The dev server and the Docker setup both use `127.0.0.1`; the README says so.
+- Fix and regression test: documented. In AWS (P8) the dashboard and the API will share one domain.
+- Status: OPEN (documented)
+
+## P7-T3-R2 — [LOW] The login response still contains the bearer token
+- Source: Claude self-review
+- File and reproduction: `POST /auth/login` returns `access_token` (for scripts) to the dashboard too. A malicious script already running in the page at the moment of login could read it.
+- Expected behavior: acceptable (such a script could act as the user anyway while it runs); the dashboard ignores the field. A separate login for scripts (e.g. API keys) could remove it later.
+- Status: OPEN (documented)

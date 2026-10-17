@@ -33,7 +33,7 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/inventory_sim/` | Replay simulator (P4): real M5 sales are replayed day by day through the inventory policy (weekly review, random 5–9 day lead times, lost sales) and compared with a simple reorder rule. With LightGBM forecasts the policy needed 17–34% less stock for the same fill rate. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `.github/workflows/ci.yml` | On every push and pull request: API and ML lint and tests (API tests against a real Postgres 16), the dashboard's type-check, unit tests and build, browser tests against a throwaway stack, and a Docker smoke test. See [Continuous integration](#continuous-integration). |
 
-Not built yet: forecast and scoring jobs from the API (needs the background worker), login cookies instead of a token in the browser (P7-T3), AWS (P8).
+Not built yet: forecast and scoring jobs from the API (needs the background worker), AWS (P8).
 
 ## How stock changes
 
@@ -304,9 +304,9 @@ bash e2e/run-e2e.sh                 # or: npm run e2e
 
 They cover: login (wrong password, keyboard only, deep links, reload, logout), what each role sees, receiving an order and finding it in the audit log, cancelling that confirmation, an admin adding a user who then logs in, the approval queue (making recommendations, approving a reorder and finding its purchase order and audit entry, approving a transfer, rejecting with a reason, two managers deciding the same recommendation, analysts read-only), the empty states (no delivery-risk scores, copilot not set up, an item without a forecast), an API error with "Try again", the "page not found" page, and an automatic accessibility check (axe, WCAG 2.1 A and AA) of every page. Automatic checks find only part of the accessibility problems; they do not replace a review with a screen reader.
 
-To use another API address, copy `apps/web/.env.example` to `.env.local` and set `VITE_API_URL`. The API accepts browser calls only from the origins in `CORS_ORIGINS` (default `http://localhost:5173,http://127.0.0.1:5173`).
+To use another API address, copy `apps/web/.env.example` to `.env.local` and set `VITE_API_URL`. The API accepts browser calls only from the origins in `CORS_ORIGINS` (default `http://localhost:5173,http://127.0.0.1:5173`). Open the dashboard on the **same host name** as the API (both `127.0.0.1`, as configured): the login cookie is `SameSite=Strict`, and `localhost` and `127.0.0.1` count as different sites, so mixing them looks like being logged out.
 
-Every page shows a **Simulated data** badge. The login token is kept for the browser tab only (`sessionStorage`). Each page has loading, error (with "Try again") and empty states.
+Every page shows a **Simulated data** badge. The login is an **httpOnly cookie** that scripts in the page cannot read; nothing about the session is kept in browser storage (see **Users, login and roles**). Each page has loading, error (with "Try again") and empty states.
 
 **Screens.** Every list has filters where useful, paging with the total, and loading, error and empty states. Statuses are written out ("out of stock", "at risk"), so colour is never the only signal.
 
@@ -353,7 +353,11 @@ Admins can also change roles and deactivate or reactivate accounts. The dashboar
 | `GET /users?limit=&offset=`, `POST /users`, `PATCH /users/{id}` (role, name, active) | admin |
 | `GET /audit-events?entity_type=&entity_id=&limit=&offset=` | manager, admin |
 
-Send the token as `Authorization: Bearer <token>`. A missing, unknown, expired or revoked token gives **401**; a role that is too low gives **403**. Tokens last `ACCESS_TOKEN_TTL_MINUTES` (default 480 = 8 hours).
+Two ways to use the login (P7-T3):
+- **Browsers (the dashboard):** login sets the cookie `chainpilot_session`: `HttpOnly` (page scripts cannot read it), `SameSite=Strict` (other sites cannot make the browser send it), and `Secure` (HTTPS only) everywhere except `ENVIRONMENT=local`. Because a browser sends cookies by itself, every request that changes data (POST, PATCH) must also carry the session's CSRF token in `X-CSRF-Token`, or it gets **403**. The token comes with the login response and from `GET /auth/me`. The dashboard keeps it in memory only. Logout revokes the session and deletes the cookie.
+- **Scripts and API clients:** send `Authorization: Bearer <access_token>` from the login response. Browsers never add this header by themselves, so it needs no CSRF token. If both are present, the header wins.
+
+A missing, unknown, expired or revoked login gives **401**; a role that is too low gives **403**. Logins last `ACCESS_TOKEN_TTL_MINUTES` (default 480 = 8 hours). `CORS_ORIGINS` must list origins one by one; `*` is refused at startup, because the API allows the login cookie on cross-origin calls from those origins.
 
 **Create the first admin** (prompts twice for the password; nothing is echoed or saved in shell history):
 

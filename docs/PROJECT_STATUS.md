@@ -1,23 +1,23 @@
 # Project Status
 
 Current phase: P7 (Approval and security)
-Current task: P7-T2, the approval queue screen
+Current task: P7-T3, login cookie and CSRF protection
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: ce3de6c (P7-T1, pushed; CI #30 result NOT VERIFIED by me: GitHub API rate limit). P7-T2 is uncommitted.
+Last commit: f70d33d (CI #31 green). P7-T3 is uncommitted.
 
-## P7-T2 acceptance criteria
-- [x] Approval queue: pending proposals with their numbers and age; Approve with a confirmation, Reject with a reason; managers and admins only
-- [x] Retry-safe: one Idempotency-Key per recommendation and decision, reused after a lost answer
-- [x] Decided recommendations by status, and recent decisions with who decided and the outcome
-- [x] Browser tests on the real API: reorder → purchase order + audit, transfer, reject, two managers at once, analysts read-only, accessibility
-- [x] Tests: web 53 unit (mutation-checked), 23 browser tests
-- [ ] CI green on GitHub. NOT VERIFIED: requires a push (and CI #30 for P7-T1 is still to be confirmed)
+## P7-T3 acceptance criteria
+- [x] The browser's login is an httpOnly, SameSite=Strict cookie (Secure outside local); nothing about the session in browser storage
+- [x] Cookie requests that change data need the CSRF token (403 otherwise); Bearer clients unchanged
+- [x] CORS allows credentials only for listed origins; `*` refused
+- [x] Logout revokes the session and deletes the cookie
+- [x] Tests: API 425 (10 new, mutation-checked); web 54; browser 25 (cookie checked in Chromium)
+- [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Open findings: P7-T1-R1 (LOW, mitigated), P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, P8), P6-T2-R1 (LOW), P6-T1-R3 (MEDIUM, P7-T3), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, partly fixed), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
-Next action: Owner confirms CI #30, checks the queue in the dashboard, pushes; then P7-T3.
+Open findings: P7-T3-R1 (LOW), P7-T3-R2 (LOW), P7-T1-R1 (LOW, mitigated), P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, P8), P6-T2-R1 (LOW), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, partly fixed), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
+Next action: Owner checks and pushes; then P7-T4 (security sweep).
 Blockers: none.
 
 ## Roadmap progress
@@ -51,9 +51,9 @@ Blockers: none.
 | P6-T2 Risk, recommendation, supplier, forecast and delivery-risk screens | APPROVED (CI #27 green on 2106dcb) |
 | P6-T3 Copilot view and audit timeline (approval queue moved to P7) | APPROVED (CI #28 green on 7164f10) |
 | P6-T4 Browser end-to-end tests, error/empty states, accessibility, Compose | APPROVED (CI #29 green on 835a6d5) |
-| P7-T1 Approval workflow in the API (decide, execute, idempotency, concurrency, audit) | READY_FOR_USER_CHECK (pushed as ce3de6c; CI #30 not yet confirmed) |
-| P7-T2 Approval queue screen with browser tests | READY_FOR_USER_CHECK |
-| P7-T3 Login token in an httpOnly cookie with CSRF protection | NOT_STARTED |
+| P7-T1 Approval workflow in the API (decide, execute, idempotency, concurrency, audit) | APPROVED (CI #30 green on ce3de6c) |
+| P7-T2 Approval queue screen with browser tests | APPROVED (CI #31 green on f70d33d) |
+| P7-T3 Login token in an httpOnly cookie with CSRF protection | READY_FOR_USER_CHECK |
 | P7-T4 Security sweep: every write endpoint against every role; API security headers | NOT_STARTED |
 | P8–P9 | NOT_STARTED |
 
@@ -95,3 +95,4 @@ Blockers: none.
 - 2026-10-17: P6-T4: browser tests and accessibility checks in CI; the dashboard in Docker Compose.
 - 2026-10-17: P6 complete (CI #29). P7-T1: managers approve or reject recommendations; approved ones become purchase orders or stock transfers.
 - 2026-10-17: P7-T2: the approval queue in the dashboard; approvals tested end to end in a browser.
+- 2026-10-17: P7-T3: the dashboard's login is an httpOnly cookie with CSRF protection.

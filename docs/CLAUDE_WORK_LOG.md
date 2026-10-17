@@ -873,3 +873,32 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P7-T2-R1 (VERIFIED); P7-T1-R2 VERIFIED; P7-T1-R1 mitigated. Decision D-060.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P7-T3 (login token in an httpOnly cookie with CSRF protection).
+
+## 2026-10-17 15:35 UTC — P7-T1 and P7-T2 approved; P7-T3 plan (written before coding)
+- CI #30 (ce3de6c, P7-T1) and CI #31 (f70d33d, P7-T2) green, read from the GitHub API once each. The owner checked the approval queue.
+- P7-T3 goal: the browser's login token out of reach of page scripts (P6-T1-R3).
+- Design:
+  - Login sets an httpOnly cookie `chainpilot_session` (the same random token as before; only its hash is stored). It is `SameSite=Strict`, `Path=/`, with Max-Age equal to the token lifetime, and `Secure` unless `ENVIRONMENT=local` (setting `SESSION_COOKIE_SECURE` overrides). Logout revokes the token and deletes the cookie.
+  - The dashboard (127.0.0.1:8080 or :5173) and the API (127.0.0.1:8000) are the same site (ports do not count), so the cookie is sent with `credentials: "include"`. CORS then needs `allow_credentials` with the explicit origin list (already explicit, never `*`).
+  - CSRF: when a request authenticates with the cookie and changes data (POST, PATCH, PUT, DELETE), it must send `X-CSRF-Token`. The token is SHA-256 of "csrf:" plus the session token, so it needs no storage and reveals nothing about the session token. The client gets it from the login response and from `GET /auth/me`. Wrong or missing: 403. Another site cannot read it (CORS) and cannot send the cookie (SameSite). This is defence in depth.
+  - `Authorization: Bearer` keeps working for scripts and API clients. A browser never adds that header by itself, so it needs no CSRF token. If both are present, the header wins.
+  - Dashboard: no token in `sessionStorage` any more. The CSRF token is kept in memory only. On page load the app asks `GET /auth/me` (401 means logged out).
+  - Note: the login response still contains `access_token` for API clients. A script in the page could only see it at the moment of login.
+- Pre-registered tests:
+  - API: login sets the cookie with HttpOnly, SameSite=Strict and Max-Age, and `Secure` when not local. The cookie alone works for GET. With the cookie, a POST without the CSRF token gets 403, a wrong one 403, and the right one succeeds. Bearer POSTs need no CSRF token. Logout deletes the cookie and the old cookie then gets 401. `/auth/me` returns the CSRF token for cookie sessions and null for Bearer. CORS preflight from an allowed origin allows credentials and the header; another origin is not allowed. Existing tests keep using Bearer; the shared `login` helper drops the cookie so they stay independent of it.
+  - Web unit: requests are sent with credentials; the CSRF header is on changing requests, not on GETs; no token is written to storage; the session is restored by `/auth/me`; logout forgets the CSRF token.
+  - Browser: the whole e2e suite (logins, approvals, receiving) on the cookie. Plus: `document.cookie` does not show the session, `sessionStorage` is empty, and a reload keeps the session.
+  - Mutation checks: remove the CSRF check; make the cookie readable by scripts (httponly off); send no credentials from the client.
+
+## 2026-10-17 15:45 UTC — P7-T3 results: login cookie and CSRF protection
+- Files changed and why: API: `app/dependencies.py` (cookie or Bearer, CSRF check on changes, `SessionToken`), `app/routes/auth.py` (sets and deletes the cookie, returns the CSRF token; `/auth/me` returns it for cookie sessions), `app/security.py` (`csrf_token_for`, `csrf_token_matches`), `app/config.py` (`SESSION_COOKIE_SECURE`, `cookie_secure`, refuses a `*` CORS origin), `app/schemas.py` (`csrf_token`, `MeOut`), `app/main.py` (CORS credentials, `X-CSRF-Token` allowed), `tests/conftest.py` (the login helper drops the cookie), `tests/test_session_cookie.py` (new, 10 tests). Web: `src/api/client.ts` (no token storage; credentials; CSRF header on changes; memory only), `src/api/types.ts`, `src/auth/AuthContext.tsx` (asks `/auth/me` on every start), `src/setupTests.ts`, `src/testUtils.tsx`, `src/api/client.test.ts`, `src/pages/LoginPage.test.tsx`, `AccountPage.test.tsx`, `UsersPage.test.tsx`; `e2e/auth.spec.ts` (+2), `e2e/helpers.ts`.
+- Tests run / actual results (as pre-registered):
+  - API: `tests/test_session_cookie.py` 10 passed (my first version used a deprecated per-request cookie argument, which the suite treats as an error; fixed). The full suite with the new file, in one run: 425 passed (415 + 10). Ruff check and format pass.
+  - API mutation checks (each restored): no CSRF check: 3 failed; cookie not httpOnly: 1 failed; SameSite lax: 1 failed.
+  - Web: type-check passes; 54 unit tests pass (two runs). One test had to wait for the login form, because the app now asks `/auth/me` first. Mutation checks: no `credentials: "include"`: 1 failed; no CSRF header: 2 failed.
+  - Browser tests: 25 passed on the first run, all of them logging in through the cookie. Checked in Chromium: the cookie is httpOnly and SameSite=Strict, `document.cookie` does not show it, browser storage is empty, and a POST from the page without the CSRF token gets 403 from the real API.
+  - NOT VERIFIED: CI on GitHub (not pushed).
+- Self-review findings: P6-T1-R3 VERIFIED (fixed); P7-T3-R1, R2 (LOW, documented). Decision D-061.
+- For the owner: after `docker compose up -d --build`, everyone has to log in again once (old sessions were in `sessionStorage`). Use `http://127.0.0.1:...` for both the dashboard and the API.
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P7-T4 (security sweep: every write endpoint against every role; API security headers).
