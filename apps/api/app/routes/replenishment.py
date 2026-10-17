@@ -2,7 +2,7 @@
 
 Every response carries an `X-Dataset` header: stock and suppliers are simulated
 and demand is borrowed from linked M5 forecasts (see app/replenishment_service.py).
-Recommendations are proposals; approving and executing them is P7.
+Recommendations are proposals; managers decide on them in app/routes/approvals.py.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -76,7 +76,8 @@ def generate_recommendations(
 ) -> list[Recommendation]:
     """Replace the pending recommendations with a fresh set (proposals only).
 
-    Nothing is ordered or moved: each recommendation waits for approval (P7).
+    Nothing is ordered or moved: each recommendation waits for a manager's decision.
+    Only pending ones are replaced; decided ones keep their status.
     """
     try:
         created, _ = create_recommendations(session, body.service_level, manager)
@@ -89,7 +90,9 @@ def generate_recommendations(
 
 @router.get("/recommendations", response_model=list[RecommendationOut])
 def list_recommendations(
-    status_filter: str = Query(default="pending", alias="status", pattern="^(pending|superseded)$"),
+    status_filter: str = Query(
+        default="pending", alias="status", pattern="^(pending|superseded|rejected|executed|failed)$"
+    ),
     kind: str | None = Query(default=None, pattern="^(reorder|transfer)$"),
     warehouse_id: int | None = None,
     limit: int = Query(default=50, ge=1, le=500),
