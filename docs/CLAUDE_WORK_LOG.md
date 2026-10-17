@@ -818,3 +818,44 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P6-T4-R1 and R2 (VERIFIED), P6-T4-R3 and R4 (LOW, open). Decision D-058.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P7-T1 (approval workflow: approve/reject recommendations with roles, audit and the approval queue screen).
+
+## 2026-10-17 14:30 UTC — P7 plan and P7-T1 plan (written before coding)
+- P7 tasks (the spec's P7 gate: unauthorized and unapproved actions are blocked):
+  - P7-T1 Approval workflow in the API: approve or reject a recommendation; approved ones are executed (simulated): a reorder becomes an open purchase order, a transfer moves the stock. Role checks, row locks, idempotency keys, audit.
+  - P7-T2 Approval queue screen in the dashboard, with browser tests.
+  - P7-T3 Login token in an httpOnly cookie with CSRF protection (P6-T1-R3).
+  - P7-T4 Security sweep: a test of every write endpoint against every role and against no login; API security headers.
+- P7-T1 design:
+  - `POST /recommendations/{id}/decision` (manager or admin), body `{decision: approve|reject, comment}`; a comment is required to reject. An `Idempotency-Key` header is required.
+  - Lifecycle: pending, then rejected, executed or failed. Approval and execution happen in one request. If execution fails (the source site no longer has the stock, or the receiving site has no room), the decision is still stored with outcome "failed" and the reason, and nothing changes stock. Superseded recommendations cannot be decided.
+  - New table `approvals`: one per recommendation (unique), with the decision, the comment, who and when, the idempotency key (unique), the outcome, its details and the purchase order created.
+  - A reorder creates purchase order `PO-REC-<id>`: the recommendation's supplier, warehouse and quantity, today's date, expected after the supplier's lead time, at the product's unit cost. A transfer records `transfer_out` at the source and `transfer_in` at the destination, with reference `REC-<id>`, through the ledger (stock and capacity checks). It arrives at once: travel time is not simulated (as the transfer policy says).
+  - Concurrency: the recommendation row is locked (FOR UPDATE) before the status check, so two managers cannot both decide. Replay: the same key from the same user for the same decision returns the stored result (200). A key reused for anything else returns 409. A second decision with a new key returns 409 "already decided".
+  - Audit: `recommendation.approved` / `recommendation.rejected` with the outcome, and `purchase_order.created` for a new order.
+  - `GET /approvals` (analysts and up, paged, with the decider's email). `GET /recommendations?status=` also accepts rejected, executed and failed.
+  - The approvals policy gets version 2: the "not built yet" sentence is replaced by how it works.
+- Pre-registered tests (RUN_DB_TESTS=1):
+  - Without login 401; analyst 403; missing key 422; unknown id 404.
+  - Approving a reorder makes the right purchase order, raises on-order, and stores the approval and audit events.
+  - Approving a transfer moves exactly the quantity, with the actor and reference on both movements.
+  - A transfer whose source no longer has the stock, or whose destination is full, ends "failed" with the reason, and stock is unchanged.
+  - Reject needs a comment and creates nothing.
+  - A replay with the same key returns the same result, with one order only. The same key for another recommendation or decision gets 409. A second decision gets 409. A superseded recommendation gets 409.
+  - Two managers approving at the same moment (threads): exactly one executes; one order.
+  - A new recommendation run supersedes only pending ones; decided ones keep their status.
+  - `GET /approvals` lists decisions with the decider's email.
+  - Mutation check: removing the row lock, the status check or the key comparison must fail at least one test.
+
+## 2026-10-17 14:50 UTC — P7-T1 results: approval workflow in the API
+- Starting point: P6-T4 pushed by the owner; CI #29 green on 835a6d5 (all five jobs, including the new browser tests on Linux). P6 is complete.
+- Files changed and why: `app/models.py` (`Approval`, `ApprovalDecision`, `ApprovalOutcome`; recommendation statuses rejected, executed, failed), `migrations/versions/20261017_0012_approvals.py` (new table, wider status check; the downgrade keeps decided recommendations as superseded), `app/approval_service.py` (new: decide and carry out), `app/routes/approvals.py` (new: decision and list endpoints), `app/main.py`, `app/schemas.py` (`DecisionRequest`, `ApprovalOut`, wider status), `app/routes/replenishment.py` (status filter, docstrings), `policies/approvals.md` (version 2: how approval works now), `tests/test_approvals.py` (new, 13 tests).
+- Tests run / actual results (as pre-registered in the plan entry):
+  - `tests/test_approvals.py` with `RUN_DB_TESTS=1`: 13 passed. My mistake on the first run: 5 API tests failed because the route returned the decision after `commit()`, when its decider could no longer be loaded (`lazy="raise"`); the route now reads it back. The 8 service tests passed first time.
+  - Mutation checks, each restored afterwards: no row lock: 1 failed (the two-managers test); no status check: 2 failed; no key comparison: 1 failed; no reason check: 2 failed (the database check also refuses it); no savepoint: 1 failed (the full-site transfer left the first leg).
+  - Full API suite with `RUN_DB_TESTS=1`: 415 passed (402 + 13), including the migration up/down round trip and the models-vs-migrations check. Ruff check and format pass.
+  - Policy and copilot tests after the policy edit: 67 passed. The P5 policy-retrieval result file was not re-run (it describes version 1).
+  - NOT VERIFIED: CI on GitHub (not pushed); a run against the Docker stack (the API tests use a real Postgres through the test client; the e2e stack has no forecasts, so it has no recommendations to approve; P7-T2 will need a way to make some).
+- Self-review findings: P7-T1-R1, R2 (LOW). P4-T3-R3 partly fixed. Decision D-059.
+- To use it on your database: `docker compose up -d --build` (runs migration 0012), then `docker compose run --rm api python -m app.cli load-policies` (loads policy version 2 for the copilot).
+- Ending commit (if any): none. The owner will commit and push.
+- Next recommended task: P7-T2 (approval queue screen with browser tests).

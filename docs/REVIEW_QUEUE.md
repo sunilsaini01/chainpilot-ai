@@ -470,7 +470,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: new orders come from approved recommendations (P4-T4, approval in the spec's section 4.F/P7); admins can edit purchasing rules.
 - Fix and regression test: P4-T4 (orders from approved recommendations) and a later catalogue update for the purchasing fields.
 - Update 2026-10-16 (P4-T4): recommendations exist as pending proposals; turning an approved one into a purchase order or transfer is the approval workflow (spec section 4.G), so this moves to P7.
-- Status: OPEN (P7)
+- Update 2026-10-17 (P7-T1): approved reorders now create purchase orders (`tests/test_approvals.py`). Still missing: cancelling or partly receiving an order, and editing a product's purchasing rules.
+- Status: OPEN (partly fixed; the rest is optional)
 
 ## P4-T4-R1 — [MEDIUM] Six planning rules were not covered by any test at first
 - Source: mutation check (17 mutations; 6 survived the first test version)
@@ -663,3 +664,16 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `apps/web/Dockerfile` bakes `VITE_API_URL` at build time, so one image cannot be reused for another API address.
 - Expected behavior: acceptable locally; for AWS either build per environment or serve the API under the same domain through the load balancer (decide in P8).
 - Status: OPEN (P8)
+
+## P7-T1-R1 — [LOW] Approval does not re-check whether a reorder is still needed
+- Source: Claude self-review
+- File and reproduction: `apps/api/app/approval_service.py` executes an approved reorder as recommended. If stock arrived or another order was placed after the recommendation was made, approving it can over-order. Transfers are re-checked by the ledger (stock and space), reorders are not.
+- Expected behavior: managers decide on current numbers.
+- Fix and regression test: making new recommendations replaces stale pending ones; the approval queue (P7-T2) will show each recommendation's age and the numbers it used. A "still needed" re-check at approval time can be added if wanted.
+- Status: OPEN (documented)
+
+## P7-T1-R2 — [LOW] The dashboard does not know the new recommendation statuses yet
+- Source: Claude self-review
+- File and reproduction: `apps/web/src/api/types.ts` types a recommendation's status as pending or superseded; the API now also returns rejected, executed and failed. The current screens only ask for pending ones, so nothing breaks.
+- Fix and regression test: P7-T2 (approval queue screen).
+- Status: OPEN (P7-T2)

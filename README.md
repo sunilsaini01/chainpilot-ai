@@ -31,9 +31,9 @@ The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](C
 | `ml/delivery_risk/olist_data.py` | Prepares the Olist marketplace data for delivery-delay risk: one row per delivered order, a `late` label, and features known at dispatch time (no delivery dates, no reviews), with a time-based split. See [docs/DATASETS.md](docs/DATASETS.md). |
 | `ml/delivery_risk/{models,evaluation,rolling,scoring,tier_check}.py` | Delivery-delay risk: logistic regression retrained every month with calibration on recent outcomes (chosen in a rolling monthly evaluation), scoring of dispatched orders into daily high/medium/low tiers with the top 3 reasons, and an after-the-fact check of the tiers. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
 | `ml/inventory_sim/` | Replay simulator (P4): real M5 sales are replayed day by day through the inventory policy (weekly review, random 5–9 day lead times, lost sales) and compared with a simple reorder rule. With LightGBM forecasts the policy needed 17–34% less stock for the same fill rate. See [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md). |
-| `.github/workflows/ci.yml` | On every push and pull request: API and ML Ruff lint/format and tests (API tests against a real Postgres 16, ML tests on tiny M5-format fixtures), then builds the Docker stack, checks `/health`, `/ready` and that migrations ran. |
+| `.github/workflows/ci.yml` | On every push and pull request: API and ML lint and tests (API tests against a real Postgres 16), the dashboard's type-check, unit tests and build, browser tests against a throwaway stack, and a Docker smoke test. See [Continuous integration](#continuous-integration). |
 
-Not built yet: forecast and scoring jobs from the API (needs the background worker), approving and executing recommendations (P7), most dashboard screens (P6-T2 onwards), AWS.
+Not built yet: forecast and scoring jobs from the API (needs the background worker), the approval queue screen (P7-T2), login cookies instead of a token in the browser (P7-T3), AWS (P8).
 
 ## How stock changes
 
@@ -166,7 +166,7 @@ For each product at each warehouse, the forecast for the next (lead time + 7) da
 | `excess` | more than 60 days of demand above the target level |
 | `ok` | everything else |
 
-Recommendations are **proposals** (`pending`). Nothing is ordered or moved until they are approved and executed (P7).
+Recommendations are **proposals** (`pending`). Nothing is ordered or moved until a manager approves them (see **Approving recommendations** below).
 - **Transfers come first:** stock another site holds above its own target.
 - **Supplier orders follow** for what is still missing, in whole packs and at least the supplier's minimum order.
 - **Space:** each warehouse's free space (capacity minus stock minus open orders) is shared, most urgent first.
@@ -177,9 +177,27 @@ Recommendations are **proposals** (`pending`). Nothing is ordered or moved until
 |---|---|
 | `GET /inventory/risks?warehouse_id=&status=&service_level=&limit=&offset=` (most urgent first; `X-Unassessed-Count` = pairs without demand data) | analyst+ |
 | `POST /inventory/recommendations` `{"service_level": 0.95}` | manager+ |
-| `GET /inventory/recommendations?status=pending&kind=&warehouse_id=` | analyst+ |
+| `GET /inventory/recommendations?status=pending&kind=&warehouse_id=` (status: pending, superseded, rejected, executed, failed) | analyst+ |
 
 With seed 42 and the real forecasts, 800 pairs are assessed: 146 out of stock, 24 at risk, 88 ok and 542 excess (the seed overstocks). The recommendations are 150 transfers (4,355 units) and 24 supplier orders (1,202 units).
+
+## Approving recommendations (P7)
+
+A manager or admin approves or rejects each pending recommendation (rules: `apps/api/policies/approvals.md`). Approving carries it out at once, **as a simulation**:
+- **Reorder:** an open purchase order `PO-REC-<id>` to the recommended supplier, for the recommended warehouse and quantity, at the product's unit cost, expected after the supplier's lead time. It counts as "on order" straight away and is received like any other order.
+- **Transfer:** stock leaves the source warehouse and arrives at the destination through the ledger (`transfer_out` and `transfer_in`, reference `REC-<id>`). There is no travel time.
+
+If an approved transfer cannot be carried out any more (the source has sold the stock, or the destination is full), the decision is still stored as **failed** with the reason, and no stock moves. Rejecting needs a reason.
+
+| Endpoint | Who |
+|---|---|
+| `POST /inventory/recommendations/{id}/decision` `{"decision": "approve" \| "reject", "comment": "..."}` with an `Idempotency-Key` header | manager+ |
+| `GET /approvals?decision=&outcome=&limit=&offset=` (newest first, with the decider's email) | analyst+ |
+
+How it stays safe:
+- **Once only:** a recommendation can be decided only while it is pending. Its row is locked during the decision, so two managers clicking at the same moment cannot both act: the second gets **409**. Recommendations replaced by a newer run cannot be decided.
+- **Retries:** the `Idempotency-Key` header is required. Repeating a request with the same key returns the stored decision (**200**) instead of ordering twice. The same key for a different decision gets **409**.
+- **All or nothing:** a decision, its purchase order or stock movements and the audit events (`recommendation.approved` / `recommendation.rejected`, `purchase_order.created`) are saved in one transaction.
 
 ## Policy documents (grounding for the AI copilot)
 

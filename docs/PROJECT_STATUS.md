@@ -1,23 +1,24 @@
 # Project Status
 
-Current phase: P6 (Frontend)
-Current task: P6-T4, browser tests, accessibility, the dashboard in Docker
+Current phase: P7 (Approval and security)
+Current task: P7-T1, approval workflow in the API
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 7164f10 (CI #28 green). P6-T4 is uncommitted.
+Last commit: 835a6d5 (CI #29 green, five jobs). P7-T1 is uncommitted.
 
-## P6-T4 acceptance criteria
-- [x] Browser end-to-end tests against the real stack: login, roles, receiving with audit, adding a user, empty and error states (16 tests, Chromium)
-- [x] Accessibility: axe WCAG 2.1 A/AA on every page with real data, 0 problems; keyboard-only login
-- [x] The dashboard in Docker Compose (nginx, non-root, deep links work), checked in the CI smoke test
-- [x] Browser tests run in CI on every push
-- [x] Bugs found by the browser tests fixed with tests (P6-T4-R1, R2)
+## P7-T1 acceptance criteria
+- [x] Managers and admins approve or reject pending recommendations; analysts and anonymous users are refused (403/401)
+- [x] Approving executes (simulated): reorder → open purchase order; transfer → stock moved through the ledger; failures stored with the reason, no stock change
+- [x] Decided only once (row lock; two managers at once: one acts); superseded ones cannot be decided
+- [x] Idempotency-Key required; retries return the stored decision; reused keys refused
+- [x] Audit events in the same transaction; `GET /approvals` with the decider's email
+- [x] Tests: 13 new, mutation-checked; API 415 passed
 - [ ] CI green on GitHub. NOT VERIFIED: requires a push
 
-Open findings: P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, P8), P6-T2-R1 (LOW), P6-T1-R3 (MEDIUM, P7/P8), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, P7), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
-Next action: Owner checks and pushes; when CI is green, P6 is complete and P7 (approval workflow and security) starts.
+Open findings: P7-T1-R1 (LOW), P7-T1-R2 (LOW, P7-T2), P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, P8), P6-T2-R1 (LOW), P6-T1-R3 (MEDIUM, P7-T3), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, partly fixed), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
+Next action: Owner checks and pushes; then P7-T2 (approval queue screen).
 Blockers: none.
 
 ## Roadmap progress
@@ -50,8 +51,12 @@ Blockers: none.
 | P6-T1b User accounts in the dashboard (Users page, My account) | APPROVED (CI #26 green on c0cb7db) |
 | P6-T2 Risk, recommendation, supplier, forecast and delivery-risk screens | APPROVED (CI #27 green on 2106dcb) |
 | P6-T3 Copilot view and audit timeline (approval queue moved to P7) | APPROVED (CI #28 green on 7164f10) |
-| P6-T4 Browser end-to-end tests, error/empty states, accessibility, Compose | READY_FOR_USER_CHECK |
-| P7–P9 | NOT_STARTED |
+| P6-T4 Browser end-to-end tests, error/empty states, accessibility, Compose | APPROVED (CI #29 green on 835a6d5) |
+| P7-T1 Approval workflow in the API (decide, execute, idempotency, concurrency, audit) | READY_FOR_USER_CHECK |
+| P7-T2 Approval queue screen with browser tests | NOT_STARTED |
+| P7-T3 Login token in an httpOnly cookie with CSRF protection | NOT_STARTED |
+| P7-T4 Security sweep: every write endpoint against every role; API security headers | NOT_STARTED |
+| P8–P9 | NOT_STARTED |
 
 ## History
 - 2026-10-08 to 2026-10-15: first attempt under the two-agent Claude↔Codex workflow. On 2026-10-15 the owner deleted it entirely, including Git history. See DECISIONS D-001.
@@ -89,3 +94,4 @@ Blockers: none.
 - 2026-10-17: P6-T2: five data screens in the dashboard.
 - 2026-10-17: P6-T3: copilot screen and audit log in the dashboard.
 - 2026-10-17: P6-T4: browser tests and accessibility checks in CI; the dashboard in Docker Compose.
+- 2026-10-17: P6 complete (CI #29). P7-T1: managers approve or reject recommendations; approved ones become purchase orders or stock transfers.
