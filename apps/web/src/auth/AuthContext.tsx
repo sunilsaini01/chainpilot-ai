@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { Navigate, useLocation } from "react-router-dom";
 
 import { api, getToken, login as apiLogin, logout as apiLogout } from "../api/client";
-import type { User } from "../api/types";
+import type { Role, User } from "../api/types";
 
 interface AuthState {
   user: User | null;
@@ -62,9 +62,18 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return children;
 }
 
-/** Shows its children only to admins; others see a short explanation. */
-export function RequireAdmin({ children }: { children: ReactNode }) {
+const RANK: Record<Role, number> = { analyst: 0, manager: 1, admin: 2 };
+
+/** Same rule as the API: each role can do everything the roles below it can. */
+export function atLeast(role: Role, minimum: Role): boolean {
+  return RANK[role] >= RANK[minimum];
+}
+
+/** Shows its children only to users with at least `role`; others see a short explanation. */
+export function RequireRole({ role, children }: { role: Role; children: ReactNode }) {
   const { user } = useAuth();
-  if (user?.role !== "admin") return <p role="alert">This page is for administrators.</p>;
+  if (!user || !atLeast(user.role, role)) {
+    return <p role="alert">This page is for {role === "admin" ? "administrators" : `${role}s and above`}.</p>;
+  }
   return children;
 }

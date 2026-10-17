@@ -5,6 +5,8 @@
 // injection; that hardening is planned with the approval/security phase.)
 
 import type {
+  AgentRun,
+  AuditEvent,
   DashboardKpis,
   DeliveryRiskRun,
   DeliveryRiskScore,
@@ -155,4 +157,9 @@ export const api = {
   forecasts: (params: Params) => request<ForecastRow[]>(`/forecasts${query(params)}`),
   deliveryRuns: () => request<DeliveryRiskRun[]>("/delivery-risk/runs?limit=1"),
   deliveryAlerts: (date: string) => request<DeliveryRiskScore[]>(`/delivery-risk/alerts${query({ date, limit: 200 })}`),
+
+  // The copilot calls the model provider: it can take a minute and is limited per hour.
+  investigate: (question: string) => post<AgentRun>("/agents/investigate", { question }),
+  agentRuns: (params: Params) => request<AgentRun[]>(`/agents/runs${query(params)}`),
+  auditEvents: (params: Params) => request<AuditEvent[]>(`/audit-events${query(params)}`),
 };

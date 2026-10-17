@@ -1,8 +1,10 @@
 import { Route, Routes } from "react-router-dom";
 
-import { RequireAdmin, RequireAuth } from "./auth/AuthContext";
+import { RequireAuth, RequireRole } from "./auth/AuthContext";
 import { Layout } from "./components/Layout";
 import { AccountPage } from "./pages/AccountPage";
+import { AuditPage } from "./pages/AuditPage";
+import { CopilotPage } from "./pages/CopilotPage";
 import { DeliveryRiskPage } from "./pages/DeliveryRiskPage";
 import { ForecastsPage } from "./pages/ForecastsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -29,13 +31,22 @@ export function App() {
         <Route path="suppliers" element={<SuppliersPage />} />
         <Route path="forecasts" element={<ForecastsPage />} />
         <Route path="delivery-risk" element={<DeliveryRiskPage />} />
+        <Route path="copilot" element={<CopilotPage />} />
+        <Route
+          path="audit"
+          element={
+            <RequireRole role="manager">
+              <AuditPage />
+            </RequireRole>
+          }
+        />
         <Route path="account" element={<AccountPage />} />
         <Route
           path="users"
           element={
-            <RequireAdmin>
+            <RequireRole role="admin">
               <UsersPage />
-            </RequireAdmin>
+            </RequireRole>
           }
         />
       </Route>

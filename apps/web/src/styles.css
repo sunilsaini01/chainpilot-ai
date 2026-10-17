@@ -341,3 +341,39 @@ button.secondary {
 .mono {
   font-family: ui-monospace, Consolas, monospace;
 }
+
+/* P6-T3: copilot and audit. */
+textarea {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.wide-form {
+  max-width: 760px;
+}
+
+.answer {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.citations {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.steps li {
+  margin: 4px 0;
+}
+
+details > summary {
+  cursor: pointer;
+}
+
+.details-cell {
+  max-width: 420px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}

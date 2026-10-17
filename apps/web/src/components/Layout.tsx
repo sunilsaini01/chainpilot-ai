@@ -2,19 +2,22 @@
 
 import { NavLink, Outlet } from "react-router-dom";
 
-import { useAuth } from "../auth/AuthContext";
+import type { Role } from "../api/types";
+import { atLeast, useAuth } from "../auth/AuthContext";
 import { DataBadge } from "./DataBadge";
 
-// "Users" is listed only for admins; the API checks the role on every call anyway.
-const PAGES = [
-  { to: "/", label: "Overview", adminOnly: false },
-  { to: "/risks", label: "Stock risks", adminOnly: false },
-  { to: "/recommendations", label: "Recommendations", adminOnly: false },
-  { to: "/suppliers", label: "Suppliers & orders", adminOnly: false },
-  { to: "/forecasts", label: "Forecasts", adminOnly: false },
-  { to: "/delivery-risk", label: "Delivery risk", adminOnly: false },
-  { to: "/users", label: "Users", adminOnly: true },
-  { to: "/account", label: "My account", adminOnly: false },
+// Pages each role sees; the API checks the role on every call anyway.
+const PAGES: { to: string; label: string; minRole: Role }[] = [
+  { to: "/", label: "Overview", minRole: "analyst" },
+  { to: "/risks", label: "Stock risks", minRole: "analyst" },
+  { to: "/recommendations", label: "Recommendations", minRole: "analyst" },
+  { to: "/suppliers", label: "Suppliers & orders", minRole: "analyst" },
+  { to: "/forecasts", label: "Forecasts", minRole: "analyst" },
+  { to: "/delivery-risk", label: "Delivery risk", minRole: "analyst" },
+  { to: "/copilot", label: "Ask the copilot", minRole: "analyst" },
+  { to: "/audit", label: "Audit log", minRole: "manager" },
+  { to: "/users", label: "Users", minRole: "admin" },
+  { to: "/account", label: "My account", minRole: "analyst" },
 ];
 
 export function Layout() {
@@ -35,7 +38,7 @@ export function Layout() {
         </button>
       </header>
       <nav aria-label="Main" className="nav">
-        {PAGES.filter((page) => !page.adminOnly || user?.role === "admin").map((page) => (
+        {PAGES.filter((page) => user && atLeast(user.role, page.minRole)).map((page) => (
           <NavLink key={page.to} to={page.to} end>
             {page.label}
           </NavLink>

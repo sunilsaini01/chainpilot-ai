@@ -166,3 +166,40 @@ export interface DeliveryRiskScore {
   alert: boolean;
   reasons: { feature: string; value: unknown; effect: number }[];
 }
+
+// --- P6-T3: copilot and audit ------------------------------------------------------
+
+export interface AgentAnswer {
+  answer: string;
+  citations: string[];
+  limitations: string;
+  grounded?: boolean;
+  unsupported_citations?: string[];
+}
+
+export interface AgentRun {
+  id: number;
+  question: string;
+  status: "completed" | "limit_reached" | "failed";
+  answer: AgentAnswer | null;
+  trace: Record<string, unknown>[];
+  model: string;
+  model_calls: number;
+  tool_calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  duration_ms: number;
+  error: string | null;
+  created_at: string;
+}
+
+export interface AuditEvent {
+  id: number;
+  actor_user_id: number | null;
+  actor_email: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
