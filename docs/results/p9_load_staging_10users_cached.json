@@ -1,0 +1,37 @@
+{
+  "base": "https://d3ry42c2brz8fx.cloudfront.net/api",
+  "users": 10,
+  "seconds": 60,
+  "endpoints": {
+    "/health": {
+      "requests": 390,
+      "errors": 0,
+      "server_errors": 0,
+      "requests_per_second": 6.5,
+      "p50_ms": 109,
+      "p95_ms": 301,
+      "p99_ms": 650
+    },
+    "/dashboard/kpis": {
+      "requests": 390,
+      "errors": 0,
+      "server_errors": 0,
+      "requests_per_second": 6.5,
+      "p50_ms": 710,
+      "p95_ms": 1308,
+      "p99_ms": 4575
+    },
+    "/inventory/risks?limit=50": {
+      "requests": 390,
+      "errors": 0,
+      "server_errors": 0,
+      "requests_per_second": 6.5,
+      "p50_ms": 492,
+      "p95_ms": 870,
+      "p99_ms": 1319
+    }
+  },
+  "total_requests": 1170,
+  "server_errors": 0,
+  "p95_ms": 1094
+}

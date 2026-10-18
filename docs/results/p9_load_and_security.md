@@ -18,7 +18,7 @@ Pre-registered in docs/CLAUDE_WORK_LOG.md before running. Raw numbers: `p9_load_
 |---|---|---|---|---|---|---|
 | Local Docker, 10 users, 60 s | 5,118 | 0 | 0.23 s | 0.27 s | 0.19 s | **pass** |
 | Local Docker, 25 users, 60 s | 4,968 | 0 | 0.55 s | 0.61 s | 0.49 s | — |
-| Staging, 10 users, 60 s | *after the next deploy* | | | | | |
+| Staging, 10 users, 60 s (deploy run #3, bf86180) | 1,170 | 0 | 1.09 s | 1.31 s | 0.87 s | **pass** (before the fix: 201 requests, p95 6.60 s) |
 
 What the first runs showed (before the fix):
 - **No errors at any load.** Everything slows down evenly, and nothing fails.
