@@ -4,6 +4,7 @@
 # and creating users (docs/AWS_RUNBOOK.md).
 # Usage: bash infrastructure/scripts/run-task.sh alembic upgrade head
 #        EXTRA_ENV_NAME=... EXTRA_ENV_VALUE=... bash ... python -m app.cli create-user ...
+#        TASK_CPU=1024 TASK_MEMORY=4096 bash ... (more room for big imports)
 set -euo pipefail
 
 cd "$(dirname "$0")/../terraform/staging"
@@ -21,8 +22,15 @@ if [ -n "${EXTRA_ENV_NAME:-}" ]; then
   environment=$(python -c "import json,sys; print(json.dumps([{'name': sys.argv[1], 'value': sys.argv[2]}]))" \
     "$EXTRA_ENV_NAME" "$EXTRA_ENV_VALUE")
 fi
-overrides=$(python -c "import json,sys; print(json.dumps({'containerOverrides': [{'name': 'api', 'command': json.loads(sys.argv[1]), 'environment': json.loads(sys.argv[2])}]}))" \
-  "$command_json" "$environment")
+# TASK_CPU / TASK_MEMORY: more than the API's 0.25 vCPU / 512 MB for big imports
+# (a valid Fargate pair, e.g. 1024 / 4096).
+overrides=$(python -c "
+import json, sys
+overrides = {'containerOverrides': [{'name': 'api', 'command': json.loads(sys.argv[1]),
+                                     'environment': json.loads(sys.argv[2])}]}
+if sys.argv[3]:
+    overrides['cpu'], overrides['memory'] = sys.argv[3], sys.argv[4]
+print(json.dumps(overrides))" "$command_json" "$environment" "${TASK_CPU:-}" "${TASK_MEMORY:-}")
 
 task_arn=$(MSYS_NO_PATHCONV=1 aws ecs run-task --cluster "$cluster" --task-definition "$task_definition" \
   --launch-type FARGATE \

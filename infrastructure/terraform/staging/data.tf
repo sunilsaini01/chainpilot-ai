@@ -60,3 +60,20 @@ resource "aws_secretsmanager_secret" "groq" {
   name                    = "${var.name}-groq-api-key"
   recovery_window_in_days = 0 # demo days: destroy and create again without a 7-day wait
 }
+
+# Private bucket for data files to import (forecasts, delivery-risk scores). Kept
+# apart from the dashboard bucket, which CloudFront serves publicly. The import task
+# reads the files through short-lived presigned links (docs/AWS_RUNBOOK.md), so the
+# API's task role needs no S3 permission.
+resource "aws_s3_bucket" "imports" {
+  bucket        = "${var.name}-imports-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true # demo days only: the files are uploaded again from the owner's machine
+}
+
+resource "aws_s3_bucket_public_access_block" "imports" {
+  bucket                  = aws_s3_bucket.imports.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}

@@ -38,3 +38,8 @@ output "task_network" {
     security_groups = [aws_security_group.api.id]
   }
 }
+
+output "imports_bucket" {
+  description = "Private bucket for data files to import (see docs/AWS_RUNBOOK.md)."
+  value       = aws_s3_bucket.imports.bucket
+}
