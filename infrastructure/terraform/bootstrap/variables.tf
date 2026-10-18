@@ -4,10 +4,10 @@ variable "region" {
   default     = "ap-south-1"
 }
 
-variable "github_repository" {
-  description = "owner/name of the GitHub repository allowed to deploy."
+variable "github_repository_subject" {
+  description = "The repository as GitHub's OIDC token names it: owner@owner_id/name@repo_id."
   type        = string
-  default     = "sunilsaini01/chainpilot-ai"
+  default     = "sunilsaini01@242772514/chainpilot-ai@1420463207"
 }
 
 variable "alert_email" {

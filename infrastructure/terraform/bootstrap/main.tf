@@ -78,12 +78,14 @@ data "aws_iam_policy_document" "github_assume" {
     # Only the deploy workflow's two GitHub environments can assume the role:
     # "staging-plan" (build and plan) and "staging" (apply, after the owner approves).
     # Both are limited to the main branch in the repository settings (docs/AWS_RUNBOOK.md).
+    # GitHub names the repository with its permanent ids (owner@id/name@id), seen in
+    # CloudTrail on the first run, so a re-created repository of the same name is refused.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.github_repository}:environment:staging-plan",
-        "repo:${var.github_repository}:environment:staging",
+        "repo:${var.github_repository_subject}:environment:staging-plan",
+        "repo:${var.github_repository_subject}:environment:staging",
       ]
     }
   }
