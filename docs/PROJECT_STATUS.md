@@ -61,7 +61,7 @@ Blockers: P8-T2 onwards needs the owner at their AWS account (AWS CLI install, c
 | P8-T4 Rollback drill, alarms, dashboard, destroy/pause instructions | APPROVED (alarm emails confirmed by the owner) |
 | P9-T1 Load test and security scans | APPROVED (CI #43 green on 6efa467) |
 | P9-T2 Demo setup and demo script | APPROVED (CI #44 green on a6f88df) |
-| P9-T3 Final README, architecture diagram, limitations | APPROVED (CI #45 green on 6a4eeb2; diagram rendering to confirm) |
+| P9-T3 Final README, architecture diagram, limitations | APPROVED (CI #45; the owner confirmed the diagrams render; README rewritten in plain language on request) |
 | P9-T4 Acceptance checklist with evidence | READY_FOR_USER_CHECK |
 | P9-T5 Manual walkthrough (keyboard, screen reader) and final full run | NOT_STARTED |
 

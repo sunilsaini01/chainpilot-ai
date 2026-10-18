@@ -1257,3 +1257,9 @@ Append-only. Each entry records what was actually done and actually run.
   - **Restore test** (pre-registered): the local database dumped (13,953,426 bytes) and restored into a new database `chainpilot_restore_test`. Exact row counts compared for all 20 tables: **0 mismatches** (e.g. forecasts 853,720, delivery_risk_scores 32,422, inventory_movements 662). The test database was dropped; only `chainpilot` remains.
   - A Claude Code safety check refused one of my commands because it combined `rm` with a shell script it could not inspect; it was not run. The dump file `/tmp/chainpilot.dump` inside the local postgres container was left for the owner to delete.
 - Corrected a contradiction: AWS_PLAN said "7-day backups" while Terraform sets 1 day; the doc now says 1 day, with a note.
+
+## 2026-10-18 21:20 UTC — README rewritten for non-technical readers (owner's request)
+- The owner confirmed that the README's Mermaid diagrams render as pictures on GitHub, which closes P9-T3's open check.
+- The owner asked for the README in the style of a sample project README (centered title, badges, tables, a coloured diagram), in **simple language that a reader without a technical background can follow**. Rewritten accordingly. The technical details stay in docs/REFERENCE.md, docs/ARCHITECTURE.md and docs/ACCEPTANCE.md.
+- Every number is copied from the checked sources (MODEL_RESULTS, the p9 results, the demo-data check) and checked again by script after writing. Nothing from the sample that this project lacks (screenshots, video, demo passwords) was copied.
+- After writing: a script checked the README's links and anchors (0 problems) and every number against its source (all matched; 43 operations confirmed in `test_security_sweep.py`).
