@@ -70,6 +70,11 @@ One-time GitHub settings (done by the owner): repository **variables** `AWS_DEPL
 ## Destroy (stops all costs; the data is lost, staging is demo data only)
 In `infrastructure/terraform/staging`: `terraform destroy -var "alert_email=<owner email>" -var "api_image_tag=<tag>"`. Read the list, then type `yes`. The registry images and the dashboard files are deleted too (`force_delete` / `force_destroy`). The bootstrap resources (state bucket, deploy role, budget) stay; they cost nothing or almost nothing.
 
+## Watching it
+- **Dashboard:** CloudWatch → Dashboards → `chainpilot-staging` (traffic, errors, response time, healthy tasks, API CPU and memory, database).
+- **Alarms** email the owner (5xx errors, no healthy API task, API CPU, database CPU, low database storage). To test the email path: `aws cloudwatch set-alarm-state --alarm-name chainpilot-staging-db-cpu --state-value ALARM --state-reason test`. CloudWatch sets it back to OK at the next evaluation and emails again.
+- **Logs:** CloudWatch → Log groups → `/ecs/chainpilot-staging-api` (14 days).
+
 ## Rollback
-- Automatic: the ECS deployment circuit breaker returns to the last working task definition if a new one never becomes healthy.
-- By hand: apply again with the previous image tag (`-var "api_image_tag=<previous tag>"`). ECR tags are immutable, so the old tag is exactly the old image.
+- Automatic: the ECS deployment circuit breaker returns to the last working task definition if a new one never becomes healthy. Tested 2026-10-18: an image that does not exist was rolled back after 3 failed tasks (about 13 minutes), and the site answered 77 of 77 health checks meanwhile.
+- By hand: apply again with the previous image tag (`-var "api_image_tag=<previous tag>"`). ECR tags are immutable, so the old tag is exactly the old image. Tested 2026-10-18: back to `6b5bde4` and forward to `b245fa0`, each stable in under 3 minutes, with smoke tests 12/12.

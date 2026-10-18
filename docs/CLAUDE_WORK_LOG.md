@@ -1092,3 +1092,30 @@ Append-only. Each entry records what was actually done and actually run.
 - Run #2 after the fix: "Build image and plan" succeeded and showed "Plan: 1 to add, 1 to change, 1 to destroy." Before the owner approved, I reproduced the plan locally (read-only, `-lock=false`): only the task definition image `6b5bde4` → `b245fa0` and the service update. The owner approved the `staging` environment, and "Apply, migrate, upload, smoke test" succeeded.
 - Checked afterwards: GitHub API run 2 `completed success`, both jobs success, no failed steps. ECS runs image tag `b245fa0` (1 task, rollout COMPLETED). `smoke-test.py` without login gives 12 of 12.
 - **P8-T3 complete:** staging was created by hand once, has the real demo data and the copilot, and now deploys from GitHub with plan, approval and apply.
+
+## 2026-10-18 17:20 UTC — P8-T3 approved; P8-T4 plan (written before running anything)
+- CI #39 green on 3f3cb80. P8-T3 approved.
+- P8-T4 is the spec's P8 gate ("smoke tests, rollback") plus observability. Pre-registered checks:
+  1. **Automatic rollback.** Point the service at a task definition whose image does not exist. Expected: new tasks fail; ECS's circuit breaker rolls back to the current revision by itself; the old task keeps serving throughout. Measured: `/api/health` every 10 s during the drill, with the share of 200 answers, and the time until ROLLBACK. Pass: rollback completes, the service is back on the current revision, and every health check during the drill returns 200.
+  2. **Rollback by hand to the previous version.** Apply with the previous image tag `6b5bde4` (plan must show only the image change), run the smoke tests, then apply `b245fa0` again and run the smoke tests. Pass: both deploys succeed and both smoke runs give 12 of 12.
+  3. **CloudWatch dashboard** in Terraform: load balancer requests, 5xx answers and response time; healthy hosts; API CPU and memory; database CPU, connections and free storage. Pass: the plan only adds the dashboard; the dashboard exists with all widgets.
+  4. **Alarm path:** set one alarm to ALARM by hand (`set-alarm-state`), then back to OK. Pass: the owner receives the ALARM email and the OK email.
+
+## 2026-10-18 17:45 UTC — P8-T4 results: rollback drills, dashboard, alarm path
+- Check 1, automatic rollback (as pre-registered): registered revision 4, a copy of revision 3 with the image tag `rollback-drill-does-not-exist`, and pointed the service at it at 17:21:04.
+  - New tasks failed to start (failedTasks 1, then 2, then 3).
+  - At 17:32:55 the circuit breaker rolled back to revision 3, and at 17:33:58 revision 3 was PRIMARY/COMPLETED again (775 s in all).
+  - `/api/health` every 10 s throughout: **77 of 77 returned 200**, so there was no downtime; the old task served until the new one would have been healthy.
+  - Revision 4 deregistered afterwards.
+  - **Pass.**
+- Check 3, dashboard: `aws_cloudwatch_dashboard.main` (monitoring.tf) with 7 widgets: requests, 5xx, p95 response time, healthy and unhealthy tasks, API CPU and memory, database CPU and connections, free storage.
+  - Plan: 1 to add, 0 to change, 0 to destroy, which also showed the drill left no drift. Applied.
+  - `get-dashboard` lists all 7 widgets.
+  - **Pass.**
+- Check 2, rollback by hand:
+  - Apply with `6b5bde4`: the plan showed only the image `b245fa0` → `6b5bde4`; stable after 158 s; running `6b5bde4`; smoke 12/12.
+  - Then forward with `b245fa0`: the plan showed only the image change; stable after 173 s; running `b245fa0`; smoke 12/12.
+  - **Pass.**
+- Check 4, alarm path: `set-alarm-state` on `chainpilot-staging-db-cpu` to ALARM at 17:41:23. The alarm history shows the SNS action executed at 17:41:22 (ALARM). CloudWatch evaluated the real metric about 20 s later and sent OK at 17:41:43, so my manual OK at 17:42:24 changed nothing.
+  - **Pass if the owner confirms both emails arrived.**
+- P8 gate (spec): staging deployed with Terraform; smoke tests; rollback, automatic and by hand; CloudWatch logs, alarms and dashboard; CI/CD through the deploy workflow. Everything was done with the owner's approval, demo days only.

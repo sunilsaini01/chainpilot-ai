@@ -57,8 +57,8 @@ Blockers: P8-T2 onwards needs the owner at their AWS account (AWS CLI install, c
 | P7-T4 Security sweep: every write endpoint against every role; API security headers | APPROVED (CI #33 green on 6ebb899) |
 | P8-T1 Terraform for staging, checked offline (no AWS) | APPROVED (CI #34 green on 5fe9f46) |
 | P8-T2 AWS account setup: budget, state bucket, GitHub OIDC role | APPROVED (verified in AWS) |
-| P8-T3 Plan → review → apply staging; deploy workflow; smoke tests | READY_FOR_USER_CHECK (live; demo data and copilot; deploys from GitHub with approval, run #2 green) |
-| P8-T4 Rollback drill, alarms, dashboard, destroy/pause instructions | BLOCKED (owner approval) |
+| P8-T3 Plan → review → apply staging; deploy workflow; smoke tests | APPROVED (CI #39 green on 3f3cb80) |
+| P8-T4 Rollback drill, alarms, dashboard, destroy/pause instructions | READY_FOR_USER_CHECK (rollback automatic and by hand tested, dashboard, alarm emails; owner to confirm the emails) |
 | P9 | NOT_STARTED |
 
 ## History
