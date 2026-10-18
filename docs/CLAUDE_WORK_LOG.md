@@ -1153,3 +1153,33 @@ Append-only. Each entry records what was actually done and actually run.
   - Dockerfile: `apt-get upgrade` added, and `--no-server-header` (P8-T3-R1). Checked locally: `/health` has no `server` header. A new CI smoke step checks it.
 - Results: `docs/results/p9_load_and_security.md` and `p9_load_*.json`.
 - NOT VERIFIED: CI with the new steps (not pushed); the hardened image on staging (needs a deploy through the workflow).
+
+## 2026-10-18 18:19 UTC — P9-T1-R1 fix plan: cache the risk assessment (owner chose option 1)
+- `assess_all` keeps its last results per (forecast run, service level, warehouse filter, data version) for at most 60 s, in memory per API process.
+- Data version, one query:
+  - the number of stock movements (an append-only ledger, so every committed movement changes it, even when transactions commit out of order);
+  - the number of open purchase orders and their open units (create, receive, cancel and approved reorders all change them);
+  - the newest `updated_at` and the row count of products, warehouses and suppliers (rare admin edits and demand links).
+  - The 60 s expiry covers the one theoretical gap: an admin edit committing out of order with an older timestamp.
+- Pre-registered checks:
+  - the same results with and without the cache;
+  - the second call does not reload the inputs (counted with a spy on `load_inputs`);
+  - a stock movement, receiving an order, and a product edit each make the next call recalculate;
+  - entries expire after 60 s (fake clock);
+  - the existing replenishment, dashboard and copilot tests still pass;
+  - mutation: removing each part of the version key must fail a test.
+  - Then repeat the load test: local 10 and 25 users, staging 10 users after a deploy. Target unchanged: p95 under 2 s at 10 users.
+
+## 2026-10-18 18:30 UTC — P9-T1-R1 fix: risk assessment cache (local results)
+- `app/replenishment_service.py`: `assess_all` cache with the data version (movement count, open orders and units, product, warehouse and supplier count and newest `updated_at`), a 60 s limit, 16 entries, and copies of the list for callers. `tests/conftest.py`: the cache is cleared around every test.
+- `tests/test_assessment_cache.py` (new, 8 tests): same answers cached and fresh; a second call does not reload; callers get their own list; a stock movement, receiving an order, a new open order and a product edit each recalculate; another service level is its own entry; entries expire after 60 s.
+- Mutation checks:
+  - first round: removing the movement count, the product version, the expiry, or the copy on the first call each failed a test; removing the open-order part **survived** (receiving also books movements), and so did a shared list on the cached path;
+  - added a test with a new open order and no movements, and made the list test repeat three times;
+  - second round: both mutations now fail a test, so all 6 are caught.
+- Full API suite: 505 passed (497 + 8). Ruff passes.
+- Local load test after rebuilding the API container (it also shows no `server` header now):
+  - 10 users: 5,118 requests, 0 errors, p95 0.23 s (before: 990 requests, p95 1.07 s);
+  - 25 users: 4,968 requests, 0 errors, p95 0.55 s (before: p95 2.80 s).
+  - Files: `docs/results/p9_load_local_*_cached.json`.
+- Next: deploy through the GitHub workflow, then the staging load test at 10 users (target p95 under 2 s).
