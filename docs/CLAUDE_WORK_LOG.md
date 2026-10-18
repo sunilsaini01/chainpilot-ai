@@ -1013,3 +1013,46 @@ Append-only. Each entry records what was actually done and actually run.
 - Cost: the bucket, IAM, OIDC provider and budget cost nothing to a few cents a month. Credits: $100 (plus $20 earned from the budget task).
 - P8-T1-R2 is now applied in AWS. P8-T1-R1 (VPC origin) is in code, to verify with the first staging apply.
 - Next: P8-T3. The plan needs a step zero: the API image must be in ECR before the ECS service starts. Otherwise the service starts without an image, and the circuit breaker keeps rolling back. The first apply will create the registry, the deploy workflow pushes the image, and then the service starts.
+
+## 2026-10-18 07:20 UTC — P8-T3 first staging apply: blocked by CloudFront account verification
+- Owner's approval: "yes apply staing". The CLI login had expired (`aws login` lasts about 12 hours) and was renewed; account …3157 confirmed.
+- Steps:
+  1. `terraform init` with the S3 backend.
+  2. A targeted apply of the ECR repository and its lifecycle policy (2 added).
+  3. API image built for linux/amd64 and pushed as `6b5bde4`.
+  4. Full plan saved and checked: 47 to add, 0 to change, 0 to destroy.
+  5. Apply from 07:08 to 07:19 UTC.
+- Result: 38 created, then `AccessDenied: Your account must be verified before you can add new CloudFront resources. ... contact AWS Support`. This is an AWS rule for new accounts, not a code error.
+  - Not created: the CloudFront distribution, and what depends on its address: the web bucket policy, the API task definition, the ECS service and the `api-cpu` alarm.
+  - Created and running: the database (`available`) and the internal load balancer, about $1.1 a day.
+  - Free or nearly free: the VPC origin, the CloudFront functions, the policies, the network.
+- Caught before uploading: Git Bash rewrote `VITE_API_URL=/api` to `C:/Program Files/Git/api` in the dashboard build. Rebuilt with `MSYS_NO_PATHCONV=1`; the bundle now contains `/api`.
+- New: `infrastructure/scripts/run-task.sh` runs one-off commands (migrations, seed, create-user) as ECS tasks and prints the exit code and log. Not run yet.
+- The plan and apply output files (with the account id) were deleted.
+- Next: the owner asks AWS Support to verify the account for CloudFront. Meanwhile, staging can be destroyed (`terraform destroy`) to stop the $1.1 a day, and recreated in about 15 minutes once CloudFront is allowed. Owner to choose.
+- Owner's choice (2026-10-18): **keep** the partly built staging while AWS Support verifies the account for CloudFront (about $1.1 a day from the credits). The support chat is open. After verification, only the 9 missing resources are created.
+
+## 2026-10-18 12:55 UTC — P8-T3: staging is live and passes the smoke tests
+- AWS Support (live chat) verified the account for CloudFront. A fresh plan showed 9 to add, 0 to change, 0 to destroy, and was applied: "Apply complete! Resources: 9 added". Site: https://d3ry42c2brz8fx.cloudfront.net (staging, simulated data).
+- Then:
+  - dashboard uploaded to S3 (bundles cached for a year, `index.html` no-store) and the CloudFront cache cleared;
+  - one-off ECS tasks through `infrastructure/scripts/run-task.sh`, each with exit code 0:
+    - `alembic upgrade head`: migrations 0001 to 0012;
+    - `seed`: 4 warehouses, 200 products, 210 purchase orders;
+    - `load-policies`: 6 added;
+    - `create-user admin@example.com` (admin), with a random temporary password kept only in my scratchpad, for the owner to change.
+- ECS: 1 task running, rollout `COMPLETED`, target `healthy`.
+- Smoke tests (`infrastructure/scripts/smoke-test.py`) against the live URL: **19 of 19 passed**.
+  - The dashboard and a deep link load, with the content policy, HSTS and no framing.
+  - `/api/health` and `/api/ready` (database ok) answer through CloudFront and the VPC origin, with the API's security headers.
+  - An API 404 stays JSON.
+  - Data needs a login, and a wrong password is refused.
+  - Login sets an HttpOnly, Secure, SameSite=Strict cookie, and the cookie session reads the seeded data.
+  - A change without the CSRF token gets 403; logout with it gets 204; afterwards 401.
+- My mistake: the first run reported 16 of 19, because the script read headers case-sensitively (the API sends them lower case). The raw headers were checked with curl and were correct. Fixed the script, reran: 19 of 19.
+- Also checked: the load balancer scheme is `internal` and its address resolves only to 10.20.x.x, so direct HTTP gets no connection. Bearer requests through CloudFront work (GET 200, logout 204), which closes that part of P8-T1-R5. The alarm email subscription is `PendingConfirmation`, waiting for the owner to click the email link.
+- New: `docs/AWS_RUNBOOK.md` (create or update, dashboard upload, database tasks, pause, destroy, rollback), `infrastructure/scripts/smoke-test.py`, and `/build/` in `.gitignore`.
+- Still open in P8-T3: the GitHub Actions deploy workflow. This deployment was run by hand from this machine. A small finding: API answers include `server: uvicorn`.
+- Cost: staging is running, about $1.5–2 a day, from the credits.
+- Follow-up: the owner's first login on staging hit "Too many failed login attempts". My 3 smoke-test runs each made one deliberate wrong-password login for `admin@example.com`. Together with the owner's attempts, that reached the limit of 5 per 15 minutes, so the throttle worked as designed. Fixed: the smoke test now uses a made-up email for the wrong-password check. The owner waits 15 minutes.
+- Correction (my mistake): in my handoff message I gave the owner a staging admin password that was **not** the one I had created. The real random password was in my scratchpad file, and I wrote an invented value instead of reading the file. The owner's logins failed with "Incorrect email or password". Fixed by reading the file, checking it with a real login (200, which also reset the attempt counter), and giving the owner the real value. Lesson: generated secrets are only reported by reading them back, never retyped.

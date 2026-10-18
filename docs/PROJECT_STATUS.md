@@ -1,7 +1,7 @@
 # Project Status
 
 Current phase: P8 (AWS), demo days only, ap-south-1 (D-063)
-Current task: P8-T2, AWS account setup (done and verified; next P8-T3)
+Current task: P8-T3, staging deployment (live at https://d3ry42c2brz8fx.cloudfront.net; deploy workflow to do)
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
@@ -56,8 +56,8 @@ Blockers: P8-T2 onwards needs the owner at their AWS account (AWS CLI install, c
 | P7-T3 Login token in an httpOnly cookie with CSRF protection | APPROVED (CI #32 green on 46135fe) |
 | P7-T4 Security sweep: every write endpoint against every role; API security headers | APPROVED (CI #33 green on 6ebb899) |
 | P8-T1 Terraform for staging, checked offline (no AWS) | APPROVED (CI #34 green on 5fe9f46) |
-| P8-T2 AWS account setup: budget, state bucket, GitHub OIDC role | READY_FOR_USER_CHECK (applied and verified in AWS) |
-| P8-T3 Plan → review → apply staging; deploy workflow; smoke tests | BLOCKED (owner approval) |
+| P8-T2 AWS account setup: budget, state bucket, GitHub OIDC role | APPROVED (verified in AWS) |
+| P8-T3 Plan → review → apply staging; deploy workflow; smoke tests | IN_PROGRESS (staging live, smoke tests 19/19; the GitHub deploy workflow is still to do) |
 | P8-T4 Rollback drill, alarms, dashboard, destroy/pause instructions | BLOCKED (owner approval) |
 | P9 | NOT_STARTED |
 

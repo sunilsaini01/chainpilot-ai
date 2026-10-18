@@ -706,7 +706,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Expected behavior: encrypted, or private, all the way.
 - Fix and regression test: in P8-T3, when it can be tested against AWS, either a CloudFront **VPC origin** (internal load balancer, traffic stays in AWS's network, no public IPs; no domain needed) or HTTPS to the load balancer with a certificate for a domain. Must be done before staging is used with any real login.
 - Update 2026-10-17: fixed in code while waiting for the AWS account. The load balancer is internal (private subnets, no public address), CloudFront reaches it through `aws_cloudfront_vpc_origin`, and the secret origin header and the random provider were removed (nothing outside the VPC can reach the load balancer now). `terraform validate` passes. Still to verify on the first real apply: that the VPC origin reaches the API (smoke test in P8-T3).
-- Status: FIXED IN CODE (verify in P8-T3)
+- Update 2026-10-18: verified on live staging. The load balancer is `internal`, resolves only to private addresses and cannot be reached from the internet; `/api/health` and `/api/ready` answer through CloudFront and the VPC origin (smoke test 19/19).
+- Status: VERIFIED
 
 ## P8-T1-R2 — [MEDIUM] The GitHub deploy role is broad
 - Source: Claude self-review
@@ -733,4 +734,11 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Source: Claude self-review
 - File and reproduction: `terraform validate` checks types and references, not whether AWS accepts every setting. Not checked yet: the plan against the account; that `Authorization` headers on GET requests reach the API through CloudFront (scripts use them; the dashboard uses the cookie); the API's connection to RDS uses TLS (`sslmode=prefer`) without checking the certificate.
 - Fix and regression test: P8-T3 smoke tests against the real URL; set `sslmode=verify-full` with the RDS certificate bundle if the connection proves reliable.
-- Status: OPEN (P8-T3)
+- Update 2026-10-18: the plan and apply worked; the smoke tests pass; Bearer requests through CloudFront work (GET 200, POST 204). Still open: TLS certificate verification to RDS.
+- Status: OPEN (only the RDS certificate check)
+
+## P8-T3-R1 — [LOW] API answers name the server software
+- Source: live smoke test (curl headers)
+- File and reproduction: every API answer has `server: uvicorn`. It tells an attacker which server is used (a small information leak).
+- Fix and regression test: start uvicorn with `--no-server-header` in `apps/api/Dockerfile`, and add a header test.
+- Status: OPEN (LOW)
