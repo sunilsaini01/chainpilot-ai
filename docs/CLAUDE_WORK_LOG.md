@@ -1235,3 +1235,25 @@ Append-only. Each entry records what was actually done and actually run.
   - no project file links to an old README section.
   - Added after checking the spec ("tradeoffs a student can defend"): a trade-offs section.
 - NOT VERIFIED: how the Mermaid diagrams render. There is no browser preview here; they use plain flowchart and sequence syntax, which GitHub renders. Check on GitHub after the push.
+
+## 2026-10-18 20:48 UTC — P9-T3 approved; P9-T4 plan (written before writing)
+- CI #45 green on 6a4eeb2; P9-T3 approved. The owner said "go ahead" without saying whether the README diagrams render on GitHub; that is still to confirm.
+- P9-T4: `docs/ACCEPTANCE.md` goes through every requirement of the spec (sections 1–4, 5, 6, 8 gates, 10–14). For each: **met / partly / not met / changed by decision**, with the evidence (test file, CI job, result file, decision number).
+- Gaps found while gathering evidence, all recorded as they are:
+  - not built: forecast and scoring job endpoints (SQS worker), and the `shipments`, `sales_daily` and `risk_alerts` tables;
+  - partly: no separate EDA; no cost constraint in the recommendations;
+  - changed by decision: Groq instead of Bedrock (D-052), PostgreSQL full-text instead of pgvector (D-048);
+  - a contradiction: AWS_PLAN says "7-day backups" while Terraform sets `backup_retention_period = 1` (the doc gets corrected to 1 day);
+  - missing: **backup and recovery instructions**.
+- Fix for the backup gap, with a pre-registered check: the instructions go in the runbook (local `pg_dump`/`pg_restore`; RDS automated backups and snapshots). A **real restore test** locally: dump the local database, restore it into a new database `chainpilot_restore_test` on the same server, compare the row counts of every table (must be equal), then drop the test database. The owner's database is only read.
+
+## 2026-10-18 20:53 UTC — P9-T4 results: acceptance checklist; backup and recovery tested
+- `docs/ACCEPTANCE.md` (new): every spec requirement in §1–§6, §8 and §10–§14 with a status (met, partly, not met, changed by decision) and its evidence. The README links to it.
+  - Not met: background jobs and the SQS worker (with their two endpoints); the `shipments`, `sales_daily` and `risk_alerts` tables.
+  - Partly: shipping events in the seed; cost constraints (P4-T4-R3); S3 for model artifacts; minimal IAM; the manual accessibility walkthrough (P9-T5).
+  - Changed by decision: Groq instead of Bedrock (D-052); full-text search instead of pgvector (D-048); LightGBM text model files instead of joblib (no pickle).
+- Evidence checked against the code while writing. Three claims were corrected before publishing: Parquet is not used (CSV only); the forecast leakage tests are in `test_lgbm_model.py` and `test_publish.py`; and P4-T4-R3 is about missing ordering and transfer costs. Links and anchors checked by script: 0 problems.
+- **Backup and recovery** (the spec §4.H gap): instructions added to `docs/AWS_RUNBOOK.md` (local `pg_dump`/`pg_restore`; RDS automated backups, snapshots and restore).
+  - **Restore test** (pre-registered): the local database dumped (13,953,426 bytes) and restored into a new database `chainpilot_restore_test`. Exact row counts compared for all 20 tables: **0 mismatches** (e.g. forecasts 853,720, delivery_risk_scores 32,422, inventory_movements 662). The test database was dropped; only `chainpilot` remains.
+  - A Claude Code safety check refused one of my commands because it combined `rm` with a shell script it could not inspect; it was not run. The dump file `/tmp/chainpilot.dump` inside the local postgres container was left for the owner to delete.
+- Corrected a contradiction: AWS_PLAN said "7-day backups" while Terraform sets 1 day; the doc now says 1 day, with a note.
