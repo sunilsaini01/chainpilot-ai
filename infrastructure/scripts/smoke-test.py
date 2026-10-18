@@ -1,7 +1,8 @@
 """Smoke tests against the live staging URL (P8-T3). Prints PASS or FAIL for each check.
 
-Usage: python infrastructure/scripts/smoke-test.py https://<id>.cloudfront.net <email> <password>
-Logs in once (and out again) with the given account. Read-only apart from that session.
+Usage: python infrastructure/scripts/smoke-test.py https://<id>.cloudfront.net [<email> <password>]
+With an account, also logs in once (and out again). Without one, only the checks
+that need no login run (the deploy workflow has no one's password).
 """
 
 import http.cookiejar
@@ -11,7 +12,7 @@ import urllib.error
 import urllib.request
 
 SITE = sys.argv[1].rstrip("/")
-EMAIL, PASSWORD = sys.argv[2], sys.argv[3]
+EMAIL, PASSWORD = (sys.argv[2], sys.argv[3]) if len(sys.argv) > 3 else (None, None)
 
 jar = http.cookiejar.CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
@@ -93,6 +94,13 @@ status, headers, body = call(
     {"email": "nobody@example.com", "password": "wrong-password-123"},
 )
 check("wrong password refused", status == 401, status)
+
+if EMAIL is None:
+    print()
+    print(
+        f"{sum(results)} of {len(results)} checks passed (no account: login checks skipped)"
+    )
+    sys.exit(0 if all(results) else 1)
 
 status, headers, body = call(
     "/api/auth/login", "POST", {"email": EMAIL, "password": PASSWORD}

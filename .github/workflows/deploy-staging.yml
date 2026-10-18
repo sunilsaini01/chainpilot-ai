@@ -1,0 +1,166 @@
+# Deploys the current main branch to AWS staging (docs/AWS_RUNBOOK.md, D-066).
+# Started by hand only (Actions -> Deploy staging -> Run workflow). Job 1 builds the
+# image and shows the Terraform plan; job 2 waits in the protected "staging"
+# environment until the owner approves, then applies exactly that kind of change,
+# migrates the database, uploads the dashboard and runs the smoke tests.
+# AWS access: GitHub OIDC -> the bootstrap deploy role. No AWS keys are stored.
+name: Deploy staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_copilot:
+        description: "Run the AI copilot (needs the Groq key in Secrets Manager)"
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write # to get the OIDC token for AWS
+  contents: read
+
+concurrency:
+  group: deploy-staging # never two deploys at once
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  TF_DIR: infrastructure/terraform/staging
+
+jobs:
+  plan:
+    name: Build image and plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: staging-plan
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      summary: ${{ steps.plan.outputs.summary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_version: "1.16.5"
+          terraform_wrapper: false
+
+      - name: Image tag (the commit)
+        id: tag
+        run: echo "tag=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push the API image (skipped if this commit is already there)
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          account=$(aws sts get-caller-identity --query Account --output text)
+          registry="$account.dkr.ecr.$AWS_REGION.amazonaws.com"
+          repo="$registry/chainpilot-staging-api"
+          if aws ecr describe-images --repository-name chainpilot-staging-api --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+            echo "Image $TAG already in ECR (tags are immutable)."
+            exit 0
+          fi
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          docker build --platform linux/amd64 -t "$repo:$TAG" apps/api
+          docker push "$repo:$TAG"
+
+      - name: Terraform plan
+        id: plan
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+          COPILOT: ${{ inputs.enable_copilot }}
+        run: |
+          cd "$TF_DIR"
+          terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" -backend-config="region=$AWS_REGION"
+          terraform plan -input=false -no-color -var "alert_email=$ALERT_EMAIL" -var "api_image_tag=$TAG" \
+            -var "enable_copilot=$COPILOT" > plan.txt
+          summary=$(grep -E "^(Plan:|No changes)" plan.txt | head -1)
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Terraform plan for image \`$TAG\`"
+            echo "**$summary**"
+            echo '```'
+            grep -E "^  # " plan.txt || echo "(nothing to change)"
+            echo '```'
+            echo "Approve the **staging** environment to apply this."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: Apply, migrate, upload, smoke test
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: staging # protected: waits for the owner's approval
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_version: "1.16.5"
+          terraform_wrapper: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38  # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Terraform apply (only if the plan is still the one that was approved)
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          APPROVED: ${{ needs.plan.outputs.summary }}
+          ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+          COPILOT: ${{ inputs.enable_copilot }}
+        run: |
+          cd "$TF_DIR"
+          terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" -backend-config="region=$AWS_REGION"
+          terraform plan -input=false -no-color -var "alert_email=$ALERT_EMAIL" -var "api_image_tag=$TAG" \
+            -var "enable_copilot=$COPILOT" -out=staging.tfplan > plan.txt
+          now=$(grep -E "^(Plan:|No changes)" plan.txt | head -1)
+          if [ "$now" != "$APPROVED" ]; then
+            echo "The plan changed since approval: '$APPROVED' -> '$now'. Run the workflow again."
+            exit 1
+          fi
+          terraform apply -input=false -no-color staging.tfplan
+
+      - name: Wait until the new API version is running
+        run: |
+          aws ecs wait services-stable --cluster chainpilot-staging --services chainpilot-staging-api
+          echo "API service stable."
+
+      - name: Database migrations
+        run: bash infrastructure/scripts/run-task.sh alembic upgrade head
+
+      - name: Build and upload the dashboard
+        run: |
+          cd "$TF_DIR"
+          bucket=$(terraform output -raw web_bucket)
+          distribution=$(terraform output -raw cloudfront_distribution_id)
+          cd "$GITHUB_WORKSPACE/apps/web"
+          npm ci --no-audit --no-fund
+          VITE_API_URL=/api npx vite build --outDir "$RUNNER_TEMP/web" --emptyOutDir
+          aws s3 sync "$RUNNER_TEMP/web/assets" "s3://$bucket/assets" --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp "$RUNNER_TEMP/web/index.html" "s3://$bucket/index.html" --cache-control no-store --content-type "text/html; charset=utf-8"
+          aws cloudfront create-invalidation --distribution-id "$distribution" --paths "/*" >/dev/null
+          echo "Dashboard uploaded."
+
+      - name: Smoke tests (without login, the workflow has no one's password)
+        run: |
+          site=$(terraform -chdir="$TF_DIR" output -raw site_url)
+          # CloudFront may serve the old index.html for a moment after the invalidation.
+          sleep 30
+          python infrastructure/scripts/smoke-test.py "$site"
+          echo "Staging: $site" >> "$GITHUB_STEP_SUMMARY"
