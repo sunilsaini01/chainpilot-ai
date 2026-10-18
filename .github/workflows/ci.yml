@@ -61,6 +61,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Known vulnerabilities in the locked requirements
+        run: pip-audit -r requirements.txt --progress-spinner off
+
       - name: Ruff lint
         run: ruff check .
 
@@ -128,6 +131,9 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Known vulnerabilities in dependencies (high and above)
+        run: npm audit --audit-level=high
 
   web-e2e:
     name: Browser end-to-end tests
@@ -210,6 +216,12 @@ jobs:
           echo
           curl --fail --silent --show-error http://127.0.0.1:8000/ready
           echo
+
+      - name: Check the API does not name its server software
+        run: |
+          if curl --silent --head http://127.0.0.1:8000/health | grep -i '^server:'; then
+            echo "The API sends a Server header"; exit 1
+          fi
 
       - name: Check the web dashboard is served
         # The app page itself, and a deep link (served by the same index.html).
