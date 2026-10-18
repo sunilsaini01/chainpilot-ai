@@ -1119,3 +1119,37 @@ Append-only. Each entry records what was actually done and actually run.
 - Check 4, alarm path: `set-alarm-state` on `chainpilot-staging-db-cpu` to ALARM at 17:41:23. The alarm history shows the SNS action executed at 17:41:22 (ALARM). CloudWatch evaluated the real metric about 20 s later and sent OK at 17:41:43, so my manual OK at 17:42:24 changed nothing.
   - **Pass if the owner confirms both emails arrived.**
 - P8 gate (spec): staging deployed with Terraform; smoke tests; rollback, automatic and by hand; CloudWatch logs, alarms and dashboard; CI/CD through the deploy workflow. Everything was done with the owner's approval, demo days only.
+
+## 2026-10-18 17:49 UTC — P9 plan; P9-T1 plan (written before building)
+- Owner: "keep" staging running for P9. The alarm emails are not yet confirmed by the owner (asked again). CI #40 was running on 2f3c386 when this started.
+- P9, final polish. The spec's gate: "all acceptance checks documented; portfolio demo".
+  - P9-T1: load test and security scans.
+  - P9-T2: a repeatable demo setup and a demo script.
+  - P9-T3: final README, architecture diagram, limitations.
+  - P9-T4: acceptance checklist (every spec check with its evidence).
+  - P9-T5: manual walkthrough, keyboard and screen reader (P6-T4-R3), and a final full run.
+- P9-T1 design, with pre-registered checks:
+  1. **Load test:** `infrastructure/scripts/load-test.py`, standard library only. N simulated users, each with its own logged-in cookie session, repeatedly read the overview numbers, the stock risks (first page) and `/health` for a fixed time. Reported: requests, errors, requests per second, p50, p95 and p99 latency per endpoint.
+     - Runs: the **local** Docker stack at 10 and 25 users for 60 s each, and **staging** at 10 users for 60 s. Staging has one 0.25-vCPU task, so only a short, polite run.
+     - Pre-registered pass: 0 server errors (5xx) and p95 under 2 s at 10 users on both. The 25-user local run is for information. Results are reported as measured, including a failure.
+  2. **Security scans:**
+     - `pip-audit` on the API's locked requirements (pinned, run in CI);
+     - `npm audit --audit-level=high` in the web CI job;
+     - ECR's own scan of the running image `b245fa0` (`describe-image-scan-findings`);
+     - fix P8-T3-R1: start uvicorn with `--no-server-header`, with a test.
+     - Pass: no known HIGH or CRITICAL vulnerability that has a fix available. Anything found is listed, with a decision for each.
+
+## 2026-10-18 18:01 UTC — P9-T1 results: load test and security scans
+- Load test (`infrastructure/scripts/load-test.py`, new; separate `loadtest@example.com` analyst users created locally and on staging with random passwords):
+  - local, 10 users: 990 requests, 0 errors, p95 1.07 s, **pass**;
+  - local, 25 users: 1,005 requests, 0 errors, p95 2.80 s (information);
+  - staging, 10 users: 201 requests, 0 errors, p95 **6.60 s**, which **fails** the pre-registered 2 s;
+  - single-user reference: local p95 0.16 s, staging 0.68 s. Staging's API CPU was at about 100% during the 10-user run.
+  - Cause: every request recalculates the 800-pair assessment, on a quarter of a CPU. Recorded as P9-T1-R1 (MEDIUM) with 3 fix options.
+- Security:
+  - `pip-audit` 2.10.1 (added to requirements-dev and to the CI API job): no known vulnerabilities in the API or ML requirements;
+  - `npm audit --audit-level=high`: 0 vulnerabilities (added to the CI web job);
+  - ECR scan of `b245fa0`: 3 HIGH, 9 MEDIUM, 3 LOW, all in base-image Debian packages (glibc, zlib). `apt list --upgradable` inside the image shows no fix yet, so this **passes** the rule "none with a fix available" (P9-T1-R2);
+  - Dockerfile: `apt-get upgrade` added, and `--no-server-header` (P8-T3-R1). Checked locally: `/health` has no `server` header. A new CI smoke step checks it.
+- Results: `docs/results/p9_load_and_security.md` and `p9_load_*.json`.
+- NOT VERIFIED: CI with the new steps (not pushed); the hardened image on staging (needs a deploy through the workflow).

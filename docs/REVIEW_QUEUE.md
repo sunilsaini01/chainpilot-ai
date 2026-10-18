@@ -741,4 +741,23 @@ History note: the review queue from the deleted first attempt (including Codex f
 - Source: live smoke test (curl headers)
 - File and reproduction: every API answer has `server: uvicorn`. It tells an attacker which server is used (a small information leak).
 - Fix and regression test: start uvicorn with `--no-server-header` in `apps/api/Dockerfile`, and add a header test.
-- Status: OPEN (LOW)
+- Update 2026-10-18 (P9-T1): done; checked locally (no `server` header on `/health`) and by a new step in the CI Docker smoke test.
+- Status: VERIFIED (locally; on staging after the next deploy)
+
+## P9-T1-R1 — [MEDIUM] The data endpoints are slow under load, on staging in particular
+- Source: P9-T1 load test (docs/results/p9_load_and_security.md)
+- File and reproduction: `GET /dashboard/kpis` and `GET /inventory/risks` recalculate the assessment of all 800 product-warehouse pairs on every request (`app/replenishment_service.py`, `assess_all`). With 10 users, staging's p95 is 6.6 s (target 2 s) and the API task's CPU is at about 100%. Locally the throughput is capped at about 17 requests per second. No errors.
+- Expected behavior: under 2 s at 10 users.
+- Fix and regression test, options:
+  1. **Cache the assessment.** Keep the last result keyed by the forecast run, the newest stock movement id, the newest purchase-order change and the service level. Any stock or order change makes a new key, so answers are never stale. Test: same answer as before, second call fast, and a stock movement changes it.
+  2. More CPU for the staging task (0.5 vCPU: about +$9 a month if it ran all the time).
+  3. More Uvicorn workers (needs more memory too).
+
+  Recommended: option 1. It is code only, free, and helps locally too.
+- Status: OPEN (owner to choose)
+
+## P9-T1-R2 — [LOW] Base-image vulnerabilities without a published fix
+- Source: ECR scan of `b245fa0`
+- File and reproduction: 3 HIGH and 9 MEDIUM in glibc and zlib of `python:3.11-slim` (Debian 13). Debian has no fixed versions yet.
+- Fix and regression test: the Dockerfile now runs `apt-get upgrade`; rebuild and redeploy when fixes appear (ECR scans each pushed image). Before production, also consider a smaller base image (e.g. distroless).
+- Status: OPEN (waiting for Debian)
