@@ -1184,3 +1184,29 @@ Append-only. Each entry records what was actually done and actually run.
   - Files: `docs/results/p9_load_local_*_cached.json`.
 - Next: deploy through the GitHub workflow, then the staging load test at 10 users (target p95 under 2 s).
 - 2026-10-18 19:10 UTC: CI #42 and deploy run #3 green on bf86180. Staging has no `server` header any more, so the new image is running. Staging load test, 10 users, 60 s: 1,170 requests, 0 errors, p95 1.09 s, **pass** (before: 201 requests, p95 6.60 s; `docs/results/p9_load_staging_10users_cached.json`). P9-T1-R1 and P8-T3-R1 verified. **P9-T1 complete.** Not checked: staging CPU during this run (the AWS CLI login had expired; the load test itself needs no AWS access).
+
+## 2026-10-18 19:17 UTC — P8 complete, P9-T1 approved; P9-T2 plan (written before building)
+- The owner confirmed both alarm test emails arrived (ALARM and OK), so check 4 of P8-T4 passes. CI #43 is green on 6efa467. **P8-T4 approved, so P8 (AWS) is complete. P9-T1 approved.**
+- P9-T2 goal: anyone can set up the same demo and walk through it the same way.
+  1. `scripts/demo-setup.sh` (bash; Git Bash on Windows): on a running local Compose stack, it
+     - runs the migrations;
+     - loads the seed only if there is no SYN- data yet;
+     - imports the real M5 forecasts and Olist scores from `data/processed/` if they exist, and otherwise the synthetic test forecasts (labelled as such);
+     - links the demand profiles and loads the policies;
+     - creates three demo users (admin, manager, analyst) with fresh random passwords, printed once, skipping users that already exist.
+     - Safe to run twice.
+  2. `docs/DEMO.md`: a 10-minute demo story with what to click, what to say and the expected numbers, the honest data labels, and what to do if the copilot hits Groq's limit.
+- Pre-registered checks: on a **throwaway** Compose project (its own ports and volume), the script runs from scratch with exit 0; a second run also exits 0 and creates nothing twice. Afterwards the API reports 200 products, 800 assessed pairs and 6 policies, all three demo users can log in with the printed passwords, and `make new recommendations` works. The throwaway project is then removed.
+
+## 2026-10-18 19:27 UTC — P9-T2 results: demo setup script and demo walkthrough
+- New `scripts/demo-setup.sh`. It runs the migrations, the seed (skipped if there), the M5 forecasts and Olist scores from `data/processed/` (the synthetic test forecasts otherwise), the demand links and the policies, then creates three demo users with random passwords printed once (skipped if they exist). `DEMO_COMPOSE_ARGS` allows a throwaway project.
+- New `docs/DEMO.md`: a 10-minute walkthrough (who to log in as, what to show, what to say, the expected numbers), what to do when something goes wrong, and the honest limitations. README: a "Try the demo" section.
+- Checks, as pre-registered, on a throwaway Compose project (`chainpilot-demo`, ports 5437/8003/8083):
+  - run 1 exit 0 (seed, 853,720 forecast rows, 32,422 scores, 200 products linked, 6 policies, 3 users);
+  - run 2 exit 0 with everything "already done" or "already exists";
+  - all 3 demo users log in with the printed passwords and the right roles;
+  - 200 products; 800 pairs assessed, 0 unassessed (146 / 24 / 88 / 542); 6 policies;
+  - the manager's "make recommendations" gives 201 with 174 proposals; the analyst gets 403.
+  - Project, volume and images removed afterwards; the owner's own stack untouched. The output file with the test passwords deleted.
+- My mistakes fixed along the way: the result line showed Docker's "Container … Created" noise; the new filter then made the script exit 1 when a step printed nothing (`grep` with `pipefail`). Fixed with `|| true`; a third run exited 0. (An `exit 141` was my own `| head` in the test command, not the script.)
+- Checked against the code: the claims in DEMO.md (the copilot limit message, the "Only managers and administrators" text, 174 = 150 transfers + 24 reorders).

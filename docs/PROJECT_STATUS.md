@@ -58,9 +58,9 @@ Blockers: P8-T2 onwards needs the owner at their AWS account (AWS CLI install, c
 | P8-T1 Terraform for staging, checked offline (no AWS) | APPROVED (CI #34 green on 5fe9f46) |
 | P8-T2 AWS account setup: budget, state bucket, GitHub OIDC role | APPROVED (verified in AWS) |
 | P8-T3 Plan → review → apply staging; deploy workflow; smoke tests | APPROVED (CI #39 green on 3f3cb80) |
-| P8-T4 Rollback drill, alarms, dashboard, destroy/pause instructions | READY_FOR_USER_CHECK (rollback automatic and by hand tested, dashboard, alarm emails; owner to confirm the emails) |
-| P9-T1 Load test and security scans | READY_FOR_USER_CHECK (load targets met locally and on staging after the cache; scans pass) |
-| P9-T2 Demo setup and demo script | NOT_STARTED |
+| P8-T4 Rollback drill, alarms, dashboard, destroy/pause instructions | APPROVED (alarm emails confirmed by the owner) |
+| P9-T1 Load test and security scans | APPROVED (CI #43 green on 6efa467) |
+| P9-T2 Demo setup and demo script | READY_FOR_USER_CHECK (setup script tested from scratch and repeated on a throwaway stack) |
 | P9-T3 Final README, architecture diagram, limitations | NOT_STARTED |
 | P9-T4 Acceptance checklist with evidence | NOT_STARTED |
 | P9-T5 Manual walkthrough (keyboard, screen reader) and final full run | NOT_STARTED |
