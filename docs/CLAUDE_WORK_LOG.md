@@ -1056,3 +1056,20 @@ Append-only. Each entry records what was actually done and actually run.
 - Cost: staging is running, about $1.5–2 a day, from the credits.
 - Follow-up: the owner's first login on staging hit "Too many failed login attempts". My 3 smoke-test runs each made one deliberate wrong-password login for `admin@example.com`. Together with the owner's attempts, that reached the limit of 5 per 15 minutes, so the throttle worked as designed. Fixed: the smoke test now uses a made-up email for the wrong-password check. The owner waits 15 minutes.
 - Correction (my mistake): in my handoff message I gave the owner a staging admin password that was **not** the one I had created. The real random password was in my scratchpad file, and I wrote an invented value instead of reading the file. The owner's logins failed with "Incorrect email or password". Fixed by reading the file, checking it with a real login (200, which also reset the attempt counter), and giving the owner the real value. Lesson: generated secrets are only reported by reading them back, never retyped.
+- The owner confirmed the alarm email: the SNS subscription now has a full ARN instead of `PendingConfirmation`, so alarms reach the owner.
+- The owner logged in to staging with the real temporary password and changed it under My account; the dashboard works on AWS. Owner's choice: **keep** staging running for now (about $1.5–2 a day from the credits; the budget alert is active).
+
+## 2026-10-18 15:10 UTC — P8-T3: staging gets the real demo data and the copilot (owner: "load data and copilot")
+- The owner checked the live screens. Stock risks, Approval queue, Forecasts, Delivery risk and the Copilot showed their correct empty or switched-off messages, because staging had only the seed. Nothing was broken.
+- Data:
+  - New private bucket `chainpilot-staging-imports-…` (plan: 2 to add); the data does not go in the dashboard bucket, which CloudFront serves publicly.
+  - Uploaded the local M5 forecast folder (82 MB) and the Olist scoring folder (10.3 MB).
+  - New `infrastructure/scripts/import-from-s3.sh`: one-hour presigned links, a one-off task with 1 vCPU and 4 GB, then the CLI import. `run-task.sh` gained `TASK_CPU` and `TASK_MEMORY`.
+  - Results, each with exit code 0: forecast run 1 with 853,720 rows (2016-04-25 to 2016-05-22); delivery-risk run 1 with 32,422 orders (2018-04-02 to 2018-08-31); `link-demand-profiles` linked 200 products and 4 warehouses.
+  - Checked inside staging: 800 pairs assessed, 0 unassessed; 146 out of stock, 24 at risk, 88 ok, 542 excess. These are exactly the local numbers.
+- Copilot:
+  - Created the empty secret on its own first (targeted apply, 1 to add), so the running API was not touched. The owner put the key in.
+  - The first test gave Groq 401 "Invalid API Key". I checked the stored value's format without printing it: 76 characters with braces and quotes, so it had been stored as Key/value JSON. The owner re-saved it as Plaintext; the second check gave 56 characters, `gsk_` prefix, identical to the local `.env` key.
+  - Enabling it planned 1 add, 2 change, 1 destroy (the task definition replaced, the secrets permission and the service updated), and was applied: revision 2, rollout COMPLETED. A forced new deployment made the API read the corrected secret.
+  - Test question through a one-off task ("Who is allowed to approve a purchase order?"): completed, grounded, citations `policy:approvals#who-approves` and `#what-needs-approval`, 5 model calls, 1 tool call, 2.3 s. This was one Groq call, within the owner's earlier permission for copilot use. `/api/ready` reports the database ok afterwards.
+- The runbook gained the demo-data and copilot steps, including the Plaintext-not-Key/value pitfall.
