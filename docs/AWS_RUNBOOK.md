@@ -44,7 +44,18 @@ All commands run from the repository root in PowerShell or Git Bash, after `aws 
      bash infrastructure/scripts/run-task.sh python -m app.cli create-user --email admin@example.com --full-name "<name>" --role admin
    ```
    The temporary password is visible in the ECS task details for a while: change it under **My account** after the first login.
-5. **Smoke test:** `python infrastructure/scripts/smoke-test.py <site_url> admin@example.com '<password>'` must report all checks passed.
+5. **Demo data** (forecasts and delivery-risk scores from the owner's machine; staging does not train models):
+   ```bash
+   B=$(terraform -chdir=infrastructure/terraform/staging output -raw imports_bucket)
+   aws s3 sync data/processed/forecasts/m5_lightgbm_weekly_2016-04-24 s3://$B/forecasts/m5_lightgbm_weekly_2016-04-24
+   aws s3 sync data/processed/delivery_risk/olist_logistic_2018-04-02_2018-08-31 s3://$B/delivery_risk/olist_logistic_2018-04-02_2018-08-31
+   bash infrastructure/scripts/import-from-s3.sh import-forecasts forecasts/m5_lightgbm_weekly_2016-04-24
+   bash infrastructure/scripts/import-from-s3.sh import-delivery-risk delivery_risk/olist_logistic_2018-04-02_2018-08-31
+   bash infrastructure/scripts/run-task.sh python -m app.cli link-demand-profiles
+   ```
+   The imports bucket is private (not the dashboard bucket, which CloudFront serves). The import task gets 1 vCPU and 4 GB for the 850,000-row forecast file.
+6. **Copilot (optional):** apply once with `-var "enable_copilot=true" -target=aws_secretsmanager_secret.groq` to create the empty secret. The owner then puts the Groq key into `chainpilot-staging-groq-api-key` (Secrets Manager → **Plaintext** tab, only the `gsk_…` value; **not** Key/value, which stores JSON and makes Groq answer "Invalid API Key"). Then apply again with `enable_copilot=true`. The API reads the secret when it starts: after changing the value, run `aws ecs update-service --cluster chainpilot-staging --service chainpilot-staging-api --force-new-deployment`.
+7. **Smoke test:** `python infrastructure/scripts/smoke-test.py <site_url> admin@example.com '<password>'` must report all checks passed.
 
 ## Pause (keeps the data, still about $1/day)
 `terraform apply -var "api_desired_count=0" ...` stops the API. The database and load balancer keep running. For a longer break, destroy instead.
