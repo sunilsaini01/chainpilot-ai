@@ -101,6 +101,7 @@ Everything open, with its severity, is in [docs/REVIEW_QUEUE.md](docs/REVIEW_QUE
 |---|---|
 | [docs/DEMO.md](docs/DEMO.md) | The 10-minute walkthrough |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Diagrams and request flows |
+| [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) | Every requirement of the spec: met, partly, not met or changed, with evidence |
 | [docs/REFERENCE.md](docs/REFERENCE.md) | Every API, setting and setup detail |
 | [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md) | All model, replay and copilot results |
 | [docs/DATASETS.md](docs/DATASETS.md) | M5 and Olist: where they come from, how they are prepared |
