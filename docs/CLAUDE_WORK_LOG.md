@@ -1083,3 +1083,12 @@ Append-only. Each entry records what was actually done and actually run.
 - `infrastructure/scripts/smoke-test.py`: the login checks are now optional; without an account it runs 12 checks, and staging passed 12 of 12.
 - Checks: the YAML parses (2 jobs, `workflow_dispatch` only). My mistake: a step name with a colon broke the YAML; renamed. Another `\n` escape broke a patch script again; fixed with the editor. NOT VERIFIED: an actual workflow run. It needs the owner's GitHub settings (3 variables, 2 environments) first.
 - Decision D-066. The runbook gained "Deploy from GitHub".
+
+## 2026-10-18 15:54 UTC — First "Deploy staging" run: AWS refused GitHub's sign-in; fixed
+- The owner set the 3 repository variables and the 2 environments; checked from outside: `staging` has a branch policy and required reviewers, `staging-plan` has a branch policy. CI #38 green on b245fa0.
+- Run #1 (and a rerun) failed at the first AWS step: "Not authorized to perform sts:AssumeRoleWithWebIdentity".
+- Diagnosis from CloudTrail (read-only, ap-south-1): GitHub's token names the repository with its permanent ids, `repo:sunilsaini01@242772514/chainpilot-ai@1420463207:environment:staging-plan`. The trust policy expected `repo:sunilsaini01/chainpilot-ai:environment:...`. My assumption about the token format was wrong.
+- Fix: a new bootstrap variable `github_repository_subject` with the id form, and the unused `github_repository` removed. The id form is also safer, because a re-created repository with the same name gets new ids and is refused. Plan: 0 to add, 1 to change, 0 to destroy; applied; a fresh plan shows no changes.
+- Run #2 after the fix: "Build image and plan" succeeded and showed "Plan: 1 to add, 1 to change, 1 to destroy." Before the owner approved, I reproduced the plan locally (read-only, `-lock=false`): only the task definition image `6b5bde4` → `b245fa0` and the service update. The owner approved the `staging` environment, and "Apply, migrate, upload, smoke test" succeeded.
+- Checked afterwards: GitHub API run 2 `completed success`, both jobs success, no failed steps. ECS runs image tag `b245fa0` (1 task, rollout COMPLETED). `smoke-test.py` without login gives 12 of 12.
+- **P8-T3 complete:** staging was created by hand once, has the real demo data and the copilot, and now deploys from GitHub with plan, approval and apply.
