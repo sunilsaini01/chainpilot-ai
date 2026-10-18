@@ -1,0 +1,37 @@
+{
+  "base": "http://127.0.0.1:8000",
+  "users": 10,
+  "seconds": 60,
+  "endpoints": {
+    "/health": {
+      "requests": 330,
+      "errors": 0,
+      "server_errors": 0,
+      "requests_per_second": 5.5,
+      "p50_ms": 56,
+      "p95_ms": 185,
+      "p99_ms": 289
+    },
+    "/dashboard/kpis": {
+      "requests": 330,
+      "errors": 0,
+      "server_errors": 0,
+      "requests_per_second": 5.5,
+      "p50_ms": 955,
+      "p95_ms": 1183,
+      "p99_ms": 1943
+    },
+    "/inventory/risks?limit=50": {
+      "requests": 330,
+      "errors": 0,
+      "server_errors": 0,
+      "requests_per_second": 5.5,
+      "p50_ms": 805,
+      "p95_ms": 945,
+      "p99_ms": 990
+    }
+  },
+  "total_requests": 990,
+  "server_errors": 0,
+  "p95_ms": 1071
+}
