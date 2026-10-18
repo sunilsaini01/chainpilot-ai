@@ -1,112 +1,222 @@
+<div align="center">
+
 # ChainPilot AI
 
-A supply-chain control tower for retail operations, built as a portfolio project: demand forecasts, stock-out and delivery risk, reorder and transfer recommendations from a tested inventory formula, an AI copilot that answers with checked citations, and **human-approved, simulated** actions with a full audit trail. It runs locally with Docker Compose and on AWS (Terraform, deployed from GitHub with an approval step).
+**An AI-assisted control room for a store chain's stock and suppliers**
 
-> **Synthetic and public data only.** The operational data (warehouses, products, stock, suppliers, orders) is **simulated** and labelled "Simulated data" everywhere. Demand comes from the public **M5 (Walmart)** dataset, borrowed for the simulated products. Delivery risk is a separate experiment on public **Olist** orders from 2018. ChainPilot has no access to any real company's supply chain.
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-Dashboard-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white)](https://postgresql.org)
+[![LightGBM](https://img.shields.io/badge/LightGBM-Forecasts-9ACD32?style=flat-square)](https://lightgbm.readthedocs.io)
+[![LangGraph](https://img.shields.io/badge/LangGraph-AI%20assistant-1C3A5E?style=flat-square)](https://langchain-ai.github.io/langgraph/)
+[![AWS](https://img.shields.io/badge/AWS-Deployed%20with%20Terraform-FF9900?style=flat-square&logo=amazonwebservices&logoColor=white)](https://aws.amazon.com)
 
-## Try the demo
+*Predict what will sell → spot what is running out → suggest what to move or order → **a person approves** → everything is recorded.*
 
-```bash
-cp .env.example .env              # set POSTGRES_PASSWORD (and GROQ_API_KEY/GROQ_MODEL for the copilot)
-docker compose up -d --build
-bash scripts/demo-setup.sh        # loads the demo data and prints three demo logins once
-```
-Then open http://127.0.0.1:8080 and follow the 10-minute walkthrough in [docs/DEMO.md](docs/DEMO.md). The forecasts and risk scores come from the ML pipelines (see [docs/DATASETS.md](docs/DATASETS.md)); without them the script uses small synthetic test forecasts.
+</div>
 
-## How it fits together
+---
+
+## The problem, in plain words
+
+Picture a store chain with **4 warehouses and 200 products**. Every morning someone has to answer the same questions:
+
+- *Which products are about to run out, and where?*
+- *Can another warehouse spare some, or do we need to order from a supplier?*
+- *Which suppliers keep delivering late?*
+- *Which deliveries are likely to arrive late?*
+
+Doing this by hand in spreadsheets is slow and easy to get wrong. **ChainPilot AI does the checking and the arithmetic, explains its reasons, and suggests actions. A manager still has the final say:** nothing is ordered or moved until a manager approves it.
+
+> **Important: no real company data.** The warehouses, products, stock and suppliers are **made up** (every screen shows a "Simulated data" label). The sales history used to learn demand comes from a public dataset of **Walmart** sales (M5). The delivery-delay model is trained on public orders from **Olist**, a Brazilian online marketplace. ChainPilot has no access to any real company's systems.
+
+---
+
+## What a morning looks like
+
+1. The manager opens the dashboard. **The overview** shows that 146 product-and-warehouse combinations are out of stock and 24 more are close to running out.
+2. They click **Make new recommendations**. ChainPilot proposes **174 actions**: 150 times *"move spare stock from another warehouse"* and 24 times *"order from the supplier"*. Each one shows the numbers it is based on.
+3. They ask the **AI assistant**: *"Which suppliers are unreliable, and which of their orders are overdue?"* It answers in plain sentences, **with sources**, marked "Verified" when every source was checked.
+4. They **approve** a transfer and an order, and **reject** one with a reason. Approving places the (simulated) purchase order or moves the stock at once.
+5. The **audit log** shows who approved what, and when. Nothing can be quietly changed afterwards.
+
+A step-by-step 10-minute demo: [docs/DEMO.md](docs/DEMO.md).
+
+---
+
+## How it works
 
 ```mermaid
 flowchart LR
-  browser["Browser"] --> web["Dashboard<br/>React + TypeScript"]
-  web -->|"cookie session + CSRF"| api["API<br/>FastAPI: rules, roles, audit"]
-  api --> db[("PostgreSQL")]
-  api -->|"read-only tools"| copilot["AI copilot<br/>LangGraph + Groq"]
-  ml["ML pipelines (offline)<br/>forecasts, delivery risk"] -->|"validated files"| api
+    classDef person fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    classDef screen fill:#d1fae5,stroke:#059669,stroke-width:2px,color:#064e3b
+    classDef brain fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95
+    classDef data fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0c4a6e
+    classDef action fill:#fee2e2,stroke:#dc2626,stroke-width:2px,color:#7f1d1d
+
+    Manager["Manager or analyst"]:::person --> Dashboard["Dashboard<br>(web page)"]:::screen
+    Dashboard --> Server["ChainPilot server<br>checks who you are<br>and what you may do"]:::brain
+    Server --> Database[("Database<br>stock, orders, suppliers")]:::data
+
+    Forecast["Demand forecasts<br>(learned from Walmart sales)"]:::data --> Server
+    Risk["Delivery-delay scores<br>(learned from Olist orders)"]:::data --> Server
+
+    Server --> Checker["Stock checker<br>what runs out, what to do"]:::brain
+    Server --> Assistant["AI assistant<br>answers with sources,<br>can only read"]:::brain
+    Checker --> Queue["Approval queue"]:::action
+    Queue -->|"a manager approves"| Done["Order placed or stock moved<br>+ written to the audit log"]:::action
 ```
 
-Details, the AWS diagram and two request flows: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+More detailed diagrams for technical readers: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## What it does
+---
 
-| Area | What you get | How it is checked |
-|---|---|---|
-| **Demand forecasting** | Weekly LightGBM forecasts for 28 days for every M5 item and store, with an 80% range | Rolling-origin backtests against seasonal-naive and moving-average baselines, then one check on 28 days never used before |
-| **Delivery-delay risk** | Each dispatched Olist order gets a high / medium / low tier with its top 3 reasons | Time-based split, no information from after dispatch; calibrated; tiers checked against real outcomes |
-| **Inventory decisions** | Stock-out risk for every product at every warehouse; transfers of spare stock first, then supplier orders (minimum order, pack size, warehouse capacity) | Deterministic formula with unit tests; replayed on real M5 sales against a simple reorder rule |
-| **AI copilot** | Questions in plain language; a supervisor and four specialist agents answer from read-only tools, citing records and policies | Every citation is checked against what the tools returned; a 14-case evaluation including prompt injection |
-| **Approvals** | Managers approve or reject; approving places a purchase order or moves stock (simulated) | Row locks, idempotency keys, one transaction with the audit event; tests including two managers at once |
-| **Dashboard** | Overview, stock risks, approval queue, suppliers and orders, forecasts, delivery risk, copilot, audit log, users | 54 unit tests, 25 browser tests on the real API, automatic accessibility checks (WCAG 2.1 A/AA) |
+<div align="center">
 
-## Results (measured, not claimed)
+## The five parts
 
-| What | Result | Source |
-|---|---|---|
-| Forecast error on 28 unseen days (WAPE, 28-day horizon) | **0.717** weekly LightGBM vs 0.739 moving average; 80% range covers 79.6–80.6% of real sales. Watch-out: it under-forecasts by 5–8% | [MODEL_RESULTS.md](docs/MODEL_RESULTS.md#final-check-on-untouched-data-the-published-forecasts-p2-t4) |
-| Delivery-risk tiers (Apr–Aug 2018, 32,422 orders) | The "high" tier (10.2% of orders) was late **19.9%** of the time vs **2.0%** for "low", and held **42.5%** of all late orders. Four of five alerts were still on time | [MODEL_RESULTS.md](docs/MODEL_RESULTS.md#delivery-delay-risk-published-scores-and-tier-check-p3-t3) |
-| Inventory replay on real M5 sales | With LightGBM forecasts the policy needed **17–34% less stock** for the same fill rate | [MODEL_RESULTS.md](docs/MODEL_RESULTS.md#inventory-policy-replay-on-real-demand-p4-t2) |
-| Copilot evaluation (14 cases, thresholds fixed in advance) | Run 1: 12 of 14, gate **passed**. Run 2: 12 of 14, gate **not passed** (two safety-text checks) | [MODEL_RESULTS.md](docs/MODEL_RESULTS.md#ai-copilot-first-real-evaluation-p5-t4) |
-| Load (AWS staging, 10 users, 60 s) | 1,170 requests, **0 errors**, p95 **1.09 s** (after caching the risk assessment; 6.60 s before) | [p9_load_and_security.md](docs/results/p9_load_and_security.md) |
+| Part | What it does, in plain words | How we know it works |
+|:---:|:---|:---|
+| **Demand forecaster** | Learns from past Walmart sales how much of each item sells per day, and predicts the next 28 days, with a "likely range" | Tested on 28 days of real sales it had never seen |
+| **Stock checker** | For every product in every warehouse: *"Will this run out before a new delivery could arrive?"* Then it suggests moving spare stock first, and ordering only what is still missing | A fixed, written-down formula with tests; replayed on real sales history |
+| **Delivery-delay scorer** | Gives each shipped order a *high / medium / low* risk of arriving late, with the top 3 reasons | Checked against what really happened to 32,422 orders |
+| **AI assistant** | Answers questions in plain language using only ChainPilot's own data and company rules, and shows its sources | Every source is checked automatically; 14 test questions, including tricks meant to make it misbehave |
+| **Approval desk** | Managers approve or reject each suggestion; approved ones are carried out and recorded | Tested so that two managers clicking at the same moment cannot place the same order twice |
 
-## Engineering and security
+</div>
 
-- **Roles on the server:** analyst < manager < admin, checked by the API on every endpoint. A test checks all 43 endpoints against no login, the role just below and a missing CSRF token, and fails if a new endpoint is not classified.
-- **Sessions:** httpOnly, Secure, SameSite=Strict cookie plus a CSRF token for changes; passwords hashed with scrypt; login rate limits; only token hashes stored.
-- **Stock is never overwritten:** every change is a row in an append-only ledger with the actor; warehouse capacity is enforced.
-- **Copilot safety:** read-only database transactions, fixed tools, checked citations, hourly limits, prompt-injection tests; it cannot approve, order or change anything.
-- **Headers:** a strict content policy on the dashboard and the API, HSTS on AWS, no server banner.
-- **Supply chain:** exact versions at least two weeks old, lock files, GitHub Actions pinned by commit; `pip-audit` and `npm audit` in CI; ECR scans every image.
-- **Honest process:** evaluation plans written down before running ([work log](docs/CLAUDE_WORK_LOG.md)), tests mutation-checked (deliberately broken code must fail a test), findings tracked in the [review queue](docs/REVIEW_QUEUE.md).
+---
 
-## Trade-offs (and why)
+## What the screens show
 
-- **A formula for stock decisions, not a model.** Reorder points and safety stock come from a textbook formula fed by the forecast and its range. It is explainable line by line and testable. The replay on real sales checked that it beats a simple rule.
-- **ML runs offline and hands over files.** Training never runs inside the API. Forecasts and scores arrive as checked files with a manifest, so a bad model run cannot break the app (D-039).
-- **Approve and execute in one request.** No "approved but not yet done" state that a worker would have to finish; a failed execution is stored with its reason (D-059).
-- **PostgreSQL for everything,** including policy search (full-text) and rate limits: no Redis, no vector database, no queue. One system to run and back up (D-048).
-- **Monoliths over microservices; no Kafka, no Kubernetes.** The workload does not need them; ECS Fargate is enough on AWS.
-- **A small, cheap staging.** One task, a single-AZ database, no NAT gateway, destroyed after demo days. Fine for a demo, not for production (D-063, D-064).
+| Screen | What you see |
+|:---|:---|
+| **Overview** | The headline numbers: stock, risks, open orders, supplier ratings |
+| **Stock risks** | Every product at every warehouse, most urgent first, with how many days of stock are left |
+| **Approval queue** | The suggested transfers and orders, each with Approve and Reject buttons (managers only) |
+| **Suppliers & orders** | How often each supplier delivered on time, and which orders are overdue |
+| **Forecasts** | A chart of expected sales for the next 28 days, with the likely range |
+| **Delivery risk** | Each day's shipments that are most likely to arrive late, and why |
+| **Ask the copilot** | Questions in plain language, answers with sources |
+| **Audit log** | Who did what, and when (managers and admins) |
+| **Users** | Adding people and setting their role (admins only) |
 
-More: [docs/DECISIONS.md](docs/DECISIONS.md) (all numbered decisions) and [the reference](docs/REFERENCE.md#design-choices-a-student-can-defend).
+There are three kinds of user: **analysts** can look, **managers** can also approve, and **admins** can also manage users.
 
-## Tests and CI
+---
 
-| Suite | Tests |
-|---|---|
-| API (pytest, real PostgreSQL) | 505 |
-| ML pipelines (pytest, synthetic M5-format fixtures) | 131 |
-| Dashboard unit tests (Vitest) | 54 |
-| Browser tests on a throwaway full stack (Playwright, Chromium) | 25 |
+<div align="center">
 
-Every push runs six CI jobs ([ci.yml](.github/workflows/ci.yml)): API, ML, web, browser tests, Terraform checks, and a Docker smoke test. Deploying to AWS is a separate, manual workflow with an approval step ([deploy-staging.yml](.github/workflows/deploy-staging.yml)).
+## Results (measured, not guessed)
 
-## AWS
+| Question | Answer | Details |
+|:---|:---|:---:|
+| Are the forecasts better than a simple average? | Yes, a little. On 28 days of sales it had never seen, its errors were **about 3% smaller** than "average of the last 4 weeks". The likely range held the real sales **80% of the time**, as intended. Daily sales of single items are very unpredictable, so every method makes large errors; that is why the stock formula adds a safety buffer. It also tends to guess **5–8% too low**. | [results](docs/MODEL_RESULTS.md#final-check-on-untouched-data-the-published-forecasts-p2-t4) |
+| Does the delivery-risk score help? | Yes. Orders it marked **high risk were late 1 time in 5 (19.9%)**; low-risk ones only 1 time in 50 (2.0%). The 10% of orders it flags contain **42.5% of all late deliveries**. Most flagged orders still arrive on time: a flag means "keep an eye on this". | [results](docs/MODEL_RESULTS.md#delivery-delay-risk-published-scores-and-tier-check-p3-t3) |
+| Does better forecasting save stock? | Replayed on real Walmart sales: with the forecasts, the stock formula needed **17–34% less stock** to meet the same share of customer demand. | [results](docs/MODEL_RESULTS.md#inventory-policy-replay-on-real-demand-p4-t2) |
+| Does the AI assistant behave? | It passed **12 of 14** test questions, twice. The pass mark was set before testing: the first run met it; the second fell short on 2 checks of safe wording. Both runs are reported. | [results](docs/MODEL_RESULTS.md#ai-copilot-first-real-evaluation-p5-t4) |
+| Is it fast enough? | Online, with 10 people using it at once for a minute: **1,170 requests, no errors**, and 95% of answers within **1.1 seconds**. | [results](docs/results/p9_load_and_security.md) |
 
-Terraform in [infrastructure/terraform/](infrastructure/terraform/): CloudFront in front of S3 (dashboard) and a **private** load balancer (API, through a VPC origin), ECS Fargate, RDS PostgreSQL in private subnets, Secrets Manager, CloudWatch logs, alarms and dashboard, and a GitHub OIDC deploy role. There are no stored AWS keys. Staging runs on demo days only, about $1.5–2 a day, with a budget alert. Tested: automatic rollback of a broken version with no downtime, rollback by hand, and the alarm emails. Plan and costs: [AWS_PLAN.md](docs/AWS_PLAN.md); operations: [AWS_RUNBOOK.md](docs/AWS_RUNBOOK.md).
+</div>
 
-## Limitations
+---
 
-- **Data:** simulated operations, borrowed M5 demand (a demo link, not learned per product), Olist delivery risk not applied to the simulated suppliers. Numbers say nothing about any real company.
-- **Forecasts** under-forecast by 5–8% on the unseen check; the inventory formula's safety stock covers part of this.
-- **Recommendations** are simplified: transfers arrive at once (no travel time), approving does not re-check whether a reorder is still needed (the queue shows each proposal's age), and orders can only be received in full.
-- **Copilot:** it can still make mistakes the checks do not catch; Groq's free tier limits tokens per minute; CloudFront waits at most 60 s for an answer.
-- **Accounts:** no "forgot password" email (an admin sets a temporary one); no single sign-on.
-- **AWS staging** is a demo environment: one API task, a single-AZ database, no custom domain, and base-image vulnerabilities waiting for Debian's fixes.
-- **Accessibility** is checked automatically; a manual screen-reader review is still open.
+## Is it safe?
 
-Everything open, with its severity, is in [docs/REVIEW_QUEUE.md](docs/REVIEW_QUEUE.md).
+- **People decide, not the computer.** Every order and stock transfer needs a manager's approval. The AI assistant can only *read*: it cannot approve, order or change anything.
+- **Each role can only do its own job.** An analyst cannot approve, and only admins manage users. The server checks this on every action; an automatic test tries all 43 kinds of action with the wrong role and makes sure each is refused.
+- **Nothing is quietly overwritten.** Every change in stock is written down as a new entry, with who made it. The audit log is never edited.
+- **Logins are protected.** Passwords are stored scrambled (hashed), repeated wrong passwords lock the account for 15 minutes, and the browser login cannot be read by other scripts.
+- **Honest about mistakes.** Plans for every test were written down *before* running it. Failures are reported as failures, and open problems are listed in the [review queue](docs/REVIEW_QUEUE.md).
+
+---
+
+## Try it yourself
+
+You need **Docker Desktop** (and, on Windows, **Git Bash**).
+
+```bash
+git clone https://github.com/sunilsaini01/chainpilot-ai
+cd chainpilot-ai
+cp .env.example .env          # set POSTGRES_PASSWORD; GROQ_API_KEY + GROQ_MODEL for the AI assistant
+docker compose up -d --build
+bash scripts/demo-setup.sh    # loads the demo data and prints three demo logins once
+```
+
+Open **http://127.0.0.1:8080** and log in with one of the printed demo logins (admin, manager or analyst).
+
+- The forecasts and delivery scores come from the public datasets (download guide: [docs/DATASETS.md](docs/DATASETS.md)). Without them, the setup uses a small made-up set of forecasts, and the numbers differ from the ones above.
+- The AI assistant needs a free key from [Groq](https://console.groq.com). Without one, every other screen works, and the assistant says it is not set up.
+
+---
+
+## Online version (AWS)
+
+ChainPilot also runs on Amazon Web Services. It is switched on **only for demo days** to keep costs low (about $1.5–2 a day). It was set up with code (Terraform), not by clicking around, so it can be rebuilt the same way every time:
+
+- **Secure web address** (HTTPS) for the dashboard; the server and the database are not reachable from the internet directly.
+- **Updates go out through GitHub** with a review step: GitHub shows exactly what will change, the owner approves, then it deploys and tests itself.
+- **Safety nets, tested for real:** a broken update was rolled back automatically with no downtime, and alarm emails reach the owner.
+
+How it was planned and how to run it: [docs/AWS_PLAN.md](docs/AWS_PLAN.md) · [docs/AWS_RUNBOOK.md](docs/AWS_RUNBOOK.md).
+
+---
+
+## What it does not do (honest limits)
+
+- **The data is made up or public.** The results say nothing about any real company. Walmart sales are *borrowed* to give the made-up products a realistic demand pattern.
+- **The forecasts tend to be a little low** (5–8%); the safety buffer covers part of this.
+- **Simplified logistics:** moved stock arrives instantly (no travel time), there are no shipping costs or budgets, and orders arrive in full.
+- **The AI assistant can still be wrong** in ways the checks do not catch. The free AI service also limits how many questions can be asked per minute.
+- **No "forgot password" email:** an admin sets a temporary password instead.
+- **The online version is for demos,** not for a real business (one small server, no backup copy in a second location).
+- Background jobs (for example, re-training forecasts from the dashboard) were not built: forecasts are prepared separately and then loaded.
+
+The full list, item by item, is in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) and [docs/REVIEW_QUEUE.md](docs/REVIEW_QUEUE.md).
+
+---
+
+<div align="center">
+
+## Under the hood (for technical readers)
+
+| Area | Technology | Detail |
+|:---:|:---|:---|
+| **Server** | Python 3.11, FastAPI, SQLAlchemy, Alembic | Roles checked on every endpoint; 12 database migrations |
+| **Database** | PostgreSQL 16 | Append-only stock ledger; row locks for approvals; full-text search for policies |
+| **Dashboard** | React 19, TypeScript, Vite | Loading, error and empty states; automatic accessibility checks (WCAG 2.1 A/AA) |
+| **Forecasting** | LightGBM | Weekly model with a calibrated 80% range; rolling backtests against simple baselines |
+| **Delivery risk** | Logistic regression (compared with LightGBM) | Time-based split, calibrated, with the top-3 reasons per order |
+| **AI assistant** | LangGraph + Groq | A supervisor and 4 specialists; read-only database tools; every citation checked |
+| **Security** | Cookie sessions + CSRF tokens, scrypt passwords | Login rate limits; strict browser security headers; dependency scans in CI |
+| **Cloud** | AWS: CloudFront, S3, ECS Fargate, RDS, CloudWatch | Terraform; GitHub OIDC deploys with approval; no stored AWS keys |
+
+</div>
+
+| Tests | Count |
+|:---|---:|
+| Server (with a real database) | 505 |
+| Machine-learning pipelines | 131 |
+| Dashboard | 54 |
+| Full browser tests (Chromium) | 25 |
+| **Total** | **715** |
+
+All of them run on every change ([CI](.github/workflows/ci.yml)), together with lint, the dashboard build, Terraform checks and a Docker smoke test.
+
+---
 
 ## Documentation
 
-| Document | What is in it |
-|---|---|
-| [docs/DEMO.md](docs/DEMO.md) | The 10-minute walkthrough |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Diagrams and request flows |
-| [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) | Every requirement of the spec: met, partly, not met or changed, with evidence |
-| [docs/REFERENCE.md](docs/REFERENCE.md) | Every API, setting and setup detail |
-| [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md) | All model, replay and copilot results |
-| [docs/DATASETS.md](docs/DATASETS.md) | M5 and Olist: where they come from, how they are prepared |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Numbered design decisions |
-| [docs/AWS_PLAN.md](docs/AWS_PLAN.md), [docs/AWS_RUNBOOK.md](docs/AWS_RUNBOOK.md) | AWS design, costs and operations |
-| [docs/REVIEW_QUEUE.md](docs/REVIEW_QUEUE.md) | Findings, open and fixed |
-| [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), [docs/CLAUDE_WORK_LOG.md](docs/CLAUDE_WORK_LOG.md) | Progress and the full work history |
-| [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md) | The specification |
+| Document | For whom | What is in it |
+|:---|:---|:---|
+| [docs/DEMO.md](docs/DEMO.md) | Anyone presenting | The 10-minute walkthrough |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical readers | Diagrams and how a request flows |
+| [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) | Reviewers | Every requirement: met, partly, not met, with proof |
+| [docs/MODEL_RESULTS.md](docs/MODEL_RESULTS.md) | Data scientists | All model and evaluation results |
+| [docs/DATASETS.md](docs/DATASETS.md) | Anyone running it | Where the public data comes from |
+| [docs/REFERENCE.md](docs/REFERENCE.md) | Developers | Every API, setting and setup detail |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Developers | Why things were built the way they were |
+| [docs/AWS_PLAN.md](docs/AWS_PLAN.md) · [docs/AWS_RUNBOOK.md](docs/AWS_RUNBOOK.md) | Operators | Cloud design, costs and day-to-day running |
+| [docs/REVIEW_QUEUE.md](docs/REVIEW_QUEUE.md) | Reviewers | Known problems, open and fixed |
+| [docs/CLAUDE_WORK_LOG.md](docs/CLAUDE_WORK_LOG.md) | Anyone curious | The full history of how it was built |
