@@ -742,7 +742,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: every API answer has `server: uvicorn`. It tells an attacker which server is used (a small information leak).
 - Fix and regression test: start uvicorn with `--no-server-header` in `apps/api/Dockerfile`, and add a header test.
 - Update 2026-10-18 (P9-T1): done; checked locally (no `server` header on `/health`) and by a new step in the CI Docker smoke test.
-- Status: VERIFIED (locally; on staging after the next deploy)
+- Update 2026-10-19: also on staging after deploy run #3.
+- Status: VERIFIED
 
 ## P9-T1-R1 — [MEDIUM] The data endpoints are slow under load, on staging in particular
 - Source: P9-T1 load test (docs/results/p9_load_and_security.md)
@@ -754,7 +755,8 @@ History note: the review queue from the deleted first attempt (including Codex f
   3. More Uvicorn workers (needs more memory too).
 
   Recommended: option 1. It is code only, free, and helps locally too.
-- Status: OPEN (owner to choose)
+- Update 2026-10-19: the owner chose option 1. The cache is in `assess_all` (`tests/test_assessment_cache.py`, 8 tests, 6 mutations caught). Load test afterwards: local, 10 users, p95 0.23 s (was 1.07 s); staging, 10 users, p95 1.09 s with 1,170 requests and 0 errors (was 6.60 s with 201).
+- Status: VERIFIED
 
 ## P9-T1-R2 — [LOW] Base-image vulnerabilities without a published fix
 - Source: ECR scan of `b245fa0`

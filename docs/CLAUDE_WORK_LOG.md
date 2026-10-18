@@ -1183,3 +1183,4 @@ Append-only. Each entry records what was actually done and actually run.
   - 25 users: 4,968 requests, 0 errors, p95 0.55 s (before: p95 2.80 s).
   - Files: `docs/results/p9_load_local_*_cached.json`.
 - Next: deploy through the GitHub workflow, then the staging load test at 10 users (target p95 under 2 s).
+- 2026-10-18 19:10 UTC: CI #42 and deploy run #3 green on bf86180. Staging has no `server` header any more, so the new image is running. Staging load test, 10 users, 60 s: 1,170 requests, 0 errors, p95 1.09 s, **pass** (before: 201 requests, p95 6.60 s; `docs/results/p9_load_staging_10users_cached.json`). P9-T1-R1 and P8-T3-R1 verified. **P9-T1 complete.** Not checked: staging CPU during this run (the AWS CLI login had expired; the load test itself needs no AWS access).
