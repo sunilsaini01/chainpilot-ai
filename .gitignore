@@ -49,3 +49,6 @@ backend.hcl
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local build output for staging uploads (docs/AWS_RUNBOOK.md)
+/build/
