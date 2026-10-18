@@ -9,7 +9,14 @@ All commands run from the repository root in PowerShell or Git Bash, after `aws 
 - `infrastructure/terraform/staging/backend.hcl` written from the bootstrap output `state_bucket`. Git ignores it.
 - The account needed a payment method (UPI AutoPay) before S3 worked, and an AWS Support check before CloudFront worked (both one-time, see the work log).
 
-## Create or update staging
+## Deploy from GitHub (normal way, after the first creation)
+GitHub → **Actions** → **Deploy staging** → **Run workflow** (branch `main`).
+1. Job **Build image and plan** builds and pushes the API image for the commit and shows the Terraform plan in the run summary.
+2. Job **Apply, migrate, upload, smoke test** waits for approval in the protected `staging` environment. Read the plan, then **Review deployments → Approve**. The job applies only if a fresh plan has the same summary line as the approved one, then waits for ECS, migrates the database, uploads the dashboard and runs the smoke tests (no login).
+
+One-time GitHub settings (done by the owner): repository **variables** `AWS_DEPLOY_ROLE_ARN`, `TF_STATE_BUCKET` and `ALERT_EMAIL` (from the bootstrap outputs); **environments** `staging-plan` and `staging`, both limited to the `main` branch, and `staging` with the owner as required reviewer. The AWS role trusts only these two environments (bootstrap). The workflow cannot create staging from nothing (the image registry must exist first); use the manual steps below for that.
+
+## Create or update staging by hand
 1. **Image** (tag = the Git commit):
    ```bash
    TAG=$(git rev-parse --short HEAD)

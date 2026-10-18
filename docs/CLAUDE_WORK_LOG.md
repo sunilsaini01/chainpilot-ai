@@ -1073,3 +1073,13 @@ Append-only. Each entry records what was actually done and actually run.
   - Enabling it planned 1 add, 2 change, 1 destroy (the task definition replaced, the secrets permission and the service updated), and was applied: revision 2, rollout COMPLETED. A forced new deployment made the API read the corrected secret.
   - Test question through a one-off task ("Who is allowed to approve a purchase order?"): completed, grounded, citations `policy:approvals#who-approves` and `#what-needs-approval`, 5 model calls, 1 tool call, 2.3 s. This was one Groq call, within the owner's earlier permission for copilot use. `/api/ready` reports the database ok afterwards.
 - The runbook gained the demo-data and copilot steps, including the Plaintext-not-Key/value pitfall.
+
+## 2026-10-18 15:20 UTC — P8-T3: the GitHub deploy workflow (written; first run needs the owner's GitHub settings)
+- CI #37 was running on f9156c2 when this started.
+- `bootstrap/main.tf`: the OIDC trust now allows the environments `staging-plan` and `staging` instead of `ref:refs/heads/main`. Plan: 0 to add, 1 to change, 0 to destroy. Applied: "1 changed".
+- `.github/workflows/deploy-staging.yml` (new, manual only):
+  - plan job: OIDC, image build and push (skipped if the tag already exists), and a plan summary in the run;
+  - apply job, in the protected environment: plan again, compare the summary, apply, wait for ECS to be stable, migrations, dashboard build and upload with invalidation, smoke tests without login.
+- `infrastructure/scripts/smoke-test.py`: the login checks are now optional; without an account it runs 12 checks, and staging passed 12 of 12.
+- Checks: the YAML parses (2 jobs, `workflow_dispatch` only). My mistake: a step name with a colon broke the YAML; renamed. Another `\n` escape broke a patch script again; fixed with the editor. NOT VERIFIED: an actual workflow run. It needs the owner's GitHub settings (3 variables, 2 environments) first.
+- Decision D-066. The runbook gained "Deploy from GitHub".
