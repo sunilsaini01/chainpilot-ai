@@ -53,7 +53,7 @@ Every requirement of the specification ([CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](../
 |---|---|---|---|
 | A | Roles analyst / manager / admin; authenticated APIs; server-side RBAC; no unauthorized writes; audit actor and time | ✅ | `test_security_sweep.py` (all 43 operations: no login, the role below, missing CSRF); `test_auth_api.py`; `audit_events` |
 | B | Overview, forecast explorer, stock-out risks, supplier/shipment risk, AI investigation, approval queue, audit timeline | ✅ | Every screen in `apps/web/src/pages/`; browser tests `e2e/*.spec.ts` |
-| B | Real API, loading/error/empty states, accessible labels, simulated-data badge | ✅ | `e2e/states.spec.ts`; axe WCAG 2.1 A/AA on every page (`e2e/accessibility.spec.ts`); manual screen-reader check still open (P6-T4-R3) |
+| B | Real API, loading/error/empty states, accessible labels, simulated-data badge | ✅ | `e2e/states.spec.ts`; axe WCAG 2.1 A/AA on every page (`e2e/accessibility.spec.ts`); keyboard-only approval with visible focus (`e2e/keyboard.spec.ts`); manual screen-reader check: [ACCESSIBILITY_CHECK.md](ACCESSIBILITY_CHECK.md) |
 | C | Seasonal naive baseline and a tree model; 7/14/28-day forecasts | ✅ | [MODEL_RESULTS.md](MODEL_RESULTS.md) (baselines, LightGBM, weekly LightGBM) |
 | C | Rolling-origin backtests; MAE, WAPE, bias, RMSSE, uncertainty; split dates and versions recorded; no invented numbers | ✅ | [results/](results/) (`p2_baselines.json`, `p2_lightgbm.json`, `p2_model_selection.json`); unseen 28-day check [p2_holdout.json](results/p2_holdout.json) |
 | D | Logistic regression and a tree model, time-based split, PR-AUC, recall, precision, calibration | ✅ | [p3_delivery_risk.json](results/p3_delivery_risk.json), [p3_delivery_risk_rolling.json](results/p3_delivery_risk_rolling.json), [tiers](results/p3_delivery_risk_tiers.json) |
@@ -122,7 +122,7 @@ Every requirement of the specification ([CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](../
 | Evidence-grounded agent workflow | ✅ (with documented limits) |
 | Working dashboard | ✅ local and on AWS |
 | Secure simulated approvals | ✅ |
-| CI and tests | ✅ 715 tests; 6 CI jobs |
+| CI and tests | ✅ 716 tests (API 505, ML 131, web 54, browser 26); 6 CI jobs |
 | Terraform-based AWS deployment (authorized) | ✅ staging, demo days only |
 | Observability | ✅ JSON logs, CloudWatch alarms (email tested) and dashboard |
 | Student-friendly README and demo | ✅ [README.md](../README.md), [DEMO.md](DEMO.md) |

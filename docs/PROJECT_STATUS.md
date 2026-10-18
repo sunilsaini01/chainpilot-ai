@@ -62,8 +62,8 @@ Blockers: P8-T2 onwards needs the owner at their AWS account (AWS CLI install, c
 | P9-T1 Load test and security scans | APPROVED (CI #43 green on 6efa467) |
 | P9-T2 Demo setup and demo script | APPROVED (CI #44 green on a6f88df) |
 | P9-T3 Final README, architecture diagram, limitations | APPROVED (CI #45; the owner confirmed the diagrams render; README rewritten in plain language on request) |
-| P9-T4 Acceptance checklist with evidence | READY_FOR_USER_CHECK |
-| P9-T5 Manual walkthrough (keyboard, screen reader) and final full run | NOT_STARTED |
+| P9-T4 Acceptance checklist with evidence | APPROVED (CI #47 green on feb5281) |
+| P9-T5 Manual walkthrough (keyboard, screen reader) and final full run | READY_FOR_USER_CHECK (keyboard test, screenshots, final run all green; the owner's Narrator check is pending) |
 
 ## History
 - 2026-10-08 to 2026-10-15: first attempt under the two-agent Claude↔Codex workflow. On 2026-10-15 the owner deleted it entirely, including Git history. See DECISIONS D-001.

@@ -1263,3 +1263,28 @@ Append-only. Each entry records what was actually done and actually run.
 - The owner asked for the README in the style of a sample project README (centered title, badges, tables, a coloured diagram), in **simple language that a reader without a technical background can follow**. Rewritten accordingly. The technical details stay in docs/REFERENCE.md, docs/ARCHITECTURE.md and docs/ACCEPTANCE.md.
 - Every number is copied from the checked sources (MODEL_RESULTS, the p9 results, the demo-data check) and checked again by script after writing. Nothing from the sample that this project lacks (screenshots, video, demo passwords) was copied.
 - After writing: a script checked the README's links and anchors (0 problems) and every number against its source (all matched; 43 operations confirmed in `test_security_sweep.py`).
+
+## 2026-10-18 21:30 UTC — P9-T5 plan (written before starting)
+- The owner deleted the dump file in the postgres container (checked: it is gone). CI #47 was running on feb5281 when this started.
+- P9-T5, the last task:
+  1. **Keyboard-only browser test** (automated, new e2e test): log in, reach the Approval queue, make recommendations and approve one using only the Tab, Enter and Space keys. Also check that the focused element has a visible outline. Pass: the flow completes, and the outline is visible on every focused control on the way.
+  2. **Screen reader check by the owner** (Windows Narrator), following a step-by-step script: page title, headings, form labels, the data badge, table headers, approve and reject names, error and status messages. Recorded as the owner reports it; this is the open P6-T4-R3.
+  3. **Screenshots for the README:** overview, stock risks, approval queue, copilot, audit log, from the local stack with the demo data. Taken with Playwright, logged in as the demo users created by `scripts/demo-setup.sh`. No passwords on screen.
+  4. **Final full run:** API (pytest with the database), ML, web type-check, unit tests and build, browser tests on a throwaway stack, Ruff, `terraform validate`, the staging smoke test, and CI green on the final commit. Pass: everything green, and the results recorded as they come.
+
+## 2026-10-18 21:41 UTC — P9-T5 results: keyboard test, screenshots, final full run
+- CI #47 green on feb5281; P9-T4 and the README rewrite approved.
+- **Keyboard-only test** (`apps/web/e2e/keyboard.spec.ts`, new): a manager logs in, opens the Approval queue, makes recommendations and approves one with Tab, Enter and Space only, and every control on the way must show a visible focus outline. Passed on a throwaway stack. Mutation: with `:focus-visible { outline: none }` it fails at the first field ("visible focus on <input>"). The style was restored; git shows no change.
+- **Screenshots:** `docs/screenshots/` (overview, approval queue, copilot, forecasts, stock risks, audit log), taken with a temporary Playwright script from the local stack as `demo-manager`. The script was deleted afterwards.
+  - Demo logins created on the owner's local stack with `scripts/demo-setup.sh` (data steps skipped as "already done"). The passwords are kept only in my scratchpad and given to the owner.
+  - The first overview shot caught "Loading…"; it was retaken after the numbers appeared.
+  - Checked by eye: only example.com addresses and simulated data are visible. The local numbers (141/26/89/544) differ from the morning story, because of test approvals and receipts; the README caption says so.
+  - README: a "What it looks like" section.
+- **Manual screen-reader check:** `docs/ACCESSIBILITY_CHECK.md` (new): 12 Narrator steps with the expected announcements, taken from the real labels. The results come from the owner.
+- **Final full run** (all green):
+  - API 505 passed (4 min 33 s, with the database); ML 131 passed;
+  - web: type-check, 54 unit tests, build, `npm audit` 0;
+  - browser suite **26 passed** on a throwaway stack (removed);
+  - Ruff check and format clean (API and ML); Terraform fmt and validate, both folders; `docker compose config` valid;
+  - staging smoke test 12/12; `git diff --check` clean.
+  - Totals in the README and ACCEPTANCE updated: 716.
