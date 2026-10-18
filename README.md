@@ -45,6 +45,21 @@ A step-by-step 10-minute demo: [docs/DEMO.md](docs/DEMO.md).
 
 ---
 
+## What it looks like
+
+| | |
+|:---:|:---:|
+| ![Overview: the headline numbers for stock, risks, orders and suppliers](docs/screenshots/overview.png) | ![Approval queue: suggested transfers and orders with Approve and Reject buttons](docs/screenshots/approval-queue.png) |
+| **Overview:** the headline numbers at a glance | **Approval queue:** every suggestion waits for a manager |
+| ![AI assistant: a verified answer about unreliable suppliers, with its sources](docs/screenshots/copilot.png) | ![Forecasts: 28 days of expected sales with the likely range](docs/screenshots/forecasts.png) |
+| **AI assistant:** a "Verified" answer with its sources | **Forecasts:** expected sales with the likely range |
+| ![Stock risks: every product at every warehouse, most urgent first](docs/screenshots/stock-risks.png) | ![Audit log: who did what, and when](docs/screenshots/audit-log.png) |
+| **Stock risks:** most urgent first | **Audit log:** who did what, and when |
+
+*Screenshots of the local demo with simulated data, taken after some test approvals and deliveries, so a few numbers differ from the morning story above.*
+
+---
+
 ## How it works
 
 ```mermaid
@@ -199,8 +214,8 @@ The full list, item by item, is in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) and 
 | Server (with a real database) | 505 |
 | Machine-learning pipelines | 131 |
 | Dashboard | 54 |
-| Full browser tests (Chromium) | 25 |
-| **Total** | **715** |
+| Full browser tests (Chromium) | 26 |
+| **Total** | **716** |
 
 All of them run on every change ([CI](.github/workflows/ci.yml)), together with lint, the dashboard build, Terraform checks and a Docker smoke test.
 
