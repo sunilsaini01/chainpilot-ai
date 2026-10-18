@@ -89,17 +89,57 @@ resource "aws_iam_role" "deploy" {
   assume_role_policy = data.aws_iam_policy_document.github_assume.json
 }
 
-# Broad on purpose for a demo staging account: Terraform in the deploy workflow
-# creates and destroys the whole staging stack. Narrow it before any production use
-# (noted in docs/AWS_PLAN.md and the review queue).
-resource "aws_iam_role_policy_attachment" "deploy_admin" {
-  role       = aws_iam_role.deploy.name
-  policy_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
+# What the deploy workflow may do: only the services staging uses (P8-T1-R2; it
+# replaced PowerUserAccess). Regional services only in the chosen region, S3 only
+# on chainpilot buckets, IAM only on chainpilot-staging-* roles (below).
+data "aws_iam_policy_document" "deploy" {
+  statement {
+    sid = "StagingServicesInTheRegion"
+    actions = [
+      "ec2:*", "elasticloadbalancing:*", "ecs:*", "ecr:*", "rds:*",
+      "secretsmanager:*", "logs:*", "cloudwatch:*", "sns:*", "kms:DescribeKey",
+    ]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = [var.region]
+    }
+  }
+  statement {
+    sid       = "ProjectBucketsOnly"
+    actions   = ["s3:*"]
+    resources = ["arn:aws:s3:::chainpilot-*", "arn:aws:s3:::chainpilot-*/*"]
+  }
+  statement {
+    # CloudFront is a global service (no region); identity lookups too.
+    sid       = "GlobalServices"
+    actions   = ["cloudfront:*", "sts:GetCallerIdentity"]
+    resources = ["*"]
+  }
+  statement {
+    # ECS, the load balancer and RDS create their own service roles on first use.
+    sid       = "ServiceLinkedRoles"
+    actions   = ["iam:CreateServiceLinkedRole"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:AWSServiceName"
+      values = [
+        "ecs.amazonaws.com", "elasticloadbalancing.amazonaws.com", "rds.amazonaws.com",
+      ]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "deploy" {
+  name   = "staging-services"
+  role   = aws_iam_role.deploy.id
+  policy = data.aws_iam_policy_document.deploy.json
 }
 
 data "aws_iam_policy_document" "deploy_iam" {
-  # PowerUserAccess excludes IAM; staging needs to create its own task roles,
-  # limited here to roles whose names start with chainpilot-staging-.
+  # Staging creates its own task roles, limited to names starting with chainpilot-staging-.
   statement {
     actions = [
       "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:PassRole", "iam:TagRole",
