@@ -705,14 +705,17 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: `infrastructure/terraform/staging/web.tf` (`origin_protocol_policy = "http-only"`). Between the CloudFront edge and the region, requests travel unencrypted, including the session cookie and the CSRF token. The secret header only stops people from bypassing CloudFront; it does not encrypt.
 - Expected behavior: encrypted, or private, all the way.
 - Fix and regression test: in P8-T3, when it can be tested against AWS, either a CloudFront **VPC origin** (internal load balancer, traffic stays in AWS's network, no public IPs; no domain needed) or HTTPS to the load balancer with a certificate for a domain. Must be done before staging is used with any real login.
-- Status: OPEN (P8-T3)
+- Update 2026-10-17: fixed in code while waiting for the AWS account. The load balancer is internal (private subnets, no public address), CloudFront reaches it through `aws_cloudfront_vpc_origin`, and the secret origin header and the random provider were removed (nothing outside the VPC can reach the load balancer now). `terraform validate` passes. Still to verify on the first real apply: that the VPC origin reaches the API (smoke test in P8-T3).
+- Status: FIXED IN CODE (verify in P8-T3)
 
 ## P8-T1-R2 — [MEDIUM] The GitHub deploy role is broad
 - Source: Claude self-review
 - File and reproduction: `infrastructure/terraform/bootstrap/main.tf` gives the deploy role `PowerUserAccess` plus IAM limited to `chainpilot-staging-*` roles. Only this repository's `main` branch can assume it (OIDC), but a compromised workflow on `main` could change most of the account.
 - Expected behavior: least privilege.
 - Fix and regression test: narrow it to the services in `staging/` after the first real apply shows which actions are used (CloudTrail), before any production use. Recommended: a dedicated AWS account for this demo.
-- Status: OPEN (P8-T3/T4)
+- Update 2026-10-17: `PowerUserAccess` replaced by an inline policy covering only the services staging uses. Regional services are allowed only in ap-south-1, S3 only on `chainpilot-*` buckets, IAM only on `chainpilot-staging-*` roles, and service-linked roles only for ECS, ELB and RDS. A read-only plan against the account shows the change: 1 policy added, the `PowerUserAccess` attachment removed. Not applied yet, because it goes together with the 4 pending bucket resources. Possible follow-up: a missing permission shows up as AccessDenied in the first staging apply, and gets added one at a time.
+- Update 2026-10-18: applied. In AWS, the role now has no managed policy, only `staging-services` and `staging-roles-only`.
+- Status: VERIFIED (in AWS; missing permissions may still appear in the first staging apply)
 
 ## P8-T1-R3 — [LOW] On staging the per-IP login limit sees CloudFront's addresses
 - Source: Claude self-review

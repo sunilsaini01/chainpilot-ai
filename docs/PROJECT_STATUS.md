@@ -1,12 +1,12 @@
 # Project Status
 
 Current phase: P8 (AWS), demo days only, ap-south-1 (D-063)
-Current task: P8-T1, Terraform for staging, checked offline
+Current task: P8-T2, AWS account setup (done and verified; next P8-T3)
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
 Status: READY_FOR_USER_CHECK
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 6ebb899 (CI #33 green). P8-T1 is uncommitted.
+Last commit: 5fe9f46 (CI #34 green, P8-T1).
 
 ## P8-T1 acceptance criteria
 - [x] Terraform for bootstrap (state bucket, GitHub OIDC role, budget) and staging (network, ECR, RDS, ECS + ALB, S3 + CloudFront, secrets, alarms)
@@ -55,8 +55,8 @@ Blockers: P8-T2 onwards needs the owner at their AWS account (AWS CLI install, c
 | P7-T2 Approval queue screen with browser tests | APPROVED (CI #31 green on f70d33d) |
 | P7-T3 Login token in an httpOnly cookie with CSRF protection | APPROVED (CI #32 green on 46135fe) |
 | P7-T4 Security sweep: every write endpoint against every role; API security headers | APPROVED (CI #33 green on 6ebb899) |
-| P8-T1 Terraform for staging, checked offline (no AWS) | READY_FOR_USER_CHECK |
-| P8-T2 AWS account setup: budget, state bucket, GitHub OIDC role | NOT_STARTED (owner runs it) |
+| P8-T1 Terraform for staging, checked offline (no AWS) | APPROVED (CI #34 green on 5fe9f46) |
+| P8-T2 AWS account setup: budget, state bucket, GitHub OIDC role | READY_FOR_USER_CHECK (applied and verified in AWS) |
 | P8-T3 Plan → review → apply staging; deploy workflow; smoke tests | BLOCKED (owner approval) |
 | P8-T4 Rollback drill, alarms, dashboard, destroy/pause instructions | BLOCKED (owner approval) |
 | P9 | NOT_STARTED |

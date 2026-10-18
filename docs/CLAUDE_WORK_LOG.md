@@ -979,3 +979,37 @@ Append-only. Each entry records what was actually done and actually run.
 - Self-review findings: P8-T1-R1 (MEDIUM: plain HTTP between CloudFront and the load balancer), P8-T1-R2 (MEDIUM: broad deploy role), P8-T1-R3 to R5 (LOW). Decision D-064.
 - Ending commit (if any): none. The owner will commit and push.
 - Next recommended task: P8-T2, the owner's account setup with the bootstrap folder. It is free apart from a few cents; the owner runs it or approves each step.
+
+## 2026-10-17 18:35 UTC — P8-T1 approved; P8-T2 bootstrap apply, part done
+- CI #34 green on 5fe9f46 (P8-T1). The owner installed and logged in the AWS CLI (`aws login`, short-lived credentials), region ap-south-1. The identity is the account's root user; recommended for later: a normal admin user and MFA on root.
+- The owner gave the budget alert email and said "yes apply". I ran `terraform plan` first and checked it before applying the saved plan: 9 to add, 0 to change, 0 to destroy, and no existing GitHub OIDC provider or budget in the account (read-only checks).
+- Apply result: **5 of 9 created**: the GitHub OIDC provider, the deploy role, its two policies, and the budget `chainpilot-monthly` ($15, alerts at 50/80/100% and on forecast). **Failed:** the state bucket, so its versioning, encryption and public-access block were not created. AWS answered `NotSignedUp: Your account is not signed up for the S3 service`, which means the account's activation is not complete. This is not a code error. Terraform's local state records the 5 created resources, so the same apply creates only the 4 missing ones once the account is active.
+- My plan and apply output files contained the account id; I deleted them. The bootstrap state file stays on the owner's machine and is ignored by Git.
+- Cost so far: the budget, OIDC provider and IAM roles cost nothing.
+- Status: P8-T2 BLOCKED until AWS activates the account for S3.
+
+## 2026-10-18 04:35 UTC — P8-T1 follow-up: the two MEDIUM findings fixed in code (owner's choice "A")
+- Context: AWS has not yet activated S3 and EC2 on the new account. The Health event "Account customer verification success" came at 18:04 UTC; S3 still answered `NotSignedUp` at 20:01 UTC. The owner was advised to open a free support case. A background check runs `aws s3 ls` every 10 minutes for 3 hours, read-only.
+- Changes:
+  - `staging/api.tf`: internal load balancer in the private subnets; the listener forwards directly.
+  - `staging/web.tf`: `aws_cloudfront_vpc_origin`; the API origin uses `vpc_origin_config`.
+  - `staging/data.tf` and `staging/versions.tf`: the origin-verify secret and the random provider removed.
+  - `staging/network.tf`: comments.
+  - `bootstrap/main.tf`: a scoped deploy policy replaces `PowerUserAccess`.
+  - Lock file regenerated without the random provider, for 3 platforms.
+- Checks: the attribute names were read from the pinned provider's schema, because a web search did not confirm the Terraform syntax. `terraform fmt -check` is clean and `validate` passes for both folders. A read-only bootstrap plan against the account shows 5 to add (the scoped policy and the 4 bucket resources) and 1 to destroy (the `PowerUserAccess` attachment). Nothing applied.
+- Sources for the VPC origin security group: the AWS CloudFront developer guide, "Restrict access with VPC origins".
+- Not verified: that the VPC origin reaches the API (P8-T3 smoke test), and that the scoped policy covers everything the staging apply needs (P8-T3).
+- Ending commit (if any): none. The owner will commit and push.
+
+## 2026-10-18 05:54 UTC — P8-T2 results: AWS account setup complete
+- Cause of the activation wait: the account (run by AWS India, AISPL) had **no payment method** ("Manual bill payments", 0 methods). The owner opened a support chat and added UPI AutoPay as the default method (₹2 refundable check). Within minutes `aws s3 ls` worked (05:52 UTC). Note for others: AISPL accounts on the Free plan still need a verified payment method before S3 and EC2 work.
+- Bootstrap rerun: I saved a plan and checked it before applying: 5 to add (the scoped deploy policy and the state bucket's 4 resources), 1 to destroy (the `PowerUserAccess` attachment), 0 to change. Result: "Apply complete! Resources: 5 added, 0 changed, 1 destroyed."
+- Checked in AWS:
+  - state bucket: versioning `Enabled`, encryption `AES256`, all 4 public-access blocks `True`, region ap-south-1;
+  - deploy role: no managed policies, inline `staging-services` and `staging-roles-only`;
+  - a fresh `plan -detailed-exitcode` exits 0, so there are no differences.
+- `staging/backend.hcl` written with the bucket name; it is ignored by Git, like the bootstrap state, which stays on the owner's machine. The plan and apply output files (they contain the account id) were deleted.
+- Cost: the bucket, IAM, OIDC provider and budget cost nothing to a few cents a month. Credits: $100 (plus $20 earned from the budget task).
+- P8-T1-R2 is now applied in AWS. P8-T1-R1 (VPC origin) is in code, to verify with the first staging apply.
+- Next: P8-T3. The plan needs a step zero: the API image must be in ECR before the ECS service starts. Otherwise the service starts without an image, and the circuit breaker keeps rolling back. The first apply will create the registry, the deploy workflow pushes the image, and then the service starts.

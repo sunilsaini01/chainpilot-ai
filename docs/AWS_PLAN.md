@@ -13,7 +13,7 @@ One **staging** environment in AWS, built with Terraform, deployed by GitHub Act
 ```
 Browser ──HTTPS──> CloudFront (https://<id>.cloudfront.net, free certificate)
                      ├── /*      -> S3 bucket (the built dashboard, private, CloudFront-only)
-                     └── /api/*  -> Application Load Balancer -> ECS Fargate: API container
+                     └── /api/*  -> (VPC origin, private) internal Load Balancer -> ECS Fargate: API container
                                                                   └── RDS PostgreSQL (private subnets)
 Secrets Manager: database password, Groq key        CloudWatch: logs (14 days), alarms
 ECR: API image                                       AWS Budgets: alerts at 50% / 80% / 100%
@@ -22,6 +22,7 @@ GitHub Actions --OIDC role--> deploy (no static AWS keys)
 
 Why this shape:
 - **One address for the dashboard and the API** (CloudFront). The login cookie is SameSite=Strict, so it then simply works (P7-T3-R1). The image no longer needs the API address built in (P6-T4-R4), and HTTPS comes with CloudFront's own domain, so the Secure cookie works without buying a domain.
+- **Private path from CloudFront to the API:** the load balancer is internal (no public address) and CloudFront reaches it through a **VPC origin**, so requests never cross the public internet unencrypted (P8-T1-R1).
 - **No NAT gateway** (about $33/month on its own). The API task runs in a public subnet with a public IP, so it can reach ECR, Groq and Secrets Manager. Its security group accepts traffic only from the load balancer. The database sits in private subnets and accepts connections only from the API's security group.
 - **The dashboard as static files on S3 + CloudFront** instead of a second container: practically free at demo traffic.
 - **Migrations** run as a one-off ECS task with the same image before each deploy (as the `migrate` service does locally).
@@ -34,12 +35,12 @@ Why this shape:
 | ECS Fargate (API) | 0.25 vCPU, 0.5 GB, x86 (builds natively in CI; ARM would save about $1.5), 1 task | 9 |
 | RDS PostgreSQL 16 | db.t4g.micro, single-AZ, 20 GB gp3, 7-day backups | 14 |
 | Application Load Balancer | 1 ALB, very low traffic | 18–22 |
-| Public IPv4 addresses | ALB (2) + API task (1), $0.005/hour each | 11 |
+| Public IPv4 addresses | API task (1), $0.005/hour; the load balancer is internal (no public IPs) | 4 |
 | CloudFront + S3 | demo traffic (CloudFront has a free monthly allowance) | 0–1 |
 | Secrets Manager | 2 secrets | 1 |
 | CloudWatch | logs (14 days), a few alarms, 1 dashboard | 1–3 |
 | ECR | a few images | < 1 |
-| **Total** | | **≈ 54–62** (ap-south-1 somewhat more) |
+| **Total** | | **≈ 47–55** (ap-south-1 somewhat more) |
 
 How to spend much less:
 - **Run it only when needed:** `terraform apply` before a demo, `terraform destroy` afterwards. Example: 3 days ≈ **$6**. The database is created again from the seed; staging keeps no data worth keeping.
