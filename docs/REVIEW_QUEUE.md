@@ -658,7 +658,8 @@ History note: the review queue from the deleted first attempt (including Codex f
 - File and reproduction: axe finds missing labels, contrast, roles and similar; it cannot judge whether pages make sense with a screen reader or keyboard alone (only the login is tested by keyboard).
 - Expected behavior: a manual pass with a screen reader (NVDA or Narrator) and keyboard only before the final demo.
 - Fix and regression test: manual check in P9.
-- Status: OPEN (P9)
+- Update 2026-10-19 (P9-T5): a keyboard-only browser test with visible focus was added (`e2e/keyboard.spec.ts`), and a 12-step Narrator script was written (`docs/ACCESSIBILITY_CHECK.md`). The owner chose to skip the manual screen-reader walkthrough.
+- Status: OPEN (known limitation; the script is ready)
 
 ## P6-T4-R4 — [LOW] The API address is built into the web image
 - Source: Claude self-review

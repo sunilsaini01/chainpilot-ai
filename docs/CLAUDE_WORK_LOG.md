@@ -1288,3 +1288,17 @@ Append-only. Each entry records what was actually done and actually run.
   - Ruff check and format clean (API and ML); Terraform fmt and validate, both folders; `docker compose config` valid;
   - staging smoke test 12/12; `git diff --check` clean.
   - Totals in the README and ACCEPTANCE updated: 716.
+
+## 2026-10-18 22:07 UTC — Project complete
+- CI #48 green on 46e7b58 (keyboard test, screenshots, final records).
+- Owner's answers: **skip** the manual screen-reader walkthrough, and **keep** AWS staging running.
+  - Recorded honestly: `docs/ACCESSIBILITY_CHECK.md` says "not done"; P6-T4-R3 stays OPEN as a known limitation; ACCEPTANCE shows the P9 gate as partly met for that item.
+  - Staging stays up (about $1.5–2 a day from the credits, budget alert active); the runbook has the destroy steps.
+- **Final state:** P0–P9 done; 716 tests green; the definition of done met with the limits listed in docs/ACCEPTANCE.md and docs/REVIEW_QUEUE.md.
+
+## 2026-10-18 22:16 UTC — README rewritten in a more professional style (owner's request)
+- The owner asked for a more professional README that keeps the complete project details, in simple words.
+- New structure: badges (including a live CI badge), a contents line, Overview, Key features, Screenshots, How it works (diagram), Results, Security and reliability, Technology, Project structure, Getting started (requirements, installation, configuration), Testing (with commands), Deployment on AWS, Limitations, Documentation, Acknowledgements and license.
+- The numbers were reused from the checked versions. One claim of mine was corrected before publishing: "every one of the 43 actions is tested against the wrong role" became "tested without a login, and with a too-low role wherever one exists", because analyst-level actions have no lower role.
+- There is no LICENSE file, so the README says that no license has been chosen; none was invented. The dataset sources are credited.
+- Checks: every link, in-page anchor and image path resolves (0 problems; 6 screenshots).

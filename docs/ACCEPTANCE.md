@@ -97,7 +97,7 @@ Every requirement of the specification ([CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](../
 | P6 | Browser e2e flows, error and empty states | ✅ |
 | P7 | Unauthorized and unapproved actions blocked | ✅ |
 | P8 | Approved staging deployment, smoke tests, rollback | ✅ (rollback tested automatically and by hand) |
-| P9 | Load and security tests, demo data, README, architecture, walkthrough | ✅ load and security, demo, README, architecture; 🟡 manual walkthrough (P9-T5) |
+| P9 | Load and security tests, demo data, README, architecture, walkthrough | ✅ load and security, demo, README, architecture, keyboard-only test, final full run; 🟡 the manual screen-reader walkthrough was skipped by the owner (P6-T4-R3 open) |
 
 ## §10–§13 Code, Git, AWS and verification rules
 

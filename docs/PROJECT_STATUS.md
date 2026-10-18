@@ -1,24 +1,18 @@
 # Project Status
 
-Current phase: P8 (AWS), demo days only, ap-south-1 (D-063)
-Current task: P8-T3, staging deployment (done: https://d3ry42c2brz8fx.cloudfront.net; deploys from GitHub)
+Current phase: **Complete** (P0–P9)
 Developer: Claude Code
 Review method: Claude self-review + user milestone check
-Status: READY_FOR_USER_CHECK
+Status: COMPLETE (with the known limitations in docs/ACCEPTANCE.md and docs/REVIEW_QUEUE.md)
 Branch: main (remote: origin → github.com/sunilsaini01/chainpilot-ai)
-Last commit: 5fe9f46 (CI #34 green, P8-T1).
+Last commit: 46e7b58 (CI #48 green)
 
-## P8-T1 acceptance criteria
-- [x] Terraform for bootstrap (state bucket, GitHub OIDC role, budget) and staging (network, ECR, RDS, ECS + ALB, S3 + CloudFront, secrets, alarms)
-- [x] No secret values in files or state (RDS-managed password; the Groq key is filled in by the owner)
-- [x] `fmt` and `validate` pass for both folders, from a clean state with the lock files; a CI job runs them
-- [x] Cost table updated (x86; ap-south-1)
-- [ ] CI green on GitHub. NOT VERIFIED: requires a push
-- Not possible offline: plan/apply (P8-T3). Nothing has been created in AWS.
-
-Open findings: P8-T1-R1 (MEDIUM, P8-T3), P8-T1-R2 (MEDIUM), P8-T1-R3/R4/R5 (LOW, P8-T3), P7-T3-R1 (LOW, solved by the P8 design once deployed), P7-T3-R2 (LOW), P7-T1-R1 (LOW, mitigated), P6-T4-R3 (LOW, P9), P6-T4-R4 (LOW, solved by the P8 design once deployed), P6-T2-R1 (LOW), P6-T1b-R1 (LOW), P5-T4-R7 (MEDIUM), P5-T4-R6 (MEDIUM), P5-T4-R4 (LOW), P5-T4-R5 (owner), P4-T4-R3 (LOW), P4-T3-R3 (LOW, partly fixed), P3-T3-R3 (LOW), P3-T2b-R2 (LOW). See docs/REVIEW_QUEUE.md.
-Next action: Owner checks and pushes; then P8-T2 (account setup with the bootstrap folder, owner-run).
-Blockers: P8-T2 onwards needs the owner at their AWS account (AWS CLI install, credentials, approval of each apply).
+## Final state (2026-10-19)
+- All phases done; the spec's definition of done is met (docs/ACCEPTANCE.md).
+- Tests: 716 (API 505, ML 131, web 54, browser 26), all green in the final full run and in CI.
+- AWS staging: **running** at https://d3ry42c2brz8fx.cloudfront.net, owner's choice "keep" (about $1.5–2 a day from the credits; $15/month budget alert). Destroy with `terraform destroy` in `infrastructure/terraform/staging` (docs/AWS_RUNBOOK.md).
+- Not done by a person: the manual screen-reader walkthrough (the owner skipped it; P6-T4-R3 open).
+- Open findings: see docs/REVIEW_QUEUE.md (none HIGH).
 
 ## Roadmap progress
 | Phase / task | Status |
@@ -63,7 +57,7 @@ Blockers: P8-T2 onwards needs the owner at their AWS account (AWS CLI install, c
 | P9-T2 Demo setup and demo script | APPROVED (CI #44 green on a6f88df) |
 | P9-T3 Final README, architecture diagram, limitations | APPROVED (CI #45; the owner confirmed the diagrams render; README rewritten in plain language on request) |
 | P9-T4 Acceptance checklist with evidence | APPROVED (CI #47 green on feb5281) |
-| P9-T5 Manual walkthrough (keyboard, screen reader) and final full run | READY_FOR_USER_CHECK (keyboard test, screenshots, final run all green; the owner's Narrator check is pending) |
+| P9-T5 Manual walkthrough (keyboard, screen reader) and final full run | APPROVED (CI #48 green on 46e7b58; screen-reader walkthrough skipped by the owner) |
 
 ## History
 - 2026-10-08 to 2026-10-15: first attempt under the two-agent Claude↔Codex workflow. On 2026-10-15 the owner deleted it entirely, including Git history. See DECISIONS D-001.
@@ -107,3 +101,4 @@ Blockers: P8-T2 onwards needs the owner at their AWS account (AWS CLI install, c
 - 2026-10-17: P7-T4: every endpoint checked against every role; security headers on the API and the dashboard.
 - 2026-10-17: P7 complete (CI #33). P8 plan and cost estimate written; waiting for the owner's approval before any AWS action.
 - 2026-10-17: P8 approved for demo days only (ap-south-1). P8-T1: Terraform for staging written and validated offline; nothing deployed.
+- 2026-10-19: **Project complete.** P9-T5 approved (CI #48). The screen-reader walkthrough was skipped by the owner; staging is kept running.

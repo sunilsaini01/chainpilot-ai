@@ -19,4 +19,4 @@ Automatic checks (axe, WCAG 2.1 A and AA, on every page) and a keyboard-only bro
 | 11 | Open **Ask the copilot**, Tab to the text box | "Your question, edit" | |
 | 12 | Open **Stock risks**, Tab to the filters | "Warehouse, combo box" and "Status, combo box" | |
 
-**Result:** _(to be filled in from the owner's walkthrough)_
+**Result (2026-10-19): not done.** The owner chose to skip the manual screen-reader walkthrough. The dashboard has passed only the automatic checks (axe on every page) and the keyboard-only browser test. Whether it is pleasant to use with a screen reader is **not verified by a person**; this is listed as a known limitation (P6-T4-R3). The steps above are ready for anyone who does the check later.
