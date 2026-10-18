@@ -1210,3 +1210,28 @@ Append-only. Each entry records what was actually done and actually run.
   - Project, volume and images removed afterwards; the owner's own stack untouched. The output file with the test passwords deleted.
 - My mistakes fixed along the way: the result line showed Docker's "Container … Created" noise; the new filter then made the script exit 1 when a step printed nothing (`grep` with `pipefail`). Fixed with `|| true`; a third run exited 0. (An `exit 141` was my own `| head` in the test command, not the script.)
 - Checked against the code: the claims in DEMO.md (the copilot limit message, the "Only managers and administrators" text, 174 = 150 transfers + 24 reorders).
+
+## 2026-10-18 20:35 UTC — P9-T2 approved; P9-T3 plan (written before writing)
+- CI #44 green on a6f88df; P9-T2 approved.
+- P9-T3:
+  - **README** rewritten as the project's front page: what it is and the data labels, the demo, the architecture, the results with real numbers (each linked to its source in docs/), the engineering and security, the tests and CI, AWS, the limitations, and an index of the docs.
+  - The current 470-line README (every API, setup and design detail) moves **unchanged** to `docs/REFERENCE.md`, so nothing is lost.
+  - **docs/ARCHITECTURE.md**: Mermaid diagrams of the local stack, the AWS staging stack and two request flows (approval, copilot), plus the main design decisions with links to DECISIONS.md.
+  - **Limitations**: one honest list in the README, made from the open review items and the spec's known limits.
+- Pre-registered checks:
+  - every number in the new README is copied from a results file or doc and checked against it (a script compares them);
+  - every relative link in README, ARCHITECTURE and REFERENCE points to an existing file (a script checks);
+  - the Mermaid blocks use only simple flowchart syntax (no browser preview here);
+  - REFERENCE keeps the old README's content (line count and section headings compared).
+
+## 2026-10-18 20:38 UTC — P9-T3 results: README, architecture, limitations
+- `README.md` rewritten as the front page: what it is and the data labels; the demo; an overview diagram; what it does and how each part is checked; results (forecast WAPE 0.717 vs 0.739 on unseen days; delivery tiers 19.9% vs 2.0% late; inventory 17–34% less stock; copilot runs 1 and 2 both reported, including that run 2 did not pass; staging load p95 1.09 s); engineering and security; trade-offs; tests (API 505, ML 131, web 54, browser 25, counted today); CI; AWS; limitations; a docs index.
+- `docs/REFERENCE.md` (new): the previous README, unchanged apart from a 2-line note at the top and relative links adjusted for the docs folder (470 to 472 lines, the same `##` headings).
+- `docs/ARCHITECTURE.md` (new): Mermaid diagrams of the local stack, AWS staging, the approval sequence and the copilot flow, with links to the decisions; a "where things live" table.
+- Checks, as pre-registered:
+  - a script resolved every relative link and `#anchor` in the README, ARCHITECTURE, REFERENCE and DEMO: 0 problems;
+  - every README number was found in its source file (MODEL_RESULTS, REFERENCE, p9 results);
+  - the decision numbers cited exist with matching topics;
+  - no project file links to an old README section.
+  - Added after checking the spec ("tradeoffs a student can defend"): a trade-offs section.
+- NOT VERIFIED: how the Mermaid diagrams render. There is no browser preview here; they use plain flowchart and sequence syntax, which GitHub renders. Check on GitHub after the push.
