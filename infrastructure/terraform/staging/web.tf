@@ -106,6 +106,23 @@ resource "aws_cloudfront_response_headers_policy" "web" {
   }
 }
 
+# CloudFront's private way into the VPC: the internal load balancer is reached over
+# AWS's own network, never the public internet (fixes P8-T1-R1). HTTP is used only
+# for that private hop; viewers always use HTTPS to CloudFront.
+resource "aws_cloudfront_vpc_origin" "api" {
+  vpc_origin_endpoint_config {
+    name                   = "${var.name}-api"
+    arn                    = aws_lb.api.arn
+    http_port              = 80
+    https_port             = 443
+    origin_protocol_policy = "http-only"
+    origin_ssl_protocols {
+      items    = ["TLSv1.2"]
+      quantity = 1
+    }
+  }
+}
+
 data "aws_cloudfront_cache_policy" "optimized" {
   name = "Managed-CachingOptimized"
 }
@@ -134,16 +151,9 @@ resource "aws_cloudfront_distribution" "main" {
   origin {
     origin_id   = "api"
     domain_name = aws_lb.api.dns_name
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only" # inside AWS; HTTPS to the ALB needs a domain (later)
-      origin_ssl_protocols   = ["TLSv1.2"]
-      origin_read_timeout    = 60 # the longest CloudFront allows without a quota request
-    }
-    custom_header {
-      name  = "X-Origin-Verify"
-      value = random_password.origin_verify.result
+    vpc_origin_config {
+      vpc_origin_id       = aws_cloudfront_vpc_origin.api.id
+      origin_read_timeout = 60 # the longest CloudFront allows without a quota request
     }
   }
 

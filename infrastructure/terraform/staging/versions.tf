@@ -9,10 +9,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "6.67.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "3.9.1"
-    }
   }
   # Bucket and region come from backend.hcl (see backend.hcl.example), written
   # after the bootstrap step: terraform init -backend-config=backend.hcl

@@ -117,11 +117,14 @@ resource "aws_ecs_task_definition" "api" {
 
 # --- Load balancer ---------------------------------------------------------------------
 
+# Internal: no public address. Only CloudFront reaches it, through a VPC origin
+# (web.tf), so requests from the edge into the VPC stay on AWS's private network.
 resource "aws_lb" "api" {
   name               = "${var.name}-api"
+  internal           = true
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+  subnets            = aws_subnet.private[*].id
   idle_timeout       = 120 # a copilot question can take about a minute
 }
 
@@ -140,31 +143,12 @@ resource "aws_lb_target_group" "api" {
   deregistration_delay = 10 # demo traffic: no need to wait long for old tasks
 }
 
+# Plain HTTP inside the VPC only: the load balancer has no public address.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.api.arn
   port              = 80
   protocol          = "HTTP"
-  # Anything without CloudFront's secret header is refused.
   default_action {
-    type = "fixed-response"
-    fixed_response {
-      content_type = "text/plain"
-      message_body = "Forbidden"
-      status_code  = "403"
-    }
-  }
-}
-
-resource "aws_lb_listener_rule" "from_cloudfront" {
-  listener_arn = aws_lb_listener.http.arn
-  priority     = 10
-  condition {
-    http_header {
-      http_header_name = "X-Origin-Verify"
-      values           = [random_password.origin_verify.result]
-    }
-  }
-  action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api.arn
   }
@@ -196,5 +180,5 @@ resource "aws_ecs_service" "api" {
     rollback = true
   }
   health_check_grace_period_seconds = 30
-  depends_on                        = [aws_lb_listener_rule.from_cloudfront]
+  depends_on                        = [aws_lb_listener.http]
 }

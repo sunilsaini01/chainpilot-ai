@@ -60,10 +60,3 @@ resource "aws_secretsmanager_secret" "groq" {
   name                    = "${var.name}-groq-api-key"
   recovery_window_in_days = 0 # demo days: destroy and create again without a 7-day wait
 }
-
-# Shared secret between CloudFront and the load balancer: requests without it are
-# refused, so nobody can reach the API around CloudFront (and its headers).
-resource "random_password" "origin_verify" {
-  length  = 40
-  special = false
-}

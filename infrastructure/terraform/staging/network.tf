@@ -1,7 +1,9 @@
 # Network without a NAT gateway (saves about $33/month): the API task runs in a
 # public subnet with a public IP so it can reach ECR, Secrets Manager and Groq, but
-# its security group accepts traffic only from the load balancer. The database is
-# in private subnets with no route to the internet.
+# its security group accepts traffic only from the load balancer. The load balancer
+# (internal, reached by CloudFront's VPC origin) and the database are in private
+# subnets with no route to the internet. The internet gateway is also needed by
+# CloudFront VPC origins.
 
 data "aws_availability_zones" "available" {
   state = "available"
@@ -56,14 +58,15 @@ resource "aws_route_table_association" "public" {
 
 # --- Security groups: CloudFront -> ALB -> API -> database ------------------------
 
-# AWS-managed list of the addresses CloudFront uses to reach origins.
+# AWS-managed list of the addresses CloudFront uses to reach origins, also through
+# VPC origins (AWS docs: allow this list, or CloudFront's own service security group).
 data "aws_ec2_managed_prefix_list" "cloudfront" {
   name = "com.amazonaws.global.cloudfront.origin-facing"
 }
 
 resource "aws_security_group" "alb" {
   name        = "${var.name}-alb"
-  description = "Load balancer: HTTP from CloudFront only"
+  description = "Internal load balancer: HTTP from CloudFront (VPC origin) only"
   vpc_id      = aws_vpc.main.id
 }
 
