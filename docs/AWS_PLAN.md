@@ -33,7 +33,7 @@ Why this shape:
 | Item | Size | ≈ USD / month |
 |---|---|---|
 | ECS Fargate (API) | 0.25 vCPU, 0.5 GB, x86 (builds natively in CI; ARM would save about $1.5), 1 task | 9 |
-| RDS PostgreSQL 16 | db.t4g.micro, single-AZ, 20 GB gp3, 7-day backups | 14 |
+| RDS PostgreSQL 16 | db.t4g.micro, single-AZ, 20 GB gp3, 1-day automated backups (demo data; corrected 2026-10-19, the plan first said 7 days) | 14 |
 | Application Load Balancer | 1 ALB, very low traffic | 18–22 |
 | Public IPv4 addresses | API task (1), $0.005/hour; the load balancer is internal (no public IPs) | 4 |
 | CloudFront + S3 | demo traffic (CloudFront has a free monthly allowance) | 0–1 |

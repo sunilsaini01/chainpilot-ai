@@ -75,6 +75,22 @@ In `infrastructure/terraform/staging`: `terraform destroy -var "alert_email=<own
 - **Alarms** email the owner (5xx errors, no healthy API task, API CPU, database CPU, low database storage). To test the email path: `aws cloudwatch set-alarm-state --alarm-name chainpilot-staging-db-cpu --state-value ALARM --state-reason test`. CloudWatch sets it back to OK at the next evaluation and emails again.
 - **Logs:** CloudWatch → Log groups → `/ecs/chainpilot-staging-api` (14 days).
 
+## Backup and recovery
+
+**Local (Docker Compose).** Tested 2026-10-19: a dump of the local database restored into a new database had the same row count in all 20 tables.
+```bash
+# Back up (a compressed dump, copied out of the container):
+docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/chainpilot.dump'
+docker compose cp postgres:/tmp/chainpilot.dump ./chainpilot-YYYY-MM-DD.dump     # keep it outside Git
+
+# Restore into a new, empty database (check it before switching the API to it):
+docker compose cp ./chainpilot-YYYY-MM-DD.dump postgres:/tmp/chainpilot.dump
+docker compose exec -T postgres sh -c 'createdb -U "$POSTGRES_USER" chainpilot_restored && pg_restore -U "$POSTGRES_USER" -d chainpilot_restored --no-owner /tmp/chainpilot.dump'
+```
+To use the restored copy, set `POSTGRES_DB=chainpilot_restored` in `.env` and restart the API (`docker compose up -d api`). The dump holds password hashes and audit history: store it like a secret.
+
+**AWS staging.** RDS keeps automated backups for 1 day (`backup_retention_period`, enough for demo data) and can restore to any second in that window. Before something risky, take a manual snapshot: `aws rds create-db-snapshot --db-instance-identifier chainpilot-staging --db-snapshot-identifier chainpilot-staging-<date>`. A restore always creates a **new** instance (console: RDS → Snapshots → Restore, or `aws rds restore-db-instance-from-db-snapshot`); point the API at it by changing the database host, or import it into Terraform. `terraform destroy` deletes the instance without a final snapshot (`skip_final_snapshot`), because staging holds only demo data: take a manual snapshot first if anything must be kept. Manual snapshots cost storage until deleted.
+
 ## Rollback
 - Automatic: the ECS deployment circuit breaker returns to the last working task definition if a new one never becomes healthy. Tested 2026-10-18: an image that does not exist was rolled back after 3 failed tasks (about 13 minutes), and the site answered 77 of 77 health checks meanwhile.
 - By hand: apply again with the previous image tag (`-var "api_image_tag=<previous tag>"`). ECR tags are immutable, so the old tag is exactly the old image. Tested 2026-10-18: back to `6b5bde4` and forward to `b245fa0`, each stable in under 3 minutes, with smoke tests 12/12.
