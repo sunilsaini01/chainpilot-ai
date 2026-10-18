@@ -22,6 +22,8 @@ minimum order and pack size and each warehouse's free space.
 
 import hashlib
 import math
+import threading
+import time
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 
@@ -40,7 +42,11 @@ from app.models import (
     Forecast,
     ForecastRun,
     Inventory,
+    InventoryMovement,
     Product,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    PurchaseOrderStatus,
     Recommendation,
     RecommendationKind,
     RecommendationStatus,
@@ -412,14 +418,67 @@ def load_inputs(
     return inputs, total_pairs - len(inputs)
 
 
+# --- Cache (P9-T1-R1) -----------------------------------------------------------------
+# The overview, the stock-risk list and the copilot all need the assessment of every
+# pair, which takes a few hundred CPU milliseconds. It is kept for a short time and
+# reused while its inputs are unchanged, per API process.
+
+CACHE_SECONDS = 60  # safety net: even an unnoticed change shows within a minute
+CACHE_ENTRIES = 16  # e.g. a few service levels and warehouse filters
+_cache: dict[tuple, tuple[float, list[Assessment], int]] = {}
+_cache_lock = threading.Lock()
+
+
+def data_version(session: Session) -> tuple:
+    """A value that changes whenever an input of the assessment changes.
+
+    Counts, not only timestamps: PostgreSQL's now() is a transaction's start time, so
+    a slow transaction can commit after a faster one with an older timestamp. Every
+    committed stock movement raises the movement count (the ledger is append-only),
+    and every new, received or cancelled order changes the open-order numbers.
+    Products, warehouses and suppliers change rarely (admin edits, demand links):
+    their newest updated_at and row count, plus the cache's 60 s limit.
+    """
+    open_lines = (
+        select(func.count(), func.coalesce(func.sum(PurchaseOrderLine.quantity), 0))
+        .join(PurchaseOrder)
+        .where(PurchaseOrder.status == PurchaseOrderStatus.OPEN)
+    )
+    movements = select(func.count()).select_from(InventoryMovement)
+    parts = [movements, open_lines]
+    for model in (Product, Warehouse, Supplier):
+        parts.append(select(func.count(), func.max(model.updated_at)).select_from(model))
+    return tuple(tuple(session.execute(part).one()) for part in parts)
+
+
+def clear_assessment_cache() -> None:
+    with _cache_lock:
+        _cache.clear()
+
+
 def assess_all(
     session: Session, service_level: float, warehouse_id: int | None = None
 ) -> tuple[ForecastRun, list[Assessment], int]:
-    """Assess every linked pair, most urgent first. Returns (run, assessments, unassessed)."""
+    """Assess every linked pair, most urgent first. Returns (run, assessments, unassessed).
+
+    Served from the cache while the forecast run and the data version are unchanged
+    and the entry is under CACHE_SECONDS old.
+    """
     run = newest_forecast_run(session)
+    key = (run.id, service_level, warehouse_id, data_version(session))
+    now = time.monotonic()
+    with _cache_lock:
+        cached = _cache.get(key)
+    if cached is not None and now - cached[0] < CACHE_SECONDS:
+        return run, list(cached[1]), cached[2]  # a copy: callers may reorder their list
+
     inputs, unassessed = load_inputs(session, run, warehouse_id)
     assessments = sorted((assess(item, service_level) for item in inputs), key=priority)
-    return run, assessments, unassessed
+    with _cache_lock:
+        if len(_cache) >= CACHE_ENTRIES:
+            _cache.pop(min(_cache, key=lambda k: _cache[k][0]))  # the oldest entry
+        _cache[key] = (now, assessments, unassessed)
+    return run, list(assessments), unassessed
 
 
 def free_space(session: Session) -> dict[int, int]:

@@ -35,6 +35,7 @@ from app.models import (
     User,
     Warehouse,
 )
+from app.replenishment_service import clear_assessment_cache
 from app.users_service import create_user
 
 API_DIR = Path(__file__).resolve().parent.parent
@@ -88,6 +89,16 @@ def db_engine(test_database_url: URL) -> Iterator[Engine]:
         command.upgrade(alembic_config(connection), "head")
     yield engine
     engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def fresh_assessment_cache() -> Iterator[None]:
+    """The risk assessment is cached in memory (app/replenishment_service.py). Tests
+    empty the database and restart its ids, so a result from one test could look
+    current in the next: clear the cache around every test."""
+    clear_assessment_cache()
+    yield
+    clear_assessment_cache()
 
 
 @pytest.fixture
