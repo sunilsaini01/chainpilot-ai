@@ -75,11 +75,16 @@ data "aws_iam_policy_document" "github_assume" {
       variable = "token.actions.githubusercontent.com:aud"
       values   = ["sts.amazonaws.com"]
     }
-    # Only workflows on this repository's main branch can deploy.
+    # Only the deploy workflow's two GitHub environments can assume the role:
+    # "staging-plan" (build and plan) and "staging" (apply, after the owner approves).
+    # Both are limited to the main branch in the repository settings (docs/AWS_RUNBOOK.md).
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:ref:refs/heads/main"]
+      values = [
+        "repo:${var.github_repository}:environment:staging-plan",
+        "repo:${var.github_repository}:environment:staging",
+      ]
     }
   }
 }
