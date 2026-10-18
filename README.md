@@ -6,6 +6,15 @@ A supply-chain control tower for retail operations, built as a portfolio project
 
 The full specification and roadmap are in [CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md](CHAINPILOT_CLAUDE_ONLY_WORKFLOW.md). Current progress is in [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
+## Try the demo
+
+```bash
+cp .env.example .env              # set POSTGRES_PASSWORD (and GROQ_API_KEY/GROQ_MODEL for the copilot)
+docker compose up -d --build
+bash scripts/demo-setup.sh        # loads the demo data and prints three demo logins once
+```
+Then open http://127.0.0.1:8080 and follow the 10-minute walkthrough in [docs/DEMO.md](docs/DEMO.md).
+
 ## What exists today (P0 foundation and P1 core data: inventory model, users and login, data APIs, synthetic seed)
 
 | Component | What it does |
